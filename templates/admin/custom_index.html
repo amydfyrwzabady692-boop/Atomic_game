@@ -1,0 +1,5 @@
+{% extends "admin/index.html" %}
+{% block content %}
+<p class="dash-actions"><a class="dash-link" href="{% url 'admin_dashboard' %}">📊 داشبورد آمار</a></p>
+{{ block.super }}
+{% endblock %}

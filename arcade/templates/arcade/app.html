@@ -1,0 +1,80 @@
+{% load static %}<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#141a2e">
+<title>آرکید</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E🎮%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
+<link rel="stylesheet" href="{% static 'arcade/common/app.css' %}">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+<canvas id="stage" aria-label="بازی"></canvas>
+
+<div id="hud" class="hidden">
+  <button id="sound-btn" class="icon-btn" type="button" aria-label="صدا">🔇</button>
+  <div class="hud-score"><span id="hud-score">۰</span></div>
+  <div class="hud-sub" id="hud-sub"></div>
+</div>
+
+<section id="screen-loading" class="screen">
+  <div class="spinner"></div>
+  <p id="loading-text">در حال آماده‌سازی…</p>
+</section>
+
+<section id="screen-menu" class="screen hidden">
+  <h1>🕹 تمرین آزاد</h1>
+  <p class="muted">بدون سکه؛ فقط برای رکورد شخصی</p>
+  <div id="menu-list" class="menu-list"></div>
+</section>
+
+<section id="screen-start" class="screen hidden">
+  <div class="card">
+    <div class="game-emoji" id="start-emoji"></div>
+    <h1 id="start-title"></h1>
+    <div class="howto"><span class="tap-hint" aria-hidden="true">👆</span><p id="start-howto"></p></div>
+    <div class="stats" id="start-stats"></div>
+    <button id="start-btn" class="btn primary" type="button">شروع</button>
+    <p class="muted small" id="start-note"></p>
+  </div>
+</section>
+
+<section id="screen-over" class="screen hidden">
+  <div class="card">
+    <p class="muted" id="over-label">امتیاز تو</p>
+    <div class="big-score" id="over-score">۰</div>
+    <div class="stats" id="over-stats"></div>
+    <p class="muted small" id="over-note"></p>
+    <button id="again-btn" class="btn primary" type="button">دوباره</button>
+    <button id="close-btn" class="btn" type="button">برگشت به گروه</button>
+  </div>
+</section>
+
+<section id="screen-error" class="screen hidden">
+  <div class="card">
+    <div class="game-emoji">😕</div>
+    <p id="error-text"></p>
+    <button id="error-close-btn" class="btn" type="button">بستن</button>
+  </div>
+</section>
+
+{{ games|json_script:"games-data" }}
+<script>
+window.ARCADE_BOOT = {
+  gameKey: "{{ game_key|escapejs }}",
+  startParam: "{{ start_param|escapejs }}",
+  staticBase: "{% static 'arcade/' %}",
+  apiBase: "{% url 'arcade:app' %}api/",
+  playBase: "{% url 'arcade:app' %}play/",
+  devAuth: {{ dev_auth|yesno:"true,false" }},
+  games: JSON.parse(document.getElementById("games-data").textContent)
+};
+</script>
+<script src="{% static 'arcade/common/registry.js' %}"></script>
+<script src="{% static 'arcade/common/rng.js' %}"></script>
+<script src="{% static 'arcade/common/shell.js' %}"></script>
+</body>
+</html>

@@ -1,0 +1,202 @@
+/* تم پنل مدیریت: فونت فارسی، رنگ‌های مدرن و کارت‌های گرد. روی متغیرهای CSS خود جنگو سوار است. */
+:root,
+html[data-theme="light"] {
+  --primary: #4f46e5;
+  --secondary: #4338ca;
+  --accent: #fbbf24;
+  --primary-fg: #fff;
+  --header-color: #e0e7ff;
+  --header-branding-color: #fff;
+  --header-bg: #312e81;
+  --header-link-color: #fff;
+  --breadcrumbs-fg: #c7d2fe;
+  --breadcrumbs-link-fg: #fff;
+  --breadcrumbs-bg: #4338ca;
+  --link-fg: #4338ca;
+  --link-hover-color: #1e1b4b;
+  --link-selected-fg: #4f46e5;
+  --body-bg: #f5f6fb;
+  --body-fg: #1f2433;
+  --body-quiet-color: #6b7280;
+  --body-loud-color: #0f1222;
+  --hairline-color: #e6e8f2;
+  --border-color: #dfe2ee;
+  --darkened-bg: #f0f1f8;
+  --selected-bg: #eef0ff;
+  --selected-row: #eef0ff;
+  --button-bg: #4f46e5;
+  --button-hover-bg: #4338ca;
+  --default-button-bg: #312e81;
+  --default-button-hover-bg: #1e1b4b;
+  --close-button-bg: #6b7280;
+  --delete-button-bg: #e11d48;
+  --delete-button-hover-bg: #be123c;
+  --object-tools-bg: #4f46e5;
+  --object-tools-hover-bg: #312e81;
+  --module-bg: #fff;
+  --font-family-primary: Vazirmatn, Tahoma, "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --primary: #6366f1;
+    --secondary: #4f46e5;
+    --header-bg: #171a2e;
+    --breadcrumbs-bg: #1e2140;
+    --link-fg: #a5b4fc;
+    --link-hover-color: #e0e7ff;
+    --link-selected-fg: #c7d2fe;
+    --body-bg: #0f1120;
+    --body-fg: #e5e7f5;
+    --body-quiet-color: #9aa1bd;
+    --body-loud-color: #fff;
+    --hairline-color: #262a45;
+    --border-color: #2c3050;
+    --darkened-bg: #1c2038;
+    --selected-bg: #20244a;
+    --selected-row: #20244a;
+    --module-bg: #171a2e;
+  }
+}
+html[data-theme="dark"] {
+  --primary: #6366f1;
+  --secondary: #4f46e5;
+  --header-bg: #171a2e;
+  --breadcrumbs-bg: #1e2140;
+  --link-fg: #a5b4fc;
+  --link-hover-color: #e0e7ff;
+  --link-selected-fg: #c7d2fe;
+  --body-bg: #0f1120;
+  --body-fg: #e5e7f5;
+  --body-quiet-color: #9aa1bd;
+  --body-loud-color: #fff;
+  --hairline-color: #262a45;
+  --border-color: #2c3050;
+  --darkened-bg: #1c2038;
+  --selected-bg: #20244a;
+  --selected-row: #20244a;
+  --module-bg: #171a2e;
+}
+
+body, input, select, textarea, button, .button { font-family: var(--font-family-primary); }
+body { font-size: 14px; line-height: 1.7; }
+h1, h2, h3 { font-weight: 800; letter-spacing: 0; }
+
+/* سربرگ */
+#header {
+  background: linear-gradient(120deg, #312e81, #4f46e5 60%, #7c3aed);
+  padding: 14px 24px;
+  box-shadow: 0 6px 24px rgba(49, 46, 129, .25);
+}
+#site-name { font-size: 19px; font-weight: 800; }
+#site-name a { display: inline-flex; align-items: center; gap: 8px; }
+.brand-mark { font-size: 22px; }
+#user-tools { font-size: 12.5px; text-transform: none; letter-spacing: 0; }
+div.breadcrumbs { padding: 10px 24px; font-size: 13px; background: var(--breadcrumbs-bg); }
+
+#content { padding: 24px; }
+#content h1 { font-size: 22px; margin-bottom: 18px; }
+
+/* کارت‌ها و جدول‌ها */
+.module, #changelist, .inline-group {
+  background: var(--module-bg);
+  border: 1px solid var(--hairline-color);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(15, 18, 34, .04);
+}
+.module { margin-bottom: 18px; }
+.module caption, .module h2, .inline-group h2 {
+  background: transparent;
+  color: var(--body-loud-color);
+  font-size: 14px;
+  font-weight: 800;
+  padding: 12px 16px;
+  text-transform: none;
+  letter-spacing: 0;
+  border-bottom: 1px solid var(--hairline-color);
+}
+.module caption a.section:link, .module caption a.section:visited { color: var(--body-loud-color); }
+.dashboard .module table th, .dashboard .module table td { padding: 10px 16px; }
+.dashboard #content { width: auto; max-width: 1100px; }
+#content-related { border-radius: 14px; overflow: hidden; border: 1px solid var(--hairline-color); background: var(--module-bg); }
+#content-related .module { border: 0; box-shadow: none; background: transparent; }
+
+thead th, tfoot td {
+  background: var(--darkened-bg);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+thead th a:link, thead th a:visited { color: var(--body-fg); }
+td, th { padding: 10px 12px; }
+#changelist .results { overflow-x: auto; }
+#changelist table tbody tr:hover { background: var(--selected-bg); }
+#changelist .actions { padding: 12px 14px; background: transparent; border-bottom: 1px solid var(--hairline-color); }
+#toolbar { background: transparent; border-bottom: 1px solid var(--hairline-color); padding: 12px 14px; }
+#changelist-filter { border-radius: 14px; margin-inline-start: 18px; background: var(--module-bg); border: 1px solid var(--hairline-color); }
+#changelist-filter h2 { background: transparent; color: var(--body-loud-color); }
+.paginator { padding: 12px 14px; }
+
+/* دکمه‌ها و ورودی‌ها */
+.button, input[type="submit"], input[type="button"], .submit-row input, a.button, .object-tools a {
+  border-radius: 10px;
+  padding: 9px 16px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+  transition: transform .08s ease, background .15s ease;
+}
+.button:active, input[type="submit"]:active { transform: scale(.97); }
+.object-tools a { border-radius: 999px; padding: 7px 14px; font-size: 12.5px; }
+input[type="text"], input[type="password"], input[type="email"], input[type="url"], input[type="number"],
+input[type="search"], textarea, select, .vTextField {
+  border-radius: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+}
+input:focus, textarea:focus, select:focus { border-color: var(--primary); outline: 2px solid rgba(99, 102, 241, .25); }
+.submit-row { border-radius: 14px; background: var(--module-bg); border: 1px solid var(--hairline-color); padding: 14px; }
+ul.messagelist li { border-radius: 12px; margin: 0 24px 10px; }
+.form-row { padding: 12px 16px; }
+a.addlink, a.changelink, a.viewlink { font-weight: 600; }
+
+/* صفحه‌ی ورود */
+body.login { background: linear-gradient(135deg, #1e1b4b, #4f46e5); }
+.login #container { border-radius: 20px; overflow: hidden; border: 0; box-shadow: 0 24px 60px rgba(0, 0, 0, .35); }
+.login #header { justify-content: center; box-shadow: none; }
+
+/* ---------------------------------------------------------------- داشبورد آمار */
+.dash-actions { margin: 0 0 18px; }
+.dash-link {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 18px; border-radius: 14px; font-weight: 800;
+  background: linear-gradient(120deg, #4f46e5, #7c3aed); color: #fff !important;
+  box-shadow: 0 8px 22px rgba(79, 70, 229, .3);
+}
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-bottom: 22px; }
+.kpi {
+  position: relative; padding: 16px 18px; border-radius: 16px; overflow: hidden;
+  background: var(--module-bg); border: 1px solid var(--hairline-color);
+  box-shadow: 0 2px 10px rgba(15, 18, 34, .04);
+}
+.kpi::before { content: ""; position: absolute; inset-inline-start: 0; top: 0; bottom: 0; width: 5px; background: var(--kpi, #4f46e5); }
+.kpi .icon { font-size: 22px; }
+.kpi b { display: block; font-size: 26px; font-weight: 900; color: var(--body-loud-color); line-height: 1.5; }
+.kpi span { color: var(--body-quiet-color); font-size: 12.5px; }
+.dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.panel { background: var(--module-bg); border: 1px solid var(--hairline-color); border-radius: 16px; padding: 18px; }
+.panel h2 { margin: 0 0 14px; font-size: 15px; background: none; color: var(--body-loud-color); padding: 0; }
+.chart { display: flex; align-items: flex-end; gap: 6px; height: 170px; direction: ltr; }
+.chart .col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; min-width: 0; }
+.chart .col i { display: block; width: 100%; max-width: 26px; min-height: 3px; border-radius: 7px 7px 3px 3px; background: linear-gradient(180deg, #818cf8, #4f46e5); }
+.chart .col small { font-size: 10px; color: var(--body-quiet-color); white-space: nowrap; }
+.chart .col em { font-style: normal; font-size: 11px; font-weight: 700; color: var(--body-fg); }
+.rows { display: grid; gap: 10px; }
+.rowbar { display: grid; grid-template-columns: minmax(110px, 1.2fr) 3fr auto; align-items: center; gap: 10px; font-size: 13px; }
+.rowbar .track { height: 10px; border-radius: 6px; background: var(--darkened-bg); overflow: hidden; }
+.rowbar .track i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, #34d399, #10b981); }
+.rowbar b { font-variant-numeric: tabular-nums; }
+.muted-note { color: var(--body-quiet-color); font-size: 12.5px; }
+
+.aligned .form-row, form .form-row { padding-inline: 18px !important; }

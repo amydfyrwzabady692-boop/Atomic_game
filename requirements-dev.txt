@@ -1,0 +1,7 @@
+-r requirements.txt
+pytest>=8.3
+pytest-django>=4.9
+pytest-asyncio>=0.24
+fakeredis>=2.26
+ruff>=0.7
+pgserver>=0.1.4  # اختیاری: PostgreSQL موقت برای تست‌های محلی بدون Docker

@@ -1,0 +1,50 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Arcade JS/Python parity</title>
+<style>body{font:14px/1.6 monospace;background:#111;color:#ddd;padding:16px}.ok{color:#5ee6a8}.bad{color:#ff5c7a}</style>
+</head>
+<body>
+<h3>JS ↔ Python parity</h3>
+<pre id="out">running…</pre>
+<script src="{% static 'arcade/common/registry.js' %}"></script>
+<script src="{% static 'arcade/common/rng.js' %}"></script>
+<script src="{% static 'arcade/common/sim.js' %}"></script>
+{% for key in keys %}<script src="{% static 'arcade/' %}{{ key }}/core.js"></script>
+{% endfor %}
+<script>
+(async function () {
+  const keys = [{% for key in keys %}"{{ key }}",{% endfor %}];
+  const out = document.getElementById("out");
+  const lines = [];
+  const report = { total: 0, failed: 0, details: [] };
+  for (const key of keys) {
+    const core = Arcade.cores[key];
+    if (!core) { lines.push(`<span class="bad">${key}: core.js not loaded</span>`); report.failed++; continue; }
+    const assets = {};
+    for (const name of core.assets || []) {
+      assets[name] = await (await fetch(`{% static 'arcade/' %}${key}/${name}`)).json();
+    }
+    const cases = await (await fetch(`../fixtures/${key}.json`)).json();
+    let ok = 0;
+    cases.forEach((c, i) => {
+      report.total++;
+      const got = ArcadeSim.simulate(core, c.seed, c.inputs, c.duration_ms, Object.assign({ assets }, c.options || {}));
+      const same = ["score", "level", "duration_ms", "over", "cause"].every((k) => got[k] === c.expected[k]);
+      if (same) ok++;
+      else {
+        report.failed++;
+        report.details.push({ key, i, kind: c.kind, want: c.expected, got });
+        lines.push(`<span class="bad">MISMATCH ${key}[${i}] ${c.kind} want=${JSON.stringify(c.expected)} got=${JSON.stringify(got)}</span>`);
+      }
+    });
+    lines.push(`<span class="${ok === cases.length ? "ok" : "bad"}">${key}: ${ok}/${cases.length}</span>`);
+  }
+  lines.push(report.failed ? `<span class="bad">FAILED ${report.failed}/${report.total}</span>` : `<span class="ok">OK: ${report.total} cases</span>`);
+  out.innerHTML = lines.join("\n");
+  window.__parity = report;
+})();
+</script>
+</body>
+</html>

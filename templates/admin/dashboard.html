@@ -1,0 +1,47 @@
+{% extends "admin/base_site.html" %}
+{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">شروع</a> › داشبورد آمار</div>{% endblock %}
+{% block content %}
+<div class="kpi-grid">
+  <div class="kpi" style="--kpi:#4f46e5"><span class="icon">👤</span><b>{{ totals.users }}</b><span>کاربران</span></div>
+  <div class="kpi" style="--kpi:#10b981"><span class="icon">⚡</span><b>{{ totals.dau }}</b><span>کاربران فعال امروز</span></div>
+  <div class="kpi" style="--kpi:#f59e0b"><span class="icon">👥</span><b>{{ totals.groups }}</b><span>گروه‌های فعال (۷ روز اخیر)</span></div>
+  <div class="kpi" style="--kpi:#7c3aed"><span class="icon">🏁</span><b>{{ totals.matches }}</b><span>مسابقه‌ی تمام‌شده</span></div>
+  <div class="kpi" style="--kpi:#ec4899"><span class="icon">⭐</span><b>{{ totals.popular }}</b><span>محبوب‌ترین بازی</span></div>
+  <div class="kpi" style="--kpi:#eab308"><span class="icon">🪙</span><b>{{ totals.coins }}</b><span>سکه‌ی مجازی در گردش</span></div>
+  <div class="kpi" style="--kpi:#e11d48"><span class="icon">🚩</span><b>{{ totals.flagged }}</b><span>جلسه‌ی آرکید مشکوک</span></div>
+</div>
+
+<div class="dash-grid">
+  <section class="panel">
+    <h2>کاربران فعال روزانه (۱۴ روز اخیر)</h2>
+    <div class="chart">
+      {% for row in daily %}
+      <div class="col" title="{{ row.day|date:'Y/m/d' }} — {{ row.users }} کاربر، {{ row.matches }} مسابقه">
+        <em>{{ row.users }}</em><i style="height:{{ row.percent }}%"></i><small>{{ row.day|date:"m/d" }}</small>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>بازی‌ها به تفکیک نوع</h2>
+    <div class="rows">
+      {% for row in by_game %}
+      <div class="rowbar"><span>{{ row.title }}</span><div class="track"><i style="width:{{ row.percent }}%"></i></div><b>{{ row.finished }}</b></div>
+      {% empty %}<p class="muted-note">هنوز مسابقه‌ای ثبت نشده است.</p>
+      {% endfor %}
+    </div>
+    <p class="muted-note">عدد هر ردیف: مسابقه‌های تمام‌شده</p>
+  </section>
+
+  <section class="panel">
+    <h2>فعال‌ترین گروه‌ها (۷ روز اخیر)</h2>
+    <div class="rows">
+      {% for row in groups %}
+      <div class="rowbar"><span>{{ row.title }}</span><div class="track"><i style="width:{{ row.percent }}%"></i></div><b>{{ row.matches }}</b></div>
+      {% empty %}<p class="muted-note">—</p>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

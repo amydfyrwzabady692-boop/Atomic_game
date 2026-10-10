@@ -1,0 +1,19 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div id="content-main">
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <fieldset class="module aligned">
+      <div class="form-row">
+        <p>فایل CSV با کدگذاری UTF-8 انتخاب کنید. ردیف اول باید عنوان ستون‌ها باشد:</p>
+        <p><code dir="ltr">{{ columns }}</code></p>
+        <input type="file" name="file" accept=".csv,text/csv" required>
+      </div>
+    </fieldset>
+    <div class="submit-row">
+      <input type="submit" value="بارگذاری" class="default">
+      <a href="{{ changelist_url }}" class="closelink">انصراف</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

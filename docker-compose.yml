@@ -1,0 +1,75 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: gamebot
+      POSTGRES_USER: gamebot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gamebot}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gamebot -d gamebot"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # پنل ادمین جنگو + صفحه و API مینی‌اپ آرکید
+  web:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://gamebot:${POSTGRES_PASSWORD:-gamebot}@db:5432/gamebot
+      REDIS_URL: redis://redis:6379/0
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3"
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ربات تلگرام (polling یا webhook بسته به WEBHOOK_URL)
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://gamebot:${POSTGRES_PASSWORD:-gamebot}@db:5432/gamebot
+      REDIS_URL: redis://redis:6379/0
+    command: python manage.py runbot
+    ports:
+      - "8443:8443"
+    depends_on:
+      # web اول migrate را اجرا می‌کند؛ ربات بعد از آماده شدنش بالا می‌آید
+      web:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:
