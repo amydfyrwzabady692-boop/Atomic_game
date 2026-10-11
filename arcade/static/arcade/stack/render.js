@@ -62,6 +62,22 @@
       }
       c.globalAlpha = 1;
     }
+    function paintMoon(c, w) {
+      var m = w / 2, r = w * 0.3;
+      var halo = c.createRadialGradient(m, m, r * 0.8, m, m, m);
+      halo.addColorStop(0, "rgba(210,225,255,.35)");
+      halo.addColorStop(1, "rgba(210,225,255,0)");
+      c.fillStyle = halo;
+      c.fillRect(0, 0, w, w);
+      art.sphere(c, m, m, r, "#e6ebf7", false);
+      c.fillStyle = "rgba(120,135,170,.4)";
+      var craters = [[-0.3, -0.2, 0.2], [0.25, 0.1, 0.26], [-0.1, 0.4, 0.14], [0.3, -0.42, 0.12]];
+      for (var i = 0; i < craters.length; i++) {
+        c.beginPath();
+        c.arc(m + craters[i][0] * r, m + craters[i][1] * r, craters[i][2] * r, 0, Math.PI * 2);
+        c.fill();
+      }
+    }
     function paintSkyline(c, w, h) {
       var rnd = art.rand(8);
       for (var layer = 0; layer < 2; layer++) {
@@ -149,6 +165,7 @@
           env.sound("bonus");
         } else if (name === "cut") {
           settle = 1;
+          env.fx.burst((top.x + top.w / 2) / 10, y + BLOCK_H, "#ffffff", 5, 1.8);
           if (state.lastCut) {
             var right = state.lastCut.x > top.x;
             falling.push({ x: state.lastCut.x / 10, w: state.lastCut.w / 10, y: y, vy: 0, vx: right ? 1.1 : -1.1, rot: 0, spin: right ? 0.03 : -0.03, index: state.blocks.length - 1 });
@@ -194,13 +211,37 @@
         for (i = 0; i < 5 && night < 1; i++) {
           var big = i % 2 === 0;
           var cw = big ? 120 : 84;
-          var cloud = env.sprite(big ? "stack:cloudA" : "stack:cloudB", cw, cw * 0.5, function (s, w) { art.cloud(s, 0, 2, w); });
+          var cloud = env.sprite(big ? "stack:cloudA" : "stack:cloudB", cw, cw * 0.5, function (s, w) { art.cloud(s, 0, 0, w, "#ffffff", "#a9bde0", big ? 4 : 9); });
           var span = H + 160;
           var cy = ((i * 173 + camera * BLOCK_H * (0.25 + i * 0.04)) % span) - 80;
           var cx = ((i * 131 + drift * (4 + i * 2)) % (W + cw)) - cw;
           env.blit(c, cloud, cx, cy);
         }
         c.globalAlpha = 1;
+        var nowMs = env.now();
+        // پرنده‌ها در روز، ماه و شهاب در شب
+        if (dusk < 1) {
+          for (i = 0; i < 3; i++) {
+            art.bird(c, ((nowMs * (0.02 + i * 0.007) + i * 150) % (W + 60)) - 30, env.safeTop + 70 + i * 52 + Math.sin(nowMs / 600 + i) * 7, 5.5 - i, nowMs / 120 + i * 2, "rgba(30,50,90," + 0.55 * (1 - dusk) + ")");
+          }
+        }
+        if (night > 0) {
+          c.globalAlpha = night;
+          env.blit(c, env.sprite("stack:moon", 96, 96, paintMoon), W - 118, env.safeTop + 18);
+          var shoot = (nowMs % 5200) / 620;
+          if (shoot < 1) {
+            var sx0 = 40 + ((Math.floor(nowMs / 5200) * 97) % 180), sy0 = env.safeTop + 40 + ((Math.floor(nowMs / 5200) * 53) % 120);
+            c.globalAlpha = night * Math.sin(shoot * Math.PI);
+            c.strokeStyle = "#ffffff";
+            c.lineWidth = 1.6;
+            c.lineCap = "round";
+            c.beginPath();
+            c.moveTo(sx0 + shoot * 120, sy0 + shoot * 60);
+            c.lineTo(sx0 + shoot * 120 - 34, sy0 + shoot * 60 - 17);
+            c.stroke();
+          }
+          c.globalAlpha = 1;
+        }
         var groundTop = by + BLOCK_H + camera * BLOCK_H;
         var cityY = by + BLOCK_H - 132 + camera * BLOCK_H * 0.55;
         if (cityY < H + 12) env.blit(c, env.sprite("stack:city", W + 24, 132, paintSkyline), -12, cityY);

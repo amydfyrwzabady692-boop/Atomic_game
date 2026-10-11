@@ -272,7 +272,35 @@
         paddleHit *= 0.8;
 
         var layer = wallLayer(state, l);
+        var now = env.now();
+        // غبار نورانی شناور در زمین بازی
+        c.fillStyle = "#bfe9ff";
+        for (var mote = 0; mote < 12; mote++) {
+          c.globalAlpha = 0.1 + 0.2 * (0.5 + 0.5 * Math.sin(now / 600 + mote * 1.7));
+          c.fillRect(l.ox + ((mote * 97 + now * 0.004 * (1 + (mote % 3))) % (core.WIDTH * s)), l.oy + ((mote * 211) % (core.HEIGHT * s)), 1.6, 1.6);
+        }
+        c.globalAlpha = 1;
         c.drawImage(layer.canvas, l.ox, l.oy + (core.TOP - WALL_PAD) * s, layer.w, layer.h);
+        // هر چند ثانیه یک برق مورب از روی دیوار آجرها رد می‌شود
+        var sweep = (now % 4200) / 900;
+        if (sweep < 1 && state.remaining > 0) {
+          var wallTop = l.oy + core.TOP * s, wallH = core.ROWS * core.STEP_Y * s;
+          var sx = l.ox - 60 + sweep * (core.WIDTH * s + 120);
+          c.save();
+          c.beginPath();
+          c.rect(l.ox, wallTop, core.WIDTH * s, wallH);
+          c.clip();
+          c.globalCompositeOperation = "lighter";
+          c.fillStyle = "rgba(255,255,255,.10)";
+          c.beginPath();
+          c.moveTo(sx, wallTop);
+          c.lineTo(sx + 26, wallTop);
+          c.lineTo(sx - 30, wallTop + wallH);
+          c.lineTo(sx - 56, wallTop + wallH);
+          c.closePath();
+          c.fill();
+          c.restore();
+        }
 
         // آیتم‌های در حال سقوط
         for (var k = 0; k < state.items.length; k++) {

@@ -424,6 +424,14 @@
   };
   env.art = window.ArcadeArt(env);
   resize();
+  var icons = window.ArcadeIcons ? window.ArcadeIcons(env) : null;
+  /* نماد تصویری بازی را در el می‌گذارد؛ اگر نمادی نباشد همان ایموجی می‌ماند */
+  function setIcon(el, key, emoji, px) {
+    el.textContent = "";
+    var canvas = icons && icons.has(key) ? icons.element(key, px) : null;
+    if (canvas) el.appendChild(canvas);
+    else el.textContent = emoji;
+  }
   window.addEventListener("resize", function () { resize(); if (!run) drawIdle(); });
 
   /* پس‌زمینه‌ی مشترک: گرادیان شب، دو هاله‌ی نئونی و ستاره‌های چشمک‌زن */
@@ -721,11 +729,39 @@
     show("over");
   }
 
+  var countTimer = null;
+  /* امتیاز از صفر تا مقدار نهایی بالا می‌رود */
+  function countUp(el, value) {
+    clearInterval(countTimer);
+    if (value <= 0) { el.textContent = fa(0); return; }
+    var started = performance.now(), duration = Math.min(900, 300 + value * 4);
+    countTimer = setInterval(function () {
+      var t = Math.min(1, (performance.now() - started) / duration);
+      el.textContent = fa(Math.round(value * (1 - Math.pow(1 - t, 3))));
+      if (t >= 1) clearInterval(countTimer);
+    }, 30);
+  }
+  function confetti() {
+    var box = $("confetti");
+    box.innerHTML = "";
+    var palette = ["#ffd257", "#6ee7ff", "#ff5c7a", "#5ee6a8", "#a78bfa"];
+    for (var i = 0; i < 26; i++) {
+      var piece = document.createElement("i");
+      piece.style.left = Math.random() * 100 + "%";
+      piece.style.background = palette[i % palette.length];
+      piece.style.animationDelay = Math.random() * 0.5 + "s";
+      piece.style.animationDuration = 1.3 + Math.random() * 0.9 + "s";
+      piece.style.transform = "rotate(" + Math.random() * 360 + "deg)";
+      box.appendChild(piece);
+    }
+  }
+
   function renderOver(current) {
     var res = current.result;
     var local = current.state.score;
     var again = $("again-btn");
     $("over-note").textContent = "";
+    $("over-badge").classList.add("hidden");
     if (!res) {
       $("over-label").textContent = "در حال ثبت امتیاز…";
       $("over-score").textContent = fa(local);
@@ -741,7 +777,17 @@
       $("over-note").textContent = res.error === "network" ? "اتصال به سرور برقرار نشد." : errorText(res.error);
     } else {
       $("over-label").textContent = "امتیاز تو";
-      $("over-score").textContent = fa(res.verified_score);
+      if (!current.celebrated) {
+        current.celebrated = true;
+        countUp($("over-score"), res.verified_score);
+        // رکورد شخصی تازه (نسبت به رکوردی که هنگام شروع این تلاش داشت)
+        if (res.verified_score > 0 && res.verified_score > (game.info.record || 0)) {
+          $("over-badge").classList.remove("hidden");
+          confetti();
+        }
+      } else {
+        $("over-score").textContent = fa(res.verified_score);
+      }
       var html = "";
       if (res.rank) html += stat("رتبه در مسابقه", fa(res.rank) + " از " + fa(res.players));
       if (res.best !== undefined) html += stat("بهترین تو", fa(res.best));
@@ -760,7 +806,7 @@
   var countdownTimer = null;
   function renderStart() {
     var info = game.info;
-    $("start-emoji").textContent = game.meta.emoji;
+    setIcon($("start-emoji"), game.meta.key, game.meta.emoji, 92);
     $("start-title").textContent = game.meta.title;
     $("start-howto").textContent = game.meta.howto;
     var note = "";
@@ -845,7 +891,10 @@
       var a = document.createElement("a");
       a.className = "menu-item";
       a.href = BOOT.playBase + meta.key + "/" + location.search;
-      a.innerHTML = '<span class="game-emoji">' + meta.emoji + "</span>";
+      var badge = document.createElement("span");
+      badge.className = "game-emoji";
+      setIcon(badge, meta.key, meta.emoji, 76);
+      a.appendChild(badge);
       a.appendChild(document.createTextNode(meta.title));
       list.appendChild(a);
     });

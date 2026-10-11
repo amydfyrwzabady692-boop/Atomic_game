@@ -1,5 +1,6 @@
-/* «پرنده‌ی پرشی» — رندر و افکت‌ها: آسمان عصرگاهی با کوه و تپه‌های پارالاکس، لوله‌های فلزی حجم‌دار،
-   زمین چمنی متحرک و پرنده‌ای با سه حالت بال. همه‌ی لایه‌ها اسپرایت کش‌شده‌اند. */
+/* «پرنده‌ی پرشی» — رندر و افکت‌ها: آسمان عصرگاهی با خورشید، ابرهای حجیم و دسته‌ی پرنده‌های دور،
+   کوه و تپه‌های پارالاکس، لوله‌های فلزی حجم‌دار با بست و پرچ، زمین چمنی متحرک و پرنده‌ای با سه حالت بال.
+   همه‌ی لایه‌ها اسپرایت کش‌شده‌اند. */
 (function () {
   "use strict";
   Arcade.registerRenderer("flappy", function (env) {
@@ -30,6 +31,22 @@
       c.fillRect(-1, -1, w + 2, h + 2);
     }
     /* نوار کوه با دوره‌ی تکرار برابر عرض صفحه (بی‌درز) */
+    function paintSun(c, w) {
+      var m = w / 2;
+      var g = c.createRadialGradient(m, m, 2, m, m, m);
+      g.addColorStop(0, "rgba(255,252,230,1)");
+      g.addColorStop(0.2, "rgba(255,240,180,.95)");
+      g.addColorStop(0.34, "rgba(255,226,150,.3)");
+      g.addColorStop(1, "rgba(255,226,150,0)");
+      c.fillStyle = g;
+      c.fillRect(0, 0, w, w);
+    }
+    function paintCloud(seed) {
+      return function (c, w) {
+        art.cloud(c, 0, 0, w, "#ffffff", "#a9c0e4", seed);
+      };
+    }
+
     function paintMountains(c, w, h) {
       for (var layer = 0; layer < 2; layer++) {
         var base = layer ? "#5f7fa8" : "#8fa9c9";
@@ -113,6 +130,13 @@
       }
       c.fillStyle = "rgba(255,255,255,.45)";
       c.fillRect(0, 0, w, 1.2);
+      // گل‌های ریز لبه‌ی چمن (با دوره‌ی تکرار ۲۴ تا درز نیفتد)
+      for (var fx = 6; fx < w; fx += 12) {
+        c.fillStyle = ((fx - 6) / 12) % 2 === 0 ? "#ffe066" : "#ffffff";
+        c.beginPath();
+        c.arc(fx, 4.5, 1.7, 0, TAU);
+        c.fill();
+      }
     }
     function paintPipeBody(c, w, h) {
       var g = c.createLinearGradient(0, 0, w, 0);
@@ -145,6 +169,8 @@
       c.fillRect(4, 2, w - 8, 1.6);
       c.fillStyle = "rgba(0,0,0,.25)";
       c.fillRect(2, h - 4, w - 4, 2.4);
+      // پرچ‌ها
+      for (var rx = 9; rx < w - 4; rx += 12) art.sphere(c, rx, h / 2, 1.7, "#bff5cd", false);
     }
 
     /* پرنده رو به راست؛ pose: ۰ بال بالا، ۱ وسط، ۲ پایین */
@@ -278,6 +304,19 @@
         var gh = groundH(), groundY = H - gh;
 
         c.drawImage(env.sprite("flappy:sky", 4, H, paintSky).canvas, -12, -12, W + 24, H + 24);
+        var now = env.now();
+        env.blit(c, env.sprite("flappy:sun", 200, 200, paintSun), W * 0.7 - 100, groundY - 420);
+        // ابرها (آهسته‌تر از کوه‌ها) و دسته‌ی پرنده‌های دور
+        for (var cl = 0; cl < 4; cl++) {
+          var cw = 96 + (cl % 2) * 54;
+          var cloud = env.sprite("flappy:cloud:" + cl, cw, cw * 0.5, paintCloud(3 + cl * 5));
+          var cx = W + cw - ((scroll * (0.04 + cl * 0.015) + now * 0.004 + cl * 137) % (W + cw * 2));
+          env.blit(c, cloud, cx - cw, env.safeTop + 6 + cl * 74);
+        }
+        for (var b = 0; b < 4; b++) {
+          var flockX = W + 40 - ((now * 0.018 + scroll * 0.05 + b * 26) % (W + 160));
+          art.bird(c, flockX, groundY - 330 - Math.abs(b - 1.5) * 12 + Math.sin(now / 700) * 6, 4.5, now / 110 + b, "rgba(40,60,90,.55)");
+        }
         // نوارها ۶ پیکسل پهن‌تر از دوره‌ی تکرارند تا محل اتصال دو نسخه درز نیندازد
         strip(c, env.sprite("flappy:mountains", W + 6, 170, paintMountains), scroll * 0.08, groundY - 215);
         strip(c, env.sprite("flappy:hills", W + 6, 110, paintHills), scroll * 0.3, groundY - 108);

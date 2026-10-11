@@ -259,6 +259,12 @@
         var pos = state.pos;
         if (!state.over) pos = env.clamp(pos + state.dir * state.speed * alpha, 0, core.BAR);
         var theta = angleOf(pos) + Math.sin(env.now() / 18) * jolt * 0.05;
+        if (!state.over) {
+          // رد محو عقربه در جهت مخالف حرکت
+          var lag = (state.dir * state.speed) / core.BAR * SWEEP;
+          needle(c, p.x, p.y, theta - lag * 2.2, "#ff3b4e", 0.12);
+          needle(c, p.x, p.y, theta - lag * 1.1, "#ff3b4e", 0.22);
+        }
         needle(c, p.x + 3, p.y + 5, theta, "#000000", 0.35);
         needle(c, p.x, p.y, theta, "#ff3b4e", 1);
         c.save();

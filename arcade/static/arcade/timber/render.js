@@ -1,5 +1,6 @@
-/* «هیزم‌شکن» — رندر و افکت‌ها: جنگل کاج در روز با مه دوردست، تنه‌ی درخت با پوست بافت‌دار، شاخه‌های
-   پربرگ و هیزم‌شکنی که تبرش واقعاً تاب می‌خورد. همه‌ی اجزا اسپرایت کش‌شده‌اند. */
+/* «هیزم‌شکن» — رندر و افکت‌ها: جنگل کاج در روز با مه دوردست و ابر و پرنده، تنه‌ی درخت با پوست
+   بافت‌دار، شاخه‌های پربرگ و هیزم‌شکنی که نفس می‌کشد، پلک می‌زند و تبرش واقعاً تاب می‌خورد.
+   با هر ضربه برگ می‌ریزد. همه‌ی اجزا اسپرایت کش‌شده‌اند. */
 (function () {
   "use strict";
   Arcade.registerRenderer("timber", function (env) {
@@ -8,6 +9,7 @@
     var SEG_H = 62, TRUNK_W = 80, BRANCH_W = 96;
     var swing = 0, drop = 0, fallen = 0;
     var chips = [];
+    var leaves = [];
 
     function groundY() { return env.H - 104; }
 
@@ -82,6 +84,46 @@
       c.fillStyle = shade;
       c.fillRect(-b, gy, w + b * 2, h - gy + b);
       art.shadow(c, w / 2, gy + 8, 84, 13, 0.5);
+      // سنگ، قارچ و گل روی زمین
+      var deco = art.rand(71);
+      for (var d = 0; d < 9; d++) {
+        var dx = deco() * w, dy = gy + 16 + deco() * (h - gy - 26);
+        if (Math.abs(dx - w / 2) < 96 && dy < gy + 40) continue; // جای هیزم‌شکن خالی بماند
+        var kind = d % 3;
+        if (kind === 0) {
+          art.shadow(c, dx + 1, dy + 3, 9, 3, 0.35);
+          art.sphere(c, dx, dy, 6 + deco() * 3, "#8d95a3", false);
+        } else if (kind === 1) {
+          c.fillStyle = "#f3ead8";
+          c.fillRect(dx - 1.6, dy - 2, 3.2, 7);
+          c.fillStyle = "#d8343f";
+          c.beginPath();
+          c.arc(dx, dy - 2, 6, Math.PI, 0);
+          c.closePath();
+          c.fill();
+          c.fillStyle = "#ffffff";
+          c.fillRect(dx - 3, dy - 5.4, 1.6, 1.6);
+          c.fillRect(dx + 1.4, dy - 4.4, 1.4, 1.4);
+        } else {
+          c.fillStyle = ["#ffe066", "#ff9ecb", "#ffffff"][d % 3];
+          for (var petal = 0; petal < 5; petal++) {
+            var pa = (petal / 5) * TAU;
+            c.beginPath();
+            c.arc(dx + Math.cos(pa) * 2.4, dy + Math.sin(pa) * 2.4, 1.8, 0, TAU);
+            c.fill();
+          }
+          c.fillStyle = "#f59e0b";
+          c.beginPath();
+          c.arc(dx, dy, 1.5, 0, TAU);
+          c.fill();
+        }
+      }
+    }
+
+    function paintCloud(seed) {
+      return function (c, w) {
+        art.cloud(c, 0, 0, w, "#ffffff", "#b4c8e6", seed);
+      };
     }
 
     function paintSegment(variant) {
@@ -125,7 +167,7 @@
       c.fill();
       env.dropShadow(c);
       var leaves = [[62, 6, 17, "#2f8f46"], [84, 0, 19, "#3aa655"], [98, 10, 15, "#2c7f40"], [74, -12, 16, "#49b862"], [92, -14, 13, "#3aa655"], [52, -6, 12, "#2c7f40"]];
-      for (var i = 0; i < leaves.length; i++) art.sphere(c, leaves[i][0], my + leaves[i][1], leaves[i][2], leaves[i][3], false);
+      for (var i = 0; i < leaves.length; i++) art.leaves(c, leaves[i][0], my + leaves[i][1], leaves[i][2], leaves[i][3]);
       c.fillStyle = "rgba(255,255,200,.3)";
       c.beginPath();
       c.ellipse(80, my - 14, 12, 5, -0.3, 0, TAU);
@@ -171,7 +213,12 @@
     }
 
     /* هیزم‌شکن رو به چپ (به سمت تنه)، بدون تبر؛ پاها روی y=0 */
-    function paintJack(c) {
+    function paintJack(blink) {
+      return function (c) {
+        drawJack(c, blink);
+      };
+    }
+    function drawJack(c, blink) {
       c.translate(30, 104);
       // پاها و چکمه
       c.fillStyle = "#2c3a63";
@@ -210,11 +257,39 @@
       c.arc(0, -68, 16.5, 0.05 * Math.PI, 0.95 * Math.PI);
       c.quadraticCurveTo(0, -60, 16, -67);
       c.fill();
-      c.fillStyle = "#1b1f3a";
+      if (blink) {
+        c.strokeStyle = "#1b1f3a";
+        c.lineWidth = 1.6;
+        c.lineCap = "round";
+        c.beginPath();
+        c.moveTo(-11.4, -75);
+        c.lineTo(-6.8, -75);
+        c.moveTo(-1.4, -75);
+        c.lineTo(3.2, -75);
+        c.stroke();
+      } else {
+        c.fillStyle = "#ffffff";
+        c.beginPath();
+        c.arc(-9, -75, 3.2, 0, TAU);
+        c.arc(1, -75, 3.2, 0, TAU);
+        c.fill();
+        c.fillStyle = "#1b1f3a";
+        c.beginPath();
+        c.arc(-9.8, -75, 1.9, 0, TAU);
+        c.arc(0.2, -75, 1.9, 0, TAU);
+        c.fill();
+      }
+      // ابرو و بینی
+      c.strokeStyle = "#5a3212";
+      c.lineWidth = 1.8;
+      c.lineCap = "round";
       c.beginPath();
-      c.arc(-9, -75, 2.2, 0, TAU);
-      c.arc(1, -75, 2.2, 0, TAU);
-      c.fill();
+      c.moveTo(-12.4, -79.6);
+      c.lineTo(-6.4, -78.6);
+      c.moveTo(-2, -78.6);
+      c.lineTo(4, -79.6);
+      c.stroke();
+      art.sphere(c, -5.2, -70.6, 2.6, "#e5a57a", false);
       var hat = c.createLinearGradient(0, -98, 0, -78);
       hat.addColorStop(0, "#ffd257");
       hat.addColorStop(1, "#e09a12");
@@ -259,6 +334,7 @@
       ownBackground: true,
       reset: function () {
         chips = [];
+        leaves = [];
         swing = drop = fallen = 0;
       },
       input: function (kind, data) {
@@ -278,6 +354,16 @@
             chips.push({ x: cx, y: groundY() - SEG_H / 2, vx: state.side === 0 ? 8 : -8, vy: -6, rot: 0, life: 1, variant: state.chops % 4 });
           }
           env.fx.debris(cx + (state.side === 0 ? -1 : 1) * TRUNK_W / 2, groundY() - SEG_H / 2, "#e2b57e", 6, 3.2, 3);
+          // برگ‌هایی که از شاخه‌ها می‌ریزند
+          for (var leaf = 0; leaf < state.segs.length; leaf++) {
+            if (state.segs[leaf].b && leaves.length < 14) {
+              var side = state.segs[leaf].b === 1 ? -1 : 1;
+              leaves.push({
+                x: cx + side * (TRUNK_W / 2 + 40 + Math.random() * 40), y: groundY() - (leaf + 1) * SEG_H + 20,
+                vx: (Math.random() - 0.5) * 0.8, vy: 0.6 + Math.random() * 0.8, phase: Math.random() * 6, life: 1,
+              });
+            }
+          }
           env.fx.shake(2.5);
           env.haptic("light");
           env.sound("tap");
@@ -303,6 +389,19 @@
         drop *= 0.7;
         if (fallen > 0) fallen = Math.min(1, fallen + 0.06);
         env.scene(c, "timber", paintScene);
+        var now = env.now();
+
+        // ابرهای آرام و پرنده‌ها در آسمان
+        for (var cl = 0; cl < 3; cl++) {
+          var cw = 110 + cl * 36;
+          var cloud = env.sprite("timber:cloud:" + cl, cw, cw * 0.5, paintCloud(5 + cl * 6));
+          c.globalAlpha = 0.9;
+          env.blit(c, cloud, ((now * (0.004 + cl * 0.002) + cl * 150) % (env.W + cw)) - cw, env.safeTop + 30 + cl * 62);
+        }
+        c.globalAlpha = 1;
+        for (var bird = 0; bird < 2; bird++) {
+          art.bird(c, ((now * (0.024 + bird * 0.008) + bird * 190) % (env.W + 60)) - 30, env.safeTop + 150 + bird * 44 + Math.sin(now / 600 + bird) * 8, 5 - bird, now / 120 + bird * 2, "rgba(40,60,80,.6)");
+        }
 
         // تنه و شاخه‌ها (از پایین به بالا)، با انیمیشن پایین آمدن بعد از هر ضربه
         var offset = drop * SEG_H;
@@ -351,7 +450,28 @@
 
         // هیزم‌شکن و تبرش
         var facing = state.side === 0 ? -1 : 1;
-        var jack = env.sprite("timber:jack", 60, 106, paintJack, 2);
+        // برگ‌های در حال افتادن (تاب‌خوران)
+        for (var lf = leaves.length - 1; lf >= 0; lf--) {
+          var leafItem = leaves[lf];
+          leafItem.phase += 0.12;
+          leafItem.x += leafItem.vx + Math.sin(leafItem.phase) * 0.9;
+          leafItem.y += leafItem.vy;
+          if (leafItem.y > gy + 6) leafItem.life -= 0.05;
+          if (leafItem.life <= 0) { leaves.splice(lf, 1); continue; }
+          c.save();
+          c.globalAlpha = leafItem.life;
+          c.translate(leafItem.x, Math.min(leafItem.y, gy + 6));
+          c.rotate(Math.sin(leafItem.phase) * 0.9);
+          c.fillStyle = lf % 2 ? "#3aa655" : "#6cc04a";
+          c.beginPath();
+          c.ellipse(0, 0, 5, 2.4, 0, 0, TAU);
+          c.fill();
+          c.restore();
+        }
+        c.globalAlpha = 1;
+        var blink = fallen === 0 && now % 3100 < 140;
+        var jack = env.sprite(blink ? "timber:jackBlink" : "timber:jack", 60, 106, paintJack(blink), 2);
+        var breath = fallen > 0 ? 0 : Math.sin(now / 520) * 0.012;
         var axe = env.sprite("timber:axe", 60, 64, paintAxe, 2);
         c.save();
         c.translate(cx + facing * (TRUNK_W / 2 + 42), gy);
@@ -361,6 +481,8 @@
         }
         c.scale(facing, 1); // اسپرایت رو به چپ است؛ در سمت چپ تنه آینه می‌شود
         art.shadow(c, 0, 2, 26, 6, 0.4);
+        c.rotate(-swing * 0.1); // هنگام ضربه کمی به سمت تنه خم می‌شود
+        c.scale(1 - breath, 1 + breath);
         c.drawImage(jack.canvas, -30 - jack.pad, -104 - jack.pad, jack.fw, jack.fh);
         c.translate(-12, -44);
         c.rotate(0.85 - swing * 1.75);

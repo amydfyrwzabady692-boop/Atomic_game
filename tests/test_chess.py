@@ -4,6 +4,7 @@ import pytest
 
 from games.catalog import catalog
 from games.chess.engine import Move, Position, parse_square, perft
+from games.chess.pieces import piece_sprite
 from games.chess.render import render_board
 from games.plugins.chess import ChessGame
 
@@ -64,10 +65,35 @@ def test_special_moves():
     assert pinned.moves_from(sq("e2")) == []
 
 
+JPEG = b"\xff\xd8\xff"
+
+
 def test_board_image_renders():
     position = play(Position.initial(), "e2e4", "e7e5")
-    png = render_board(position, Move(sq("e7"), sq("e5")), sq("g1"), (sq("f3"), sq("h3")))
-    assert png[:8] == b"\x89PNG\r\n\x1a\n" and len(png) > 5000
+    image = render_board(position, Move(sq("e7"), sq("e5")), sq("g1"), (sq("f3"), sq("h3")))
+    assert image[:3] == JPEG and 20_000 < len(image) < 400_000  # کم‌حجم، تا هر حرکت سریع بارگذاری شود
+    # هایلایت‌ها و کیش تصویر را عوض می‌کنند
+    plain = render_board(position)
+    assert plain != image
+    mate = Position.from_fen("r1bqkbnr/pppp1Qpp/2n5/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 0 4")
+    assert mate.in_check() and render_board(mate) != plain
+
+
+def test_every_piece_has_its_own_drawn_sprite():
+    """مهره‌ها رویه‌ای کشیده می‌شوند (بدون فونت)؛ هر ۱۲ مهره باید شکل و رنگ خودش را داشته باشد."""
+    sprites = {letter: piece_sprite(letter, 86) for letter in "KQRBNPkqrbnp"}
+    for letter, sprite in sprites.items():
+        assert sprite.size == (86, 86) and sprite.mode == "RGBA"
+        alpha = sprite.getchannel("A")
+        covered = sum(alpha.histogram()[129:])
+        assert 900 < covered < 5200, letter  # نه خالی، نه کل خانه
+        assert alpha.getpixel((2, 2)) == 0 and alpha.getpixel((83, 2)) == 0  # گوشه‌ها شفاف
+    assert len({sprite.tobytes() for sprite in sprites.values()}) == 12
+    # شاه بلندتر از سرباز است و مهره‌ی سفید روشن‌تر از سیاه
+    assert sprites["K"].getbbox()[1] < sprites["P"].getbbox()[1]
+    white_mid = sprites["R"].convert("L").getpixel((43, 60))
+    black_mid = sprites["r"].convert("L").getpixel((43, 60))
+    assert white_mid > black_mid + 60
 
 
 # ====================================================================== بازی در گروه
@@ -99,7 +125,7 @@ def test_chess_registered_as_two_player_game():
 async def test_start_sends_board_photo_with_8x8_keyboard():
     ctx, game, white, black = await start_game()
     first = ctx.sent[0]
-    assert first["photo"][:4] == b"\x89PNG"
+    assert first["photo"][:3] == JPEG
     assert len(first["buttons"]) == 9 and all(len(row) == 8 for row in first["buttons"][:8])
     assert first["buttons"][7][4][1] == f"q:{sq('e1')}"  # ردیف آخر = ردیف ۱، ستون e
     assert "نوبت" in first["text"] and "شطرنج" in first["text"]

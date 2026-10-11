@@ -341,25 +341,232 @@
     };
 
     /* ابر پف‌دار از چند کره‌ی سایه‌خورده */
-    art.cloud = function (c, x, y, w, top, bottom) {
+    /* ابر حجیم: توده‌ای از پف‌های نرم با لبه‌ی محو، کف صاف‌تر و سایه‌ی آبی-خاکستری در پایین.
+       ارتفاع ابر ‎0.5×w‎ است. seed شکل پف‌ها را عوض می‌کند. */
+    art.cloud = function (c, x, y, w, top, bottom, seed) {
       top = top || "#ffffff";
-      bottom = bottom || "#b9c8e8";
-      var h = w * 0.36;
-      var puffs = [[0.2, 0.62, 0.2], [0.4, 0.42, 0.27], [0.63, 0.36, 0.3], [0.82, 0.6, 0.2], [0.52, 0.7, 0.3]];
-      c.fillStyle = bottom;
-      rr(c, x + w * 0.06, y + h * 0.55, w * 0.88, h * 0.45, h * 0.22);
-      c.fill();
-      for (var i = 0; i < puffs.length; i++) {
-        var px = x + puffs[i][0] * w, py = y + puffs[i][1] * h, pr = puffs[i][2] * w * 0.62;
-        var g = c.createRadialGradient(px - pr * 0.3, py - pr * 0.45, pr * 0.1, px, py, pr);
+      bottom = bottom || "#aab9d8";
+      var h = w * 0.5;
+      var rnd = rand(seed || 1);
+      var lw = Math.ceil(w), lh = Math.ceil(h);
+      // ابر در لایه‌ی جدا ساخته می‌شود تا سایه فقط روی خود ابر بنشیند
+      var layer = document.createElement("canvas");
+      var res = env.res || 1;
+      layer.width = Math.ceil(lw * res);
+      layer.height = Math.ceil(lh * res);
+      var l = layer.getContext("2d");
+      l.scale(res, res);
+      var puffs = [];
+      var count = 7 + Math.floor(rnd() * 3);
+      for (var i = 0; i < count; i++) {
+        var t = (i + 0.5) / count;
+        // وسط بلندتر، کناره‌ها کوتاه‌تر
+        var arch = Math.sin(t * Math.PI);
+        var r = w * (0.1 + arch * 0.085 + rnd() * 0.02);
+        puffs.push([w * (0.13 + t * 0.74), Math.max(r + 1, h * (0.76 - arch * 0.3 - rnd() * 0.05)), r]);
+      }
+      puffs.push([w * 0.3, h * 0.74, w * 0.15], [w * 0.52, h * 0.76, w * 0.17], [w * 0.72, h * 0.74, w * 0.14]);
+      for (i = 0; i < puffs.length; i++) {
+        var px = puffs[i][0], py = puffs[i][1], pr = puffs[i][2];
+        var g = l.createRadialGradient(px, py, pr * 0.55, px, py, pr);
         g.addColorStop(0, top);
-        g.addColorStop(0.65, mix(top, bottom, 0.35));
-        g.addColorStop(1, bottom);
-        c.fillStyle = g;
+        g.addColorStop(1, alpha(top.charAt(0) === "#" ? top : "#ffffff", 0));
+        l.fillStyle = g;
+        l.beginPath();
+        l.arc(px, py, pr, 0, TAU);
+        l.fill();
+      }
+      // کف ابر صاف‌تر است
+      l.globalCompositeOperation = "destination-out";
+      var cut = l.createLinearGradient(0, h * 0.84, 0, h);
+      cut.addColorStop(0, "rgba(0,0,0,0)");
+      cut.addColorStop(1, "rgba(0,0,0,1)");
+      l.fillStyle = cut;
+      l.fillRect(0, h * 0.84, w, h * 0.2);
+      // سایه‌ی پایین و نور بالا فقط روی خود ابر
+      l.globalCompositeOperation = "source-atop";
+      var shade = l.createLinearGradient(0, h * 0.3, 0, h * 0.92);
+      shade.addColorStop(0, alpha(bottom.charAt(0) === "#" ? bottom : "#aab9d8", 0));
+      shade.addColorStop(1, alpha(bottom.charAt(0) === "#" ? bottom : "#aab9d8", 0.85));
+      l.fillStyle = shade;
+      l.fillRect(0, 0, w, h);
+      for (i = 0; i < puffs.length - 3; i++) {
+        var hx = puffs[i][0] - puffs[i][2] * 0.25, hy = puffs[i][1] - puffs[i][2] * 0.35, hr = puffs[i][2] * 0.7;
+        var hg = l.createRadialGradient(hx, hy, 0, hx, hy, hr);
+        hg.addColorStop(0, "rgba(255,255,255,.75)");
+        hg.addColorStop(1, "rgba(255,255,255,0)");
+        l.fillStyle = hg;
+        l.fillRect(hx - hr, hy - hr, hr * 2, hr * 2);
+      }
+      c.drawImage(layer, x, y, lw, lh);
+    };
+
+    /* درخت پهن‌برگ: تنه و تاجی از چند توده‌ی برگ */
+    art.tree = function (c, x, base, h, tone, seed) {
+      tone = tone || "#3f9a4c";
+      var rnd = rand(seed || 2);
+      var trunkW = h * 0.09;
+      var tg = c.createLinearGradient(x - trunkW, 0, x + trunkW, 0);
+      tg.addColorStop(0, "#7a4e2a");
+      tg.addColorStop(1, "#3f2613");
+      c.fillStyle = tg;
+      c.beginPath();
+      c.moveTo(x - trunkW * 0.6, base - h * 0.5);
+      c.lineTo(x + trunkW * 0.6, base - h * 0.5);
+      c.lineTo(x + trunkW, base);
+      c.lineTo(x - trunkW, base);
+      c.closePath();
+      c.fill();
+      var crown = [[0, -0.48, 0.22], [-0.21, -0.56, 0.24], [0.21, -0.58, 0.24], [0, -0.66, 0.3], [-0.1, -0.8, 0.22], [0.12, -0.8, 0.2]];
+      for (var i = 0; i < crown.length; i++) {
+        var jitter = (rnd() - 0.5) * 0.04;
+        art.leaves(c, x + (crown[i][0] + jitter) * h, base + crown[i][1] * h, crown[i][2] * h, shade(tone, (rnd() - 0.5) * 0.2));
+      }
+    };
+
+    /* توده‌ی برگ: سایه‌روشن مات (بدون برق) با لکه‌های ریز نور */
+    art.leaves = function (c, x, y, r, tone) {
+      var g = c.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
+      g.addColorStop(0, shade(tone, 0.3));
+      g.addColorStop(0.55, tone);
+      g.addColorStop(1, shade(tone, -0.42));
+      c.fillStyle = g;
+      c.beginPath();
+      c.arc(x, y, r, 0, TAU);
+      c.fill();
+      var rnd = rand(Math.round(x * 7 + y * 13 + r));
+      c.fillStyle = shade(tone, 0.45);
+      for (var i = 0; i < 7; i++) {
+        var a = rnd() * TAU, d = rnd() * r * 0.75;
+        c.globalAlpha = 0.35;
         c.beginPath();
-        c.arc(px, py, pr, 0, TAU);
+        c.ellipse(x + Math.cos(a) * d - r * 0.15, y + Math.sin(a) * d - r * 0.15, r * 0.13, r * 0.07, a, 0, TAU);
         c.fill();
       }
+      c.globalAlpha = 1;
+    };
+
+    /* بوته‌ی کوچک */
+    art.bush = function (c, x, base, w, tone) {
+      tone = tone || "#2f8f46";
+      art.leaves(c, x - w * 0.25, base - w * 0.2, w * 0.28, shade(tone, -0.1));
+      art.leaves(c, x + w * 0.25, base - w * 0.2, w * 0.26, shade(tone, 0.06));
+      art.leaves(c, x, base - w * 0.32, w * 0.34, tone);
+    };
+
+    /* پرنده‌ی دوردست: دو کمان که با phase بال می‌زنند (ارزان؛ هر فریم کشیده می‌شود) */
+    art.bird = function (c, x, y, size, phase, color) {
+      var flap = Math.sin(phase) * size * 0.45;
+      c.strokeStyle = color || "rgba(30,36,60,.7)";
+      c.lineWidth = Math.max(1, size * 0.16);
+      c.lineCap = "round";
+      c.beginPath();
+      c.moveTo(x - size, y - flap);
+      c.quadraticCurveTo(x - size * 0.45, y - size * 0.35 - flap * 0.3, x, y);
+      c.quadraticCurveTo(x + size * 0.45, y - size * 0.35 - flap * 0.3, x + size, y - flap);
+      c.stroke();
+    };
+
+    /* خودرو از پشت سر (برای جاده): کف خودرو روی y=h و وسط آن x=w/2 است.
+       kind: sedan | van | taxi */
+    art.carRear = function (c, w, h, color, kind) {
+      var m = w / 2;
+      var van = kind === "van";
+      var roofY = van ? h * 0.06 : h * 0.2, beltY = h * 0.5, bumperY = h * 0.8;
+      var roofHalf = w * (van ? 0.4 : 0.33), bodyHalf = w * 0.46;
+      // چرخ‌ها
+      c.fillStyle = "#14161c";
+      rr(c, m - bodyHalf + 2, h * 0.78, w * 0.15, h * 0.22, 3);
+      c.fill();
+      rr(c, m + bodyHalf - 2 - w * 0.15, h * 0.78, w * 0.15, h * 0.22, 3);
+      c.fill();
+      // بدنه
+      var paint = c.createLinearGradient(0, roofY, 0, h * 0.92);
+      paint.addColorStop(0, shade(color, 0.35));
+      paint.addColorStop(0.3, color);
+      paint.addColorStop(1, shade(color, -0.45));
+      c.fillStyle = paint;
+      c.beginPath();
+      c.moveTo(m - roofHalf + 5, roofY);
+      c.lineTo(m + roofHalf - 5, roofY);
+      c.quadraticCurveTo(m + roofHalf, roofY, m + roofHalf + 2, roofY + 6);
+      c.lineTo(m + bodyHalf - 3, beltY);
+      c.quadraticCurveTo(m + bodyHalf + 1, beltY + 4, m + bodyHalf, beltY + 10);
+      c.lineTo(m + bodyHalf - 2, h * 0.9);
+      c.lineTo(m - bodyHalf + 2, h * 0.9);
+      c.lineTo(m - bodyHalf, beltY + 10);
+      c.quadraticCurveTo(m - bodyHalf - 1, beltY + 4, m - bodyHalf + 3, beltY);
+      c.lineTo(m - roofHalf - 2, roofY + 6);
+      c.quadraticCurveTo(m - roofHalf, roofY, m - roofHalf + 5, roofY);
+      c.closePath();
+      c.fill();
+      c.strokeStyle = shade(color, -0.6);
+      c.lineWidth = 1;
+      c.stroke();
+      // شیشه‌ی عقب با بازتاب آسمان
+      var glass = c.createLinearGradient(0, roofY + 5, 0, beltY - 2);
+      glass.addColorStop(0, "#9fd0f0");
+      glass.addColorStop(0.5, "#3f6c93");
+      glass.addColorStop(1, "#16263a");
+      c.fillStyle = glass;
+      c.beginPath();
+      c.moveTo(m - roofHalf + 6, roofY + 6);
+      c.lineTo(m + roofHalf - 6, roofY + 6);
+      c.lineTo(m + bodyHalf - 9, beltY - 3);
+      c.lineTo(m - bodyHalf + 9, beltY - 3);
+      c.closePath();
+      c.fill();
+      c.fillStyle = "rgba(255,255,255,.28)";
+      c.beginPath();
+      c.moveTo(m - roofHalf + 10, roofY + 8);
+      c.lineTo(m - roofHalf + 22, roofY + 8);
+      c.lineTo(m - bodyHalf + 20, beltY - 5);
+      c.lineTo(m - bodyHalf + 12, beltY - 5);
+      c.closePath();
+      c.fill();
+      // صندوق، خط در و سپر
+      c.strokeStyle = "rgba(0,0,0,.3)";
+      c.beginPath();
+      c.moveTo(m - bodyHalf + 6, beltY + 14);
+      c.lineTo(m + bodyHalf - 6, beltY + 14);
+      c.stroke();
+      c.fillStyle = "#2a2e38";
+      rr(c, m - bodyHalf + 1, bumperY, bodyHalf * 2 - 2, h * 0.11, 3);
+      c.fill();
+      c.fillStyle = "rgba(255,255,255,.2)";
+      c.fillRect(m - bodyHalf + 5, bumperY + 1.5, bodyHalf * 2 - 10, 1.2);
+      // چراغ‌های عقب با هاله‌ی قرمز
+      for (var side = -1; side <= 1; side += 2) {
+        var lx = m + side * (bodyHalf - w * 0.13), ly = beltY + 18;
+        var halo = c.createRadialGradient(lx, ly, 0, lx, ly, w * 0.16);
+        halo.addColorStop(0, "rgba(255,60,60,.55)");
+        halo.addColorStop(1, "rgba(255,60,60,0)");
+        c.fillStyle = halo;
+        c.fillRect(lx - w * 0.16, ly - w * 0.16, w * 0.32, w * 0.32);
+        var lamp = c.createLinearGradient(0, ly - 4, 0, ly + 4);
+        lamp.addColorStop(0, "#ff8f8f");
+        lamp.addColorStop(1, "#c81e2e");
+        c.fillStyle = lamp;
+        rr(c, lx - w * 0.085, ly - 4, w * 0.17, 8, 3);
+        c.fill();
+      }
+      // پلاک (بدون نوشته) و تابلوی تاکسی
+      c.fillStyle = "#f4f1e4";
+      rr(c, m - w * 0.11, bumperY - h * 0.1, w * 0.22, h * 0.075, 1.5);
+      c.fill();
+      c.fillStyle = "#3a5fb0";
+      c.fillRect(m - w * 0.11, bumperY - h * 0.1, w * 0.035, h * 0.075);
+      if (kind === "taxi") {
+        c.fillStyle = "#1c1f28";
+        rr(c, m - w * 0.09, roofY - h * 0.07, w * 0.18, h * 0.08, 2);
+        c.fill();
+        c.fillStyle = "#ffe36b";
+        rr(c, m - w * 0.07, roofY - h * 0.055, w * 0.14, h * 0.05, 1.5);
+        c.fill();
+      }
+      // برق سقف
+      c.fillStyle = "rgba(255,255,255,.35)";
+      c.fillRect(m - roofHalf + 8, roofY + 1.5, roofHalf * 2 - 16, 1.4);
     };
 
     art.starPath = function (c, x, y, r, points, inner) {

@@ -117,6 +117,8 @@
       event: function (name, state) {
         if (name === "hit") {
           hitFlash.push({ row: state.hits - 1, life: 1 });
+          var col = state.cols[state.hits - 1];
+          env.fx.text((col + 0.5) * colW(), env.H * 0.62, ["♪", "♫", "♩"][state.hits % 3], ["#ffd257", "#6ee7ff", "#ff9ecb"][state.hits % 3]);
           env.haptic("light");
           env.sound("tap");
         } else if (name === "win") {

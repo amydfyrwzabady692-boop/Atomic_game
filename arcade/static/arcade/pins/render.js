@@ -8,6 +8,7 @@
     var TAU = Math.PI * 2;
     var R = 64, EMBED = 12, KNIFE_L = 70, KNIFE_W = 16;
     var bump = 0, failAt = 0, failSide = 1;
+    var stuckAt = 0, stuckIndex = -1;
 
     function center() {
       return { x: env.W / 2, y: env.safeTop + R + KNIFE_L + 6 };
@@ -167,9 +168,9 @@
       env.blitC(c, sp, x, y, rot, scale);
     }
     /* چاقوی فرورفته در کنده در زاویه‌ی theta (رادیان) */
-    function stuck(c, p, theta, out, spin, danger) {
+    function stuck(c, px, py, theta, out, spin, danger) {
       var d = R - EMBED + KNIFE_L / 2 + out;
-      knife(c, p.x + Math.cos(theta) * d, p.y + Math.sin(theta) * d, theta - Math.PI / 2 + spin, danger);
+      knife(c, px + Math.cos(theta) * d, py + Math.sin(theta) * d, theta - Math.PI / 2 + spin, danger);
     }
 
     return {
@@ -179,6 +180,7 @@
       reset: function () {
         bump = 0;
         failAt = 0;
+        stuckIndex = -1;
       },
 
       input: function (kind) {
@@ -195,6 +197,8 @@
         if (name === "throw") env.sound("tick");
         else if (name === "stick") {
           bump = 1;
+          stuckAt = env.now();
+          stuckIndex = state.pins.length - 1;
           env.fx.debris(p.x, p.y + R - 4, "#e2b57e", 5, 2.2, 2.6);
           env.fx.shake(2.5);
           env.haptic("light");
@@ -228,16 +232,31 @@
         var rot = angle * RAD;
         bump *= 0.8;
         env.scene(c, "pins", paintScene);
+        var now = env.now();
+        // ذره‌های غبار معلق در نور
+        c.fillStyle = "#ffe9c4";
+        for (var mote = 0; mote < 14; mote++) {
+          var mx = p.x + Math.sin(now / 2300 + mote * 2.1) * (60 + mote * 9);
+          var my = p.y - 120 + ((now / (46 + mote * 3) + mote * 61) % 330);
+          c.globalAlpha = 0.1 + 0.16 * (0.5 + 0.5 * Math.sin(now / 700 + mote));
+          c.fillRect(mx, my, 1.6, 1.6);
+        }
+        c.globalAlpha = 1;
+        // کنده‌ی مرحله‌ی تازه از بالا پایین می‌آید
+        var intro = state.pause === 0 && !state.over ? env.clamp(state.ltick / 16, 0, 1) : 1;
+        var drop = (1 - intro) * (1 - intro) * 46;
 
         // هنگام تمام شدن مرحله کنده چهار تکه می‌شود و چاقوها بیرون می‌پرند
         var breaking = state.pause > 0 ? env.clamp(1 - (state.pause - alpha) / core.PAUSE_TICKS, 0, 1) : 0;
-        var fade = 1 - breaking * breaking;
-        var cy = p.y - bump * 5;
+        var fade = (1 - breaking * breaking) * intro;
+        var cy = p.y - bump * 5 - drop;
         var i;
 
         c.globalAlpha = fade;
         for (i = 0; i < state.pins.length; i++) {
-          stuck(c, { x: p.x, y: cy + breaking * breaking * 60 }, state.pins[i] * RAD + rot, breaking * 110, breaking * (i % 2 ? 4 : -4), false);
+          // چاقوی تازه‌فرورفته چند لحظه می‌لرزد
+          var wobble = i === stuckIndex ? Math.sin((now - stuckAt) / 22) * Math.exp(-(now - stuckAt) / 150) * 0.16 : 0;
+          stuck(c, p.x, cy + breaking * breaking * 60, state.pins[i] * RAD + rot, breaking * 110, breaking * (i % 2 ? 4 : -4) + wobble, false);
         }
         c.globalAlpha = 1;
 
@@ -258,6 +277,7 @@
             c.restore();
           }
         } else {
+          c.globalAlpha = intro;
           env.blitC(c, log, p.x, cy, rot);
           env.blit(c, env.sprite("pins:light", R * 2, R * 2, paintLight), p.x - R, cy - R);
           env.blitC(c, env.sprite(boss ? "pins:hubBoss" : "pins:hub", 38, 38, paintHub(boss), 6), p.x, cy);
@@ -267,6 +287,7 @@
           c.font = env.font(20, 900);
           c.fillText(env.fa(Math.max(state.remaining, 0)), p.x, cy + 1.5);
           c.textBaseline = "alphabetic";
+          c.globalAlpha = 1;
         }
 
         // چاقویی که به چاقوی دیگر خورده و کمانه می‌کند

@@ -189,6 +189,14 @@
         var cx = env.W / 2;
         var now = env.now();
         env.scene(c, "colorswitch", paintScene);
+        // ذره‌های نور که آرام بالا می‌روند
+        for (var mote = 0; mote < 12; mote++) {
+          c.fillStyle = COLORS[mote % 4];
+          c.globalAlpha = 0.12 + 0.2 * (0.5 + 0.5 * Math.sin(now / 500 + mote * 1.3));
+          var my = env.H - ((now * (0.012 + (mote % 4) * 0.004) + mote * 83 + camera * 0.02) % (env.H + 20));
+          c.fillRect((mote * 71 + 23) % env.W, my, 2, 2);
+        }
+        c.globalAlpha = 1;
 
         var first = Math.max(0, Math.floor((camera - 2600) / core.SPACING) - 1);
         for (var k = first; k < first + 4; k++) {
@@ -211,8 +219,8 @@
             }
             if (k >= state.passed && spec.type !== 2) {
               var beat = 1 + Math.sin(now / 260 + k) * 0.08;
-              art.glow(c, cx, sy, 26, "#ffd257", 0.35);
-              env.blitC(c, env.sprite("cs:star", 28, 28, paintStar, 5), cx, sy, 0, beat);
+              art.glow(c, cx, sy, 26, "#ffd257", 0.3 + 0.15 * Math.sin(now / 200 + k));
+              env.blitC(c, env.sprite("cs:star", 28, 28, paintStar, 5), cx, sy, Math.sin(now / 700 + k) * 0.25, beat);
             }
           }
           // گوی تعویض رنگ بین این مانع و بعدی

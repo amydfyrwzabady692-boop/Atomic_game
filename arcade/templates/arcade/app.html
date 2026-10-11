@@ -44,6 +44,8 @@
 
 <section id="screen-over" class="screen hidden">
   <div class="card">
+    <div id="confetti" aria-hidden="true"></div>
+    <div class="badge hidden" id="over-badge">🏆 رکورد جدید!</div>
     <p class="muted" id="over-label">امتیاز تو</p>
     <div class="big-score" id="over-score">۰</div>
     <div class="stats" id="over-stats"></div>
@@ -77,6 +79,7 @@ window.ARCADE_BOOT = {
 <script src="{% static 'arcade/common/registry.js' %}?v={{ version }}"></script>
 <script src="{% static 'arcade/common/rng.js' %}?v={{ version }}"></script>
 <script src="{% static 'arcade/common/art.js' %}?v={{ version }}"></script>
+<script src="{% static 'arcade/common/icons.js' %}?v={{ version }}"></script>
 <script src="{% static 'arcade/common/shell.js' %}?v={{ version }}"></script>
 </body>
 </html>

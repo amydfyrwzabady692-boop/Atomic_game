@@ -237,6 +237,18 @@
             art.glow(c, cx, by, 34 + Math.sin(env.now() / 50) * 4, "#ff7b00", 0.8);
             art.glow(c, cx, by - 16, 20, "#ffd257", 0.6);
           }
+          // رد توپ هنگام سقوط سریع
+          if (state.vy > 40 && !state.over) {
+            var streak = Math.min(1, (state.vy - 40) / 100);
+            c.fillStyle = fire ? "#ffb703" : th.ball;
+            for (var ghost = 1; ghost <= 3; ghost++) {
+              c.globalAlpha = 0.22 * streak * (1 - ghost / 4);
+              c.beginPath();
+              c.arc(cx, by - ghost * 9 * streak, 11.5 - ghost * 1.6, 0, TWO_PI);
+              c.fill();
+            }
+            c.globalAlpha = 1;
+          }
           env.blitC(c, env.sprite(fire ? "helix:fire" : "helix:ball:" + themeIndex, 24, 24, paintBall(th.ball, fire), 5), cx, by + squash * 3, 0, 1 + squash * 0.25, 1 - squash * 0.25);
         }
 

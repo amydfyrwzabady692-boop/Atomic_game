@@ -67,6 +67,27 @@
       c.fillStyle = side;
       c.fillRect(b.x, b.y, 10, b.h);
       c.restore();
+      // گل‌ها و سنگ‌های دور زمین
+      var deco = art.rand(55);
+      for (var d = 0; d < 34; d++) {
+        var dx = -bleed + deco() * (w + bleed * 2), dy = -bleed + deco() * (h + bleed * 2);
+        if (dx > b.x - 16 && dx < b.x + b.w + 16 && dy > b.y - 16 && dy < b.y + b.h + 16) continue;
+        if (d % 5 === 0) {
+          art.sphere(c, dx, dy, 4 + deco() * 3, "#7d8794", false);
+        } else {
+          c.fillStyle = ["#ffe066", "#ff9ecb", "#ffffff", "#c9b6ff"][d % 4];
+          for (var petal = 0; petal < 5; petal++) {
+            var pa = (petal / 5) * TAU;
+            c.beginPath();
+            c.arc(dx + Math.cos(pa) * 2.2, dy + Math.sin(pa) * 2.2, 1.6, 0, TAU);
+            c.fill();
+          }
+          c.fillStyle = "#f59e0b";
+          c.beginPath();
+          c.arc(dx, dy, 1.3, 0, TAU);
+          c.fill();
+        }
+      }
       art.vignette(c, w, h, 0.4);
     }
 
@@ -100,8 +121,8 @@
       };
     }
 
-    /* سر مار رو به راست؛ dead چشم‌های ضربدری می‌کشد */
-    function paintHead(s, dead) {
+    /* سر مار رو به راست؛ dead چشم‌های ضربدری و blink چشم بسته می‌کشد */
+    function paintHead(s, dead, blink) {
       return function (c) {
         var m = s; // مرکز
         var g = c.createRadialGradient(m - s * 0.15, m - s * 0.2, s * 0.05, m, m, s * 0.75);
@@ -127,6 +148,14 @@
             c.moveTo(ex + s * 0.11, ey - s * 0.11);
             c.lineTo(ex - s * 0.11, ey + s * 0.11);
             c.stroke();
+          } else if (blink) {
+            c.strokeStyle = "#102a18";
+            c.lineWidth = Math.max(1.4, s * 0.08);
+            c.lineCap = "round";
+            c.beginPath();
+            c.moveTo(ex, ey - s * 0.13);
+            c.lineTo(ex, ey + s * 0.13);
+            c.stroke();
           } else {
             c.fillStyle = "#ffffff";
             c.beginPath();
@@ -139,6 +168,13 @@
             c.fillStyle = "#ffffff";
             c.beginPath();
             c.arc(ex + s * 0.02, ey - s * 0.04, s * 0.035, 0, TAU);
+            c.fill();
+          }
+          // فلس‌های روی سر
+          if (side === 1) {
+            c.fillStyle = "rgba(255,214,90,.6)";
+            c.beginPath();
+            c.ellipse(m - s * 0.12, m, s * 0.12, s * 0.17, 0, 0, TAU);
             c.fill();
           }
           c.fillStyle = "rgba(15,60,30,.7)";
@@ -214,6 +250,9 @@
           var ar = cell * 0.4;
           var bob = Math.sin(env.now() / 300) * 1.2;
           env.blit(c, env.sprite("snake:apple", ar * 2.4, ar * 2.4, paintApple(ar), 3), cx(b, state.food) - ar * 1.2, cy(b, state.food) - ar * 1.2 - bob);
+          // برق کوچکی که روی سیب می‌چرخد
+          var twinkle = (env.now() / 900) % 1;
+          art.glow(c, cx(b, state.food) - ar * 0.3 + twinkle * ar * 0.5, cy(b, state.food) - ar * 0.45 - bob, ar * 0.5, "#ffffff", Math.sin(twinkle * Math.PI) * 0.8);
         }
 
         // مسیر بدن: دم (در حال رسیدن به خانه‌ی خودش) ← خانه‌ها ← سر (در حال رسیدن به خانه‌ی تازه)
@@ -273,6 +312,15 @@
             c.arc(xs[i], ys[i], cell * 0.11, 0, TAU);
           }
           c.fill();
+          // فلس‌های تیره‌تر بین خال‌ها
+          c.fillStyle = dead ? "rgba(40,60,48,.35)" : "rgba(18,84,44,.55)";
+          c.beginPath();
+          for (i = 1; i <= last; i++) {
+            var mx = (xs[i] + xs[i - 1]) / 2, my = (ys[i] + ys[i - 1]) / 2;
+            c.moveTo(mx + cell * 0.07, my);
+            c.arc(mx, my, cell * 0.07, 0, TAU);
+          }
+          c.fill();
         }
 
         // سر (رو به جهت حرکت) و زبان
@@ -294,7 +342,8 @@
           c.restore();
         }
         var deadHead = state.over && state.cause !== "win";
-        env.blitC(c, env.sprite(deadHead ? "snake:dead" : "snake:head", cell * 2, cell * 2, paintHead(cell, deadHead), 2), hx, hy, angle, 0.86 + gulp * 0.12);
+        var blink = !deadHead && env.now() % 2900 < 130;
+        env.blitC(c, env.sprite(deadHead ? "snake:dead" : blink ? "snake:blink" : "snake:head", cell * 2, cell * 2, paintHead(cell, deadHead, blink), 2), hx, hy, angle, 0.86 + gulp * 0.12);
       },
     };
   });
