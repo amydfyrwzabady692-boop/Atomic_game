@@ -110,6 +110,11 @@
         c.fillRect(-1, -1, w + 2, h + 2);
       };
     }
+    function paintCloud(seed) {
+      return function (c, w) {
+        art.cloud(c, 0, 0, w, "#ffffff", "#c9d8f2", seed);
+      };
+    }
     function paintPillar(c, w, h) {
       var g = c.createLinearGradient(0, 0, w, 0);
       g.addColorStop(0, "#9aa6bd");
@@ -221,6 +226,17 @@
 
         c.drawImage(env.sprite("helix:sky:" + themeIndex, 4, H, paintSky(th.sky)).canvas, -12, -12, W + 24, H + 24);
         art.glow(c, cx, H * 0.45, W * 0.9, "#ffffff", 0.22);
+        // ابرهای دور که با پایین رفتن توپ بالا می‌روند
+        var nowMs = env.now();
+        c.globalAlpha = 0.55;
+        for (var cl = 0; cl < 4; cl++) {
+          var cw = 110 + (cl % 2) * 50;
+          var cloud = env.sprite("helix:cloud:" + (cl % 2), cw, cw * 0.5, paintCloud(4 + (cl % 2) * 5));
+          var span = H + 160;
+          var cloudY = H - ((((camera * SY * 0.3 + cl * 211) % span) + span) % span);
+          env.blit(c, cloud, ((cl * 157 + nowMs * 0.004) % (W + cw)) - cw, cloudY);
+        }
+        c.globalAlpha = 1;
         var pillar = env.sprite("helix:pillar", R_IN * 2, 8, paintPillar);
         c.drawImage(pillar.canvas, cx - R_IN, -12, R_IN * 2, H + 24);
 

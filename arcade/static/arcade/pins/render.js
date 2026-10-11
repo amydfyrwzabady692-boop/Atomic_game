@@ -43,6 +43,32 @@
       art.vignette(c, w, h, 0.72);
     }
 
+    /* فانوس دیواری (بدون هاله؛ نور لرزانش جدا کشیده می‌شود) */
+    function paintLantern(c, w, h) {
+      var m = w / 2;
+      c.strokeStyle = "#1c1410";
+      c.lineWidth = 2.4;
+      c.beginPath();
+      c.moveTo(m, 0);
+      c.lineTo(m, 9);
+      c.stroke();
+      art.metal(c, m - 9, 8, 18, 5, { base: "#6b5a44" });
+      art.metal(c, m - 10, h - 6, 20, 6, { base: "#6b5a44" });
+      var glass = c.createLinearGradient(0, 13, 0, h - 6);
+      glass.addColorStop(0, "#fff3c4");
+      glass.addColorStop(0.5, "#ffc857");
+      glass.addColorStop(1, "#e08a1e");
+      c.fillStyle = glass;
+      c.fillRect(m - 7, 13, 14, h - 19);
+      c.strokeStyle = "#2a1e14";
+      c.lineWidth = 1.4;
+      c.strokeRect(m - 7, 13, 14, h - 19);
+      c.beginPath();
+      c.moveTo(m, 13);
+      c.lineTo(m, h - 6);
+      c.stroke();
+    }
+
     function paintLog(boss) {
       return function (c) {
         env.dropShadow(c, 7, 5, 0.5);
@@ -242,6 +268,14 @@
           c.fillRect(mx, my, 1.6, 1.6);
         }
         c.globalAlpha = 1;
+        // فانوس‌ها و نور لرزان‌شان
+        var lantern = env.sprite("pins:lantern", 24, 44, paintLantern);
+        for (var side = 0; side < 2; side++) {
+          var lx = side ? env.W - 42 : 42, ly = env.safeTop + 6;
+          var flicker = 0.62 + 0.14 * Math.sin(now / 90 + side * 2) + 0.08 * Math.sin(now / 37 + side);
+          art.glow(c, lx, ly + 26, 78, "#ffb347", flicker * 0.55);
+          env.blit(c, lantern, lx - 12, ly);
+        }
         // کنده‌ی مرحله‌ی تازه از بالا پایین می‌آید
         var intro = state.pause === 0 && !state.over ? env.clamp(state.ltick / 16, 0, 1) : 1;
         var drop = (1 - intro) * (1 - intro) * 46;

@@ -50,7 +50,14 @@ def test_renderer_follows_the_fast_drawing_rules(key):
 def test_app_page_loads_the_art_kit_before_the_shell():
     template = (ROOT / "arcade" / "templates" / "arcade" / "app.html").read_text(encoding="utf-8")
     assert (STATIC / "common" / "art.js").is_file()
-    assert template.index("common/art.js") < template.index("common/shell.js")
+    assert template.index("common/art.js") < template.index("common/icons.js") < template.index("common/shell.js")
+
+
+@pytest.mark.parametrize("key", KEYS)
+def test_every_game_has_a_drawn_menu_icon(key):
+    """منو و صفحه‌ی شروع برای هر بازی یک نماد تصویری دارند (نه فقط ایموجی)."""
+    icons = (STATIC / "common" / "icons.js").read_text(encoding="utf-8")
+    assert f"      {key}: function (c) {{" in icons
 
 
 @pytest.mark.parametrize("key", KEYS)

@@ -1,10 +1,14 @@
-/* «برج‌ساز» — رندر و افکت‌ها: بلوک‌های سه‌بعدی براق، آسمانی که با بالا رفتن برج از روز به شب می‌رسد
-   و ابرها و شهر دوردست با پارالاکس. */
+/* «برج‌ساز» — رندر و افکت‌ها: هر بلوک یک طبقه‌ی برج است با نمای بتنی و پنجره‌های شیشه‌ای که جرثقیل
+   پایین می‌آورد؛ آسمان با بالا رفتن برج از روز به شب می‌رسد و پنجره‌ها روشن می‌شوند. ابرها، پرنده‌ها و
+   شهر دوردست با پارالاکس حرکت می‌کنند. */
 (function () {
   "use strict";
   Arcade.registerRenderer("stack", function (env) {
     var art = env.art;
     var BLOCK_H = 30, DEPTH = 10;
+    var PITCH = 20; // فاصله‌ی افقی پنجره‌ها
+    var FACADE_W = 560; // عرض نوار نما (بیشتر از پهن‌ترین طبقه + جابه‌جایی الگو)
+    var nightAmount = 0;
     var camera = 0; // تعداد بلوک‌هایی که دوربین بالا رفته (نرم)
     var falling = []; // تکه‌های بریده‌شده‌ی در حال سقوط
     var pulses = []; // قاب نورانی بعد از ضربه‌ی دقیق
@@ -16,9 +20,9 @@
       if (hit) return hit;
       var hue = (index * 9 + 196) % 360;
       hit = palette[index] = {
-        top: "hsl(" + hue + ",78%,76%)",
-        front: "hsl(" + hue + ",72%,57%)",
-        side: "hsl(" + hue + ",62%,36%)",
+        top: "hsl(" + hue + ",34%,84%)",
+        tint: "hsla(" + hue + ",85%,58%,.24)",
+        side: "hsl(" + hue + ",26%,42%)",
         glow: "hsl(" + hue + ",90%,70%)",
       };
       return hit;
@@ -41,6 +45,55 @@
       c.fillRect(0, 0, w, 1);
       c.fillStyle = "rgba(0,0,20,.35)";
       c.fillRect(0, h - 1, w, 1);
+    }
+    /* نمای یک طبقه: بتن روشن با یک ردیف پنجره‌ی شیشه‌ای */
+    function paintFacade(c, w, h) {
+      var wall = c.createLinearGradient(0, 0, 0, h);
+      wall.addColorStop(0, "#dfe4ec");
+      wall.addColorStop(1, "#b3bcc9");
+      c.fillStyle = wall;
+      c.fillRect(0, 0, w + 1, h);
+      c.fillStyle = "#eef1f6";
+      c.fillRect(0, 0, w + 1, 4);
+      c.fillStyle = "rgba(60,70,90,.45)";
+      c.fillRect(0, 4, w + 1, 1);
+      c.fillStyle = "#8a94a3";
+      c.fillRect(0, h - 3, w + 1, 3);
+      for (var x = 4; x < w; x += PITCH) {
+        var glass = c.createLinearGradient(0, 7, 0, 24);
+        glass.addColorStop(0, "#a9dcfa");
+        glass.addColorStop(0.5, "#4f97cc");
+        glass.addColorStop(1, "#28587f");
+        c.fillStyle = glass;
+        c.fillRect(x, 7, 12, 17);
+        // بازتاب مورب آسمان روی شیشه
+        c.fillStyle = "rgba(255,255,255,.4)";
+        c.beginPath();
+        c.moveTo(x + 1, 8);
+        c.lineTo(x + 6, 8);
+        c.lineTo(x + 1, 17);
+        c.closePath();
+        c.fill();
+        c.strokeStyle = "#3b4656";
+        c.lineWidth = 1;
+        c.strokeRect(x + 0.5, 7.5, 11, 16);
+        c.fillStyle = "#3b4656";
+        c.fillRect(x + 5.6, 7, 0.9, 17);
+      }
+    }
+    /* پنجره‌های روشن شب (روی نما کشیده می‌شود)؛ بعضی خاموش‌اند */
+    function paintLitWindows(c, w) {
+      var rnd = art.rand(77);
+      for (var x = 4; x < w; x += PITCH) {
+        if (rnd() < 0.38) continue;
+        var warm = c.createLinearGradient(0, 7, 0, 24);
+        warm.addColorStop(0, "#fff3c2");
+        warm.addColorStop(1, rnd() < 0.5 ? "#ffb347" : "#ffd27a");
+        c.fillStyle = warm;
+        c.fillRect(x + 1, 8, 10, 15);
+        c.fillStyle = "rgba(90,50,10,.55)";
+        c.fillRect(x + 5.6, 8, 0.9, 15);
+      }
     }
     function sky(top, mid, bottom) {
       return function (c, w, h) {
@@ -131,8 +184,23 @@
       c.lineTo(x + w, y + BLOCK_H);
       c.closePath();
       c.fill();
-      c.fillStyle = col.front;
+      // نمای طبقه: تکه‌ای از نوار پنجره‌ها که با شبکه‌ی پنجره‌های کل برج هم‌تراز است
+      var facade = env.sprite("stack:facade", FACADE_W, BLOCK_H, paintFacade);
+      var px = facade.canvas.width / FACADE_W;
+      var sx = ((x % PITCH) + PITCH) % PITCH;
+      c.drawImage(facade.canvas, sx * px, 0, w * px, facade.canvas.height, x, y, w, BLOCK_H);
+      c.fillStyle = col.tint;
       c.fillRect(x, y, w, BLOCK_H);
+      if (nightAmount > 0.02) {
+        c.fillStyle = "rgba(8,12,40," + nightAmount * 0.42 + ")";
+        c.fillRect(x, y, w, BLOCK_H);
+        var lit = env.sprite("stack:lit", FACADE_W, BLOCK_H, paintLitWindows);
+        var before = c.globalAlpha;
+        c.globalAlpha = before * nightAmount;
+        // هر طبقه الگوی روشنایی خودش را دارد
+        c.drawImage(lit.canvas, (sx + ((index * 7) % 8) * PITCH) * px, 0, w * px, lit.canvas.height, x, y, w, BLOCK_H);
+        c.globalAlpha = before;
+      }
       var shade = env.sprite("stack:shade", 8, BLOCK_H, paintShade);
       c.drawImage(shade.canvas, x, y, w, BLOCK_H);
       if (a !== undefined) c.globalAlpha = 1;
@@ -192,6 +260,7 @@
 
         // آسمان: روز ← غروب ← شب
         var dusk = env.clamp((camera - 8) / 14, 0, 1), night = env.clamp((camera - 30) / 18, 0, 1);
+        nightAmount = Math.max(night, dusk * 0.45); // پنجره‌ها از غروب کم‌کم روشن می‌شوند
         var day = env.sprite("stack:day", 4, H, sky("#3f97ea", "#8ecbf7", "#d7efff"));
         c.drawImage(day.canvas, -12, -12, W + 24, H + 24);
         if (dusk > 0) {
@@ -292,7 +361,22 @@
             c.fill();
           }
           var hover = topY - BLOCK_H - 6;
-          art.glow(c, x + w / 2, hover + BLOCK_H / 2, Math.max(w * 0.75, 40), colors(count).glow, 0.3);
+          // کابل‌ها و قلاب جرثقیل که طبقه را نگه داشته
+          var hookX = x + w / 2 + DEPTH / 2, hookY = hover - 46;
+          c.strokeStyle = "rgba(30,36,48,.85)";
+          c.lineWidth = 1.4;
+          c.beginPath();
+          c.moveTo(x + 6, hover - DEPTH / 2);
+          c.lineTo(hookX, hookY);
+          c.lineTo(x + w + DEPTH - 6, hover - DEPTH / 2);
+          c.moveTo(hookX, hookY);
+          c.lineTo(hookX, -20);
+          c.stroke();
+          c.fillStyle = "#f4b400";
+          c.fillRect(hookX - 5, hookY - 7, 10, 9);
+          c.fillStyle = "rgba(0,0,0,.3)";
+          c.fillRect(hookX - 5, hookY, 10, 2);
+          art.glow(c, x + w / 2, hover + BLOCK_H / 2, Math.max(w * 0.75, 40), colors(count).glow, 0.22);
           slab(c, x, w, hover, count);
         }
 
