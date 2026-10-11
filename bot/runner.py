@@ -33,7 +33,7 @@ from games.engine.registry import get_game
 from games.engine.services import MatchError
 from games.models import ACTIVE_STATUSES, Match, MatchPlayer, MatchStatus
 
-from . import render
+from . import cards, render
 from .db import db
 from .tg import EditQueue, tg_call
 
@@ -463,13 +463,7 @@ class MatchManager:
         result = await db(services.finish_match)(active.match_id, standings)
         if result is None:
             return
-        await tg_call(
-            self.bot.send_message,
-            active.chat_id,
-            render.result_text(result, active.info),
-            parse_mode="HTML",
-            disable_web_page_preview=True,
-        )
+        await self._announce_result(active, result)
         for referrer, invitee in result.referral_rewards:
             from django.conf import settings
 
@@ -484,6 +478,24 @@ class MatchManager:
         logger.info(
             "match finished",
             extra={"match_id": active.match_id, "pot": result.match.pot, "players": len(result.players)},
+        )
+
+    async def _announce_result(self, active: ActiveMatch, result) -> None:
+        """نتیجه را با کارت تصویری سکو می‌فرستد؛ اگر کارت ساخته یا فرستاده نشد، فقط متن."""
+        text = render.result_text(result, active.info)
+        card = await asyncio.to_thread(cards.result_card, result, active.info)
+        if card and cards.visible_length(text) <= cards.CAPTION_LIMIT:
+            if await tg_call(self.bot.send_photo, active.chat_id, card, caption=text, parse_mode="HTML"):
+                return
+        elif card:
+            # متن نتیجه از سقف کپشن بلندتر است: کارت جدا و متن کامل زیر آن
+            await tg_call(self.bot.send_photo, active.chat_id, card)
+        await tg_call(
+            self.bot.send_message,
+            active.chat_id,
+            text,
+            parse_mode="HTML",
+            disable_web_page_preview=True,
         )
 
     # ================================================================ آرکید

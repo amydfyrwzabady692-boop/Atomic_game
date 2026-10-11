@@ -39,7 +39,7 @@ def _candidates() -> list[str]:
     return [FONT_CANDIDATES[0], FONT_CANDIDATES[1], *found, *FONT_CANDIDATES[2:]]
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=32)
 def load_font(size: int) -> ImageFont.FreeTypeFont:
     for path in _candidates():
         if path and Path(path).is_file():
