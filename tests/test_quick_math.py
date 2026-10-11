@@ -55,7 +55,7 @@ async def test_timeout_reveals_answer_and_moves_on():
     await game.start()
     first_answer = game.answer
     await ctx.fire("round")
-    assert "وقت تموم شد" in ctx.last_text
+    assert "وقت تمام شد" in ctx.last_text
     await game.on_message(ctx.msg(0, str(first_answer)))  # بعد از پایان راند
     assert game.scores[1] == 0
     await ctx.fire("gap")

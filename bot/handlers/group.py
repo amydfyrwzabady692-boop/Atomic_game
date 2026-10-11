@@ -2,17 +2,18 @@
 
 from html import escape
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardMarkup, Update
 from telegram.constants import ChatMemberStatus, ChatType
 from telegram.ext import ContextTypes
 
 from core import texts
 from core.models import TelegramGroup, TelegramUser
 from core.texts import fa_num
+from games.catalog import catalog, get_info
 from games.engine.services import MatchError
 from leaderboard.queries import top_players
 
-from .. import ratelimit
+from .. import ratelimit, render, ui
 from ..db import db
 from ..tg import tg_call
 from ..users import deactivate_group, ensure_group, is_group_admin
@@ -107,7 +108,8 @@ async def game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     active = manager.active.get(update.effective_chat.id)
     _, match_id, data = query.data.split(":", 2)
     if active is None or str(active.match_id) != match_id or active.phase != "running":
-        await answer_fn(texts.LOBBY_CLOSED)
+        # دکمه‌ی یک بازیِ تمام‌شده (مثلاً صفحه‌ی دوز قبلی)
+        await answer_fn(texts.GAME_OVER)
         return
     await manager.on_callback(active, tg_user.id, data, query.message.message_id if query.message else 0, answer_fn)
 
@@ -117,7 +119,11 @@ def _top_keyboard(scope: str, period: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton(("• " if key == period else "") + label, callback_data=f"top:{scope}:{key}")
+                ui.button(
+                    ("• " if key == period else "") + label,
+                    f"top:{scope}:{key}",
+                    style=ui.PRIMARY if key == period else "",
+                )
                 for key, label in texts.TOP_PERIODS.items()
             ]
         ]
@@ -179,9 +185,58 @@ async def top_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user:
     )
 
 
+def rules_home():
+    keyboard = InlineKeyboardMarkup(
+        [
+            [
+                ui.button(texts.RULES_TEXT_GAMES_BTN, "rules:t", style=ui.PRIMARY),
+                ui.button(texts.RULES_ARCADE_BTN, "rules:a", style=ui.SUCCESS),
+            ]
+        ]
+    )
+    return texts.RULES, keyboard
+
+
+def rules_list(arcade: bool):
+    """فهرست بازی‌های یک دسته؛ هر دکمه قوانین همان بازی را نشان می‌دهد."""
+    games = [g for g in catalog().values() if g.is_arcade == arcade]
+    style = ui.SUCCESS if arcade else ui.PRIMARY
+    rows = ui.rows([ui.button(f"{g.emoji} {g.title_fa}", f"rules:g:{g.key}", style=style) for g in games], 2)
+    rows.append([ui.button(texts.BACK_BTN, "rules:home")])
+    return (texts.RULES_LIST_ARCADE if arcade else texts.RULES_LIST_TEXT), InlineKeyboardMarkup(rows)
+
+
+def rules_game(info):
+    back = "rules:a" if info.is_arcade else "rules:t"
+    return render.rules_text(info), InlineKeyboardMarkup([[ui.button(texts.BACK_BTN, back)]])
+
+
 @command()
 async def rules(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser):
-    await reply(update, texts.RULES)
+    await reply(update, *rules_home())
+
+
+@callback
+async def rules_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser, query):
+    parts = query.data.split(":", 2)
+    action = parts[1] if len(parts) > 1 else ""
+    if action == "home":
+        screen = rules_home()
+    elif action in ("t", "a"):
+        screen = rules_list(arcade=action == "a")
+    elif action == "g" and len(parts) > 2 and catalog().get(parts[2]):
+        screen = rules_game(catalog()[parts[2]])
+    else:
+        return
+    await tg_call(query.edit_message_text, screen[0], parse_mode="HTML", reply_markup=screen[1])
+
+
+@callback
+async def rules_alert_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser, query):
+    """دکمه‌ی «قوانین بازی» زیر لابی و جدول آرکید: قوانین کوتاه فقط برای همان کاربر باز می‌شود."""
+    info = get_info(query.data.split(":", 1)[1])
+    if info is not None:
+        await answer(query, render.rules_alert(info), alert=True)
 
 
 # ------------------------------------------------------------------ اضافه/حذف شدن ربات

@@ -1,6 +1,6 @@
 """/settings — تنظیمات گروه، فقط برای ادمین‌ها (بررسی با getChatMember در هر کلیک)."""
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from core import texts
@@ -8,6 +8,7 @@ from core.models import TelegramGroup, TelegramUser
 from core.texts import fa_num
 from games.catalog import catalog
 
+from .. import ui
 from ..db import db
 from ..tg import tg_call
 from ..users import ensure_group, is_group_admin
@@ -37,18 +38,20 @@ def home_screen(group: TelegramGroup):
     )
     keyboard = InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton(texts.SETTINGS_GAMES_BTN, callback_data="set:games")],
+            [ui.button(texts.SETTINGS_GAMES_BTN, "set:games", style=ui.PRIMARY)],
             [
-                InlineKeyboardButton(texts.SETTINGS_MIN_BTN.format(v=fa_num(group.min_entry)), callback_data="set:min"),
-                InlineKeyboardButton(texts.SETTINGS_MAX_BTN.format(v=fa_num(group.max_entry)), callback_data="set:max"),
+                ui.button(texts.SETTINGS_MIN_BTN.format(v=fa_num(group.min_entry)), "set:min"),
+                ui.button(texts.SETTINGS_MAX_BTN.format(v=fa_num(group.max_entry)), "set:max"),
             ],
+            [ui.button(texts.SETTINGS_JOIN_BTN.format(v=fa_num(group.default_join_seconds)), "set:join")],
             [
-                InlineKeyboardButton(
-                    texts.SETTINGS_JOIN_BTN.format(v=fa_num(group.default_join_seconds)), callback_data="set:join"
+                ui.button(
+                    texts.SETTINGS_USERS_BTN.format(v=yes_no),
+                    "set:users",
+                    style=ui.SUCCESS if group.allow_user_created_games else ui.DANGER,
                 )
             ],
-            [InlineKeyboardButton(texts.SETTINGS_USERS_BTN.format(v=yes_no), callback_data="set:users")],
-            [InlineKeyboardButton(texts.CLOSE_BTN, callback_data="set:close")],
+            [ui.button(texts.CLOSE_BTN, "set:close", style=ui.DANGER)],
         ]
     )
     return text, keyboard
@@ -56,13 +59,15 @@ def home_screen(group: TelegramGroup):
 
 def games_screen(group: TelegramGroup):
     buttons = [
-        InlineKeyboardButton(
-            f"{texts.ON if group.game_enabled(key) else texts.OFF} {info.title_fa}", callback_data=f"set:tg:{key}"
+        ui.button(
+            f"{texts.ON if group.game_enabled(key) else texts.OFF} {info.title_fa}",
+            f"set:tg:{key}",
+            style=ui.SUCCESS if group.game_enabled(key) else "",
         )
         for key, info in catalog().items()
     ]
     rows = [buttons[i : i + 2] for i in range(0, len(buttons), 2)]
-    rows.append([InlineKeyboardButton(texts.BACK_BTN, callback_data="set:home")])
+    rows.append([ui.button(texts.BACK_BTN, "set:home")])
     return texts.SETTINGS_GAMES_HEADER, InlineKeyboardMarkup(rows)
 
 

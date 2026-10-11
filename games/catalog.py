@@ -27,6 +27,7 @@ class GameInfo:
     variant_title_fa: str = ""
     variants: dict = field(default_factory=dict)
     suggested_minutes: int = 5
+    rules: tuple = ()  # قوانین کوتاه بازی، خط‌به‌خط
     # پیش‌فرض‌ها و بازه‌ی مجاز تنظیم تعداد شرکت‌کننده از پنل ادمین
     default_min: int = 2
     default_max: int = 20
@@ -63,6 +64,7 @@ def defaults() -> dict[str, GameInfo]:
             max_players=cls.max_players,
             variant_title_fa=cls.variant_title_fa,
             variants=dict(cls.variants),
+            rules=cls.rules(),
             default_min=cls.min_players,
             default_max=cls.max_players,
             floor=cls.players_floor,
@@ -82,6 +84,7 @@ def defaults() -> dict[str, GameInfo]:
             variant_title_fa=sim.variant_title_fa,
             variants=dict(sim.variants),
             suggested_minutes=sim.suggested_minutes,
+            rules=tuple(sim.rules_fa),
             default_min=2,
             default_max=ARCADE_DEFAULT_MAX,
             floor=2,

@@ -1,7 +1,7 @@
 """/arcade — تمرین آزاد بازی‌های آرکید از پیوی (دکمه‌ی web_app، بدون سکه)."""
 
 from django.conf import settings
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
+from telegram import InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.ext import ContextTypes
 
 from arcade.sim import all_simulators
@@ -9,6 +9,7 @@ from core import texts
 from core.models import TelegramUser
 from games.catalog import arcade_enabled
 
+from .. import ui
 from .common import command, reply
 
 
@@ -19,7 +20,7 @@ async def arcade(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Teleg
         await reply(update, texts.ARCADE_NOT_CONFIGURED)
         return
     buttons = [
-        InlineKeyboardButton(f"{sim.emoji} {sim.title_fa}", web_app=WebAppInfo(url=f"{base}/arcade/play/{key}/"))
+        ui.button(f"{sim.emoji} {sim.title_fa}", web_app=WebAppInfo(url=f"{base}/arcade/play/{key}/"), style=ui.PRIMARY)
         for key, sim in all_simulators().items()
         if arcade_enabled(key)
     ]

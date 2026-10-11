@@ -4,13 +4,13 @@ import logging
 from functools import wraps
 
 from django.conf import settings
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardMarkup, Update
 from telegram.constants import ChatType
 from telegram.ext import ContextTypes
 
 from core import texts
 
-from .. import ratelimit, render
+from .. import ratelimit, render, ui
 from ..runner import MatchManager
 from ..tg import tg_call
 from ..users import ensure_user
@@ -52,9 +52,8 @@ def command(*, private: bool = False, group: bool = False, superadmin: bool = Fa
             if not await ratelimit.allow(f"rl:cmd:{tg_user.id}", 3, 2):
                 return
             if private and chat.type != ChatType.PRIVATE:
-                keyboard = InlineKeyboardMarkup(
-                    [[InlineKeyboardButton(texts.ONLY_PRIVATE_BTN, url=render.start_link(render.bot_username(context), "hi"))]]
-                )
+                link = render.start_link(render.bot_username(context), "hi")
+                keyboard = InlineKeyboardMarkup([[ui.button(texts.ONLY_PRIVATE_BTN, url=link, style=ui.PRIMARY)]])
                 await reply(update, texts.ONLY_PRIVATE, keyboard)
                 return
             if group and chat.type not in GROUP_TYPES:
@@ -79,7 +78,11 @@ def callback(fn):
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
         tg_user = update.effective_user
-        if query is None or tg_user is None or query.message is None:
+        if query is None or tg_user is None:
+            return
+        if query.message is None:
+            # پیام خیلی قدیمی است و دیگر در دسترس ربات نیست؛ فقط چرخک دکمه بسته می‌شود
+            await tg_call(query.answer)
             return
         try:
             if not await ratelimit.allow_callback(tg_user.id):

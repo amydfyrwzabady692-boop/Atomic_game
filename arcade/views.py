@@ -95,7 +95,10 @@ def authenticated(view):
 def user_from_init_data(init_data: str) -> TelegramUser:
     # حالت توسعه: فقط وقتی صریحاً فعال شده باشد، بدون تلگرام هم می‌شود صفحه را در مرورگر تست کرد
     if settings.DEBUG and getattr(settings, "ARCADE_DEV_AUTH", False) and init_data.startswith("dev:"):
-        tg_id = int(init_data[4:])
+        try:
+            tg_id = int(init_data[4:])
+        except ValueError as exc:
+            raise InitDataError("malformed") from exc
         user, _ = TelegramUser.objects.get_or_create(tg_id=tg_id, defaults={"first_name": f"dev{tg_id}"})
         return user
     data = validate_init_data(init_data)
@@ -130,6 +133,7 @@ def game_meta(sim) -> dict:
         "title": sim.title_fa,
         "emoji": sim.emoji,
         "howto": sim.howto_fa,
+        "rules": list(sim.rules_fa),
         "tick_ms": sim.TICK_MS,
     }
 

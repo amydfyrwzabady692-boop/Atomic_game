@@ -35,13 +35,13 @@
   var ERRORS = {
     match_not_found: "این مسابقه پیدا نشد.",
     match_not_running: "این مسابقه الان در جریان نیست.",
-    match_over: "زمان مسابقه تمام شده.",
-    not_a_player: "تو عضو این مسابقه نیستی. دفعه‌ی بعد توی گروه دکمه‌ی «شرکت» رو بزن.",
-    no_attempts_left: "همه‌ی تلاش‌هات رو استفاده کردی.",
-    banned: "حساب شما مسدود شده.",
-    rate_limited: "یواش‌تر! چند ثانیه صبر کن.",
+    match_over: "زمان مسابقه تمام شده است.",
+    not_a_player: "تو عضو این مسابقه نیستی. دفعه‌ی بعد در گروه دکمه‌ی «شرکت» را بزن.",
+    no_attempts_left: "همه‌ی تلاش‌هایت را استفاده کرده‌ای.",
+    banned: "حساب تو مسدود شده است.",
+    rate_limited: "کمی آهسته‌تر! چند ثانیه صبر کن.",
     unknown_game: "این بازی پیدا نشد.",
-    session_already_used: "این تلاش قبلاً ثبت شده.",
+    session_already_used: "این تلاش قبلاً ثبت شده است.",
     rejected: "این تلاش تأیید نشد و ثبت نمی‌شود.",
   };
   function errorText(code) {
@@ -802,13 +802,40 @@
     $("close-btn").textContent = game.info.mode === "match" ? "برگشت به گروه" : "بازی‌های دیگر";
   }
 
+  /* قوانین بازی روی صفحه‌ی شروع: کنترل، امتیاز و شرط پایان، هر کدام در یک ردیف */
+  var RULE_ICONS = ["👆", "⭐", "🏁"];
+  var RULE_LABELS = ["کنترل", "امتیاز", "پایان بازی"];
+  function renderRules(el, meta) {
+    el.textContent = "";
+    var lines = meta.rules && meta.rules.length ? meta.rules : [meta.howto];
+    lines.forEach(function (line, index) {
+      var item = document.createElement("li");
+      var icon = document.createElement("span");
+      icon.className = "rule-icon" + (index === 0 ? " tap-hint" : "");
+      icon.setAttribute("aria-hidden", "true");
+      icon.textContent = RULE_ICONS[index] || "•";
+      var body = document.createElement("div");
+      if (RULE_LABELS[index] && lines.length > 1) {
+        var label = document.createElement("b");
+        label.textContent = RULE_LABELS[index];
+        body.appendChild(label);
+      }
+      var text = document.createElement("span");
+      text.textContent = line;
+      body.appendChild(text);
+      item.appendChild(icon);
+      item.appendChild(body);
+      el.appendChild(item);
+    });
+  }
+
   // ------------------------------------------------------------------ صفحه‌ی شروع
   var countdownTimer = null;
   function renderStart() {
     var info = game.info;
     setIcon($("start-emoji"), game.meta.key, game.meta.emoji, 92);
     $("start-title").textContent = game.meta.title;
-    $("start-howto").textContent = game.meta.howto;
+    renderRules($("start-rules"), game.meta);
     var note = "";
     var btn = $("start-btn");
     btn.disabled = false;
@@ -832,7 +859,7 @@
       if (!info.is_player) { note = errorText("not_a_player"); btn.disabled = true; }
       else if (info.status !== "RUNNING") { note = errorText(info.status === "LOBBY" ? "match_not_running" : "match_over"); btn.disabled = true; }
       else if (info.attempts_left <= 0) { note = info.seconds_left > 0 ? errorText("no_attempts_left") : errorText("match_over"); btn.disabled = true; }
-      else note = "بهترین امتیازت حساب می‌شود. همه مرحله‌های یکسان می‌گیرند.";
+      else note = "بهترین امتیازت حساب می‌شود و مرحله‌ها برای همه یکسان است.";
     } else {
       note = "تمرین آزاد — بدون سکه";
     }

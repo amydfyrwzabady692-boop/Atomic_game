@@ -2,6 +2,7 @@
 
 import pytest
 
+from core import texts
 from games.catalog import catalog
 from games.engine.registry import all_games
 from games.plugins.anagram import AnagramGame, scramble
@@ -51,7 +52,7 @@ async def test_anagram_first_correct_wins_and_hint_at_half_time():
     assert game.word == "کتاب"
     assert "کتاب" not in ctx.last_text  # خود کلمه لو نمی‌رود
     await ctx.fire("hint")
-    assert "با «ک» شروع می‌شه" in ctx.edits[-1]["text"]
+    assert "با «ک» شروع می‌شود" in ctx.edits[-1]["text"]
 
     await game.on_message(ctx.msg(1, "كتاب"))  # ک عربی
     assert game.scores[2] == 10
@@ -186,7 +187,7 @@ async def test_hangman_wrong_guesses_cost_shared_lives_until_dead():
     for i, letter in enumerate("پتثجچح"):
         await game.on_message(ctx.msg(i % 2, letter))
     assert game.lives == 0 and not game.round_open
-    assert "جان گروه تموم شد" in ctx.last_text and "باران" in ctx.last_text
+    assert "جان گروه تمام شد" in ctx.last_text and "باران" in ctx.last_text
 
 
 async def test_hangman_whole_word_guess_scores_high_and_wrong_word_costs_life():
@@ -228,7 +229,7 @@ async def test_emoji_hint_and_timeout():
     game = EmojiGuessGame(ctx)
     await game.start()
     await ctx.fire("hint")
-    assert "با «ش» شروع می‌شه" in ctx.edits[-1]["text"]
+    assert "با «ش» شروع می‌شود" in ctx.edits[-1]["text"]
     await ctx.fire("round")
     assert "شیر شاه" in ctx.last_text
 
@@ -257,7 +258,7 @@ async def test_quiz_uses_inline_buttons_and_one_answer_per_player():
     retry = ctx.cb(0, "a:1:0")  # تلاش دوباره قبول نیست
     await game.on_callback(retry)
     assert game.scores[1] == 0
-    assert retry.answers[-1][0] == "فقط یک بار می‌تونی جواب بدی."
+    assert retry.answers[-1][0] == texts.QUIZ_ALREADY
 
 
 async def test_quiz_faster_answer_scores_more():
@@ -288,7 +289,7 @@ async def test_quiz_rejects_outsiders_and_stale_buttons():
     assert "هیچ‌کس درست نگفت" in ctx.edits[-1]["text"]
     stale = ctx.cb(0, "a:1:0")
     await game.on_callback(stale)
-    assert game.scores[1] == 0 and stale.answers[-1][0] == "این سوال تموم شده."
+    assert game.scores[1] == 0 and stale.answers[-1][0] == texts.QUIZ_CLOSED
 
 
 def test_quiz_has_freefire_category():
@@ -306,11 +307,11 @@ async def test_guess_number_feedback_narrows_range_and_correct_guess_wins():
     low_guess = max(1, target - 5) if target > 1 else None
     if low_guess and low_guess != target:
         await game.on_message(ctx.msg(0, str(low_guess)))
-        assert "بزرگ‌تره" in ctx.edits[-1]["text"] and game.low == low_guess + 1
+        assert "عدد بزرگ‌تر است" in ctx.edits[-1]["text"] and game.low == low_guess + 1
     high_guess = min(1000, target + 5)
     if high_guess != target:
         await game.on_message(ctx.msg(1, str(high_guess)))
-        assert "کوچیک‌تره" in ctx.edits[-1]["text"] and game.high == high_guess - 1
+        assert "عدد کوچک‌تر است" in ctx.edits[-1]["text"] and game.high == high_guess - 1
 
     await game.on_message(ctx.msg(0, "سلام"))
     await game.on_message(ctx.msg(0, "5000"))  # خارج از بازه
@@ -436,7 +437,7 @@ async def test_xo_turns_and_win():
         await game.on_callback(ctx.cb(player, f"m:{cell}"))
     taken = ctx.cb(x, "m:3")
     await game.on_callback(taken)
-    assert taken.answers[-1][0] == "این خونه پره!"
+    assert taken.answers[-1][0] == texts.XO_TAKEN
     await game.on_callback(ctx.cb(x, "m:2"))
     assert ctx.ended
     assert game.scores[game.x.user_id] == 1 and game.scores[game.o.user_id] == 0

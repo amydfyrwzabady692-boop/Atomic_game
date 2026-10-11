@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from html import escape
 
 from django.utils import timezone
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
+from telegram import InlineKeyboardMarkup, InputMediaPhoto
 
 from arcade import services as arcade_services
 from core import texts
@@ -33,7 +33,7 @@ from games.engine.registry import get_game
 from games.engine.services import MatchError
 from games.models import ACTIVE_STATUSES, Match, MatchPlayer, MatchStatus
 
-from . import cards, render
+from . import cards, render, ui
 from .db import db
 from .tg import EditQueue, tg_call
 
@@ -95,7 +95,10 @@ class TelegramGameContext:
             return None
         prefix = f"g:{self.active.match_id}:"
         return InlineKeyboardMarkup(
-            [[InlineKeyboardButton(text, callback_data=prefix + data) for text, data in row] for row in buttons]
+            [
+                [ui.button(cell[0], prefix + cell[1], style=getattr(cell, "style", "")) for cell in row]
+                for row in buttons
+            ]
         )
 
     async def send(self, text, buttons=None) -> int:
@@ -165,6 +168,10 @@ class MatchManager:
     @property
     def username(self) -> str:
         return self.application.bot_data.get("username") or render.bot_username()
+
+    async def shutdown(self) -> None:
+        """قبل از بسته شدن حلقه‌ی رویداد، ویرایش‌های در صف را لغو می‌کند."""
+        await self.edits.close()
 
     # ================================================================ ابزار زمان‌بندی
     def _schedule(self, active: ActiveMatch, name: str, seconds: float, coro_fn, repeat: bool = False):
@@ -249,7 +256,7 @@ class MatchManager:
             await redis.delete(lock_key)
 
         text = render.lobby_text(match, info, [], join_seconds)
-        keyboard = render.lobby_keyboard(match.pk, self.username)
+        keyboard = render.lobby_keyboard(match.pk, self.username, info.key)
         message_id = None
         if menu_message_id:
             edited = await tg_call(
@@ -308,7 +315,7 @@ class MatchManager:
             active.chat_id,
             active.lobby_message_id,
             render.lobby_text(match, active.info, names, remaining),
-            render.lobby_keyboard(active.match_id, self.username),
+            render.lobby_keyboard(active.match_id, self.username, active.info.key),
             urgent=urgent,
         )
 
@@ -342,7 +349,8 @@ class MatchManager:
                 await self._cancel_locked(active, reason)
                 return
             entries = await db(lambda: list(match.players.select_related("user")))()
-            players = [Player(e.user_id, e.user.tg_id, e.user.display_name) for e in entries]
+            # نام‌های خیلی بلند کوتاه می‌شوند تا هیچ پیام بازی از سقف طول تلگرام رد نشود
+            players = [Player(e.user_id, e.user.tg_id, render.short_name(e.user.display_name)) for e in entries]
             active.players_by_tg = {p.tg_id: p for p in players}
             active.phase = "running"
             if active.lobby_message_id:
@@ -353,7 +361,7 @@ class MatchManager:
                     message_id=active.lobby_message_id,
                     text=texts.MATCH_STARTING.format(
                         title=info.title_fa + render.variant_suffix(info, match.options),
-                        players="، ".join(escape(p.name) for p in players),
+                        players=render.names_line([p.name for p in players]),
                         pot=fa_num(match.pot),
                     ),
                     parse_mode="HTML",
@@ -393,6 +401,7 @@ class MatchManager:
                 parse_mode="HTML",
             )
             if edited:
+                logger.info("match cancelled", extra={"match_id": active.match_id, "reason": reason})
                 return
         if active.board_message_id:
             self.edits.forget(active.chat_id, active.board_message_id)
@@ -507,7 +516,7 @@ class MatchManager:
             active.chat_id,
             text,
             parse_mode="HTML",
-            reply_markup=render.arcade_keyboard(self.username, match.token),
+            reply_markup=render.arcade_keyboard(self.username, match.token, active.info.key),
             disable_web_page_preview=True,
         )
         active.board_message_id = message.message_id if message else None
@@ -557,7 +566,7 @@ class MatchManager:
                 active.chat_id,
                 active.board_message_id,
                 text,
-                render.arcade_keyboard(self.username, active.token),
+                render.arcade_keyboard(self.username, active.token, active.info.key),
             )
 
     async def finish_arcade(self, active: ActiveMatch) -> None:
@@ -608,7 +617,9 @@ class MatchManager:
             return
         if info.is_arcade and match.play_deadline:
             entries = await db(lambda: list(match.players.select_related("user")))()
-            active.players_by_tg = {e.user.tg_id: Player(e.user_id, e.user.tg_id, e.user.display_name) for e in entries}
+            active.players_by_tg = {
+                e.user.tg_id: Player(e.user_id, e.user.tg_id, render.short_name(e.user.display_name)) for e in entries
+            }
             active.phase = "running"
             active.board_message_id = (match.state or {}).get("board_message_id")
             self.active[chat_id] = active

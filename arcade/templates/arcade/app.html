@@ -27,7 +27,7 @@
 
 <section id="screen-menu" class="screen hidden">
   <h1>🕹 تمرین آزاد</h1>
-  <p class="muted">بدون سکه؛ فقط برای رکورد شخصی</p>
+  <p class="muted">بدون سکه؛ فقط برای رکورد شخصی. یک بازی را انتخاب کن.</p>
   <div id="menu-list" class="menu-list"></div>
 </section>
 
@@ -35,9 +35,9 @@
   <div class="card">
     <div class="game-emoji" id="start-emoji"></div>
     <h1 id="start-title"></h1>
-    <div class="howto"><span class="tap-hint" aria-hidden="true">👆</span><p id="start-howto"></p></div>
+    <ul class="rules" id="start-rules" aria-label="قوانین بازی"></ul>
     <div class="stats" id="start-stats"></div>
-    <button id="start-btn" class="btn primary" type="button">شروع</button>
+    <button id="start-btn" class="btn go" type="button"><span class="btn-icon" aria-hidden="true">▶</span>شروع بازی</button>
     <p class="muted small" id="start-note"></p>
   </div>
 </section>
@@ -50,8 +50,8 @@
     <div class="big-score" id="over-score">۰</div>
     <div class="stats" id="over-stats"></div>
     <p class="muted small" id="over-note"></p>
-    <button id="again-btn" class="btn primary" type="button">دوباره</button>
-    <button id="close-btn" class="btn" type="button">برگشت به گروه</button>
+    <button id="again-btn" class="btn primary" type="button"><span class="btn-icon" aria-hidden="true">↻</span>دوباره بازی کن</button>
+    <button id="close-btn" class="btn violet" type="button">برگشت به گروه</button>
   </div>
 </section>
 
@@ -59,7 +59,7 @@
   <div class="card">
     <div class="game-emoji">😕</div>
     <p id="error-text"></p>
-    <button id="error-close-btn" class="btn" type="button">بستن</button>
+    <button id="error-close-btn" class="btn danger" type="button">بستن</button>
   </div>
 </section>
 

@@ -1,7 +1,7 @@
 from html import escape
 
 from core import texts
-from games.engine.base import IncomingCallback
+from games.engine.base import PRIMARY, Button, IncomingCallback
 from games.engine.registry import register_game
 from games.engine.rounds import RoundGame
 
@@ -13,6 +13,11 @@ class QuizGame(RoundGame):
     emoji = "❓"
     description_fa = "سوال چهارگزینه‌ای با دکمه. هر نفر فقط یک بار جواب می‌دهد و جواب سریع‌تر امتیاز بیشتری دارد."
     rounds = 7
+    rules_fa = [
+        "سؤال چهارگزینه‌ای است؛ جواب را با دکمه انتخاب کن.",
+        "هر نفر فقط یک بار جواب می‌دهد؛ جواب درستِ سریع‌تر امتیاز بیشتری دارد.",
+        "{rounds} سؤال، هر سؤال {round_seconds} ثانیه.",
+    ]
     round_seconds = 15
     gap_seconds = 4
     base_points = 10
@@ -27,7 +32,7 @@ class QuizGame(RoundGame):
 
     def _buttons(self):
         options = self.question["options"]
-        cells = [(str(option), f"a:{self.round_no}:{index}") for index, option in enumerate(options)]
+        cells = [Button(str(option), f"a:{self.round_no}:{index}", PRIMARY) for index, option in enumerate(options)]
         return [cells[i : i + 2] for i in range(0, len(cells), 2)]
 
     async def begin_round(self) -> None:

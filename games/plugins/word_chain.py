@@ -16,6 +16,11 @@ class WordChainGame(BaseGame):
     max_players = 10
     players_ceiling = 20
     start_seconds = 20
+    rules_fa = [
+        "به‌نوبت کلمه‌ای بگو که با حرف آخر کلمه‌ی قبلی شروع شود.",
+        "کلمه‌ی تکراری یا خارج از فهرست کلمات قبول نیست.",
+        "اگر در مهلت جواب ندهی حذف می‌شوی؛ آخرین نفر برنده است.",
+    ]
     min_seconds = 8
     max_turns = 80
 

@@ -39,3 +39,26 @@ def fresh_game_settings():
     game_config.reset()
     yield
     game_config.reset()
+
+
+@pytest.fixture(autouse=True)
+def close_edit_queues(monkeypatch):
+    """ویرایش‌های معوق هر تست بسته می‌شوند تا task نیمه‌کاره‌ای بعد از پایان تست باقی نماند."""
+    from bot.tg import EditQueue
+
+    created = []
+    original = EditQueue.__init__
+
+    def tracking(self, *args, **kwargs):
+        original(self, *args, **kwargs)
+        created.append(self)
+
+    monkeypatch.setattr(EditQueue, "__init__", tracking)
+    yield
+    for queue in created:
+        tasks = [task for task in queue._tasks.values() if not task.done()]
+        if not tasks:
+            continue
+        loop = tasks[0].get_loop()
+        if not loop.is_closed() and not loop.is_running():
+            loop.run_until_complete(queue.close())

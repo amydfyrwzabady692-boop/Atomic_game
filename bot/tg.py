@@ -111,6 +111,16 @@ class EditQueue:
                 **payload,
             )
 
+    async def close(self) -> None:
+        """هنگام خاموش شدن ربات: ویرایش‌های معوق دور ریخته و taskهای در انتظار لغو می‌شوند."""
+        self._pending.clear()
+        tasks = [task for task in self._tasks.values() if not task.done()]
+        self._tasks.clear()
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
     def forget(self, chat_id: int, message_id: int) -> None:
         key = (chat_id, message_id)
         self._pending.pop(key, None)

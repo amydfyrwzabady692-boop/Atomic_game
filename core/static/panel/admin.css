@@ -161,13 +161,56 @@ ul.messagelist li { border-radius: 12px; margin: 0 24px 10px; }
 .form-row { padding: 12px 16px; }
 a.addlink, a.changelink, a.viewlink { font-weight: 600; }
 
-/* دکمه‌ی اصلی فرم‌ها */
-.submit-row input.default, .submit-row input[type="submit"].default {
-  background: linear-gradient(120deg, #4f46e5, #7c3aed);
+/* دکمه‌های رنگی: هر کار رنگ خودش را دارد (ذخیره سبز، حذف قرمز، بقیه بنفش/آبی) */
+.submit-row input, .button, input[type="submit"], input[type="button"], a.button, .object-tools a, #changelist-search input[type="submit"] {
+  border: 0;
   color: #fff;
-  box-shadow: 0 8px 20px rgba(79, 70, 229, .3);
+  background: linear-gradient(120deg, #4f46e5, #7c3aed);
+  box-shadow: 0 3px 0 #3730a3, 0 8px 18px rgba(79, 70, 229, .22);
 }
-.submit-row input.default:hover { filter: brightness(1.08); }
+.submit-row input:hover, .button:hover, input[type="submit"]:hover, a.button:hover, .object-tools a:hover { filter: brightness(1.08); }
+.submit-row input:active, .button:active, input[type="submit"]:active, a.button:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #3730a3, 0 4px 10px rgba(79, 70, 229, .2);
+}
+/* ذخیره */
+.submit-row input.default, .submit-row input[type="submit"].default, .submit-row input[name="_save"] {
+  background: linear-gradient(120deg, #059669, #10b981);
+  box-shadow: 0 3px 0 #047857, 0 8px 18px rgba(16, 185, 129, .28);
+}
+/* ذخیره و ادامه / ذخیره و افزودن */
+.submit-row input[name="_continue"], .submit-row input[name="_addanother"] {
+  background: linear-gradient(120deg, #0284c7, #38bdf8);
+  box-shadow: 0 3px 0 #0369a1, 0 8px 18px rgba(56, 189, 248, .25);
+}
+/* حذف */
+.submit-row a.deletelink, .delete-confirmation input[type="submit"], .delete-selected-confirmation input[type="submit"] {
+  display: inline-block;
+  height: auto;
+  border: 0;
+  border-radius: 10px;
+  padding: 9px 16px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(120deg, #e11d48, #fb7185);
+  box-shadow: 0 3px 0 #9f1239, 0 8px 18px rgba(225, 29, 72, .25);
+}
+.submit-row a.deletelink:hover { filter: brightness(1.08); color: #fff; }
+/* انصراف در صفحه‌ی تأیید حذف */
+.delete-confirmation .cancel-link, .delete-selected-confirmation .cancel-link, a.button.cancel-link {
+  color: #fff;
+  background: linear-gradient(120deg, #64748b, #94a3b8);
+  box-shadow: 0 3px 0 #475569;
+}
+/* افزودن */
+.object-tools a.addlink { background: linear-gradient(120deg, #059669, #10b981); box-shadow: 0 3px 0 #047857; }
+.object-tools a.historylink, .object-tools a.viewsitelink { background: linear-gradient(120deg, #64748b, #94a3b8); box-shadow: 0 3px 0 #475569; }
+/* اجرای اکشن گروهی و جست‌وجو */
+.actions button, #changelist .actions .button {
+  border: 0; border-radius: 10px; padding: 7px 16px; font-weight: 700; color: #fff; cursor: pointer;
+  background: linear-gradient(120deg, #d97706, #fbbf24); box-shadow: 0 3px 0 #b45309;
+}
+#changelist-search input[type="submit"] { background: linear-gradient(120deg, #0284c7, #38bdf8); box-shadow: 0 3px 0 #0369a1; }
 
 /* صفحه‌ی ورود */
 body.login {
@@ -268,7 +311,10 @@ body.login {
   font: 800 18px/1 var(--font-family-primary); color: var(--primary-fg); background: var(--button-bg);
   transition: background .15s ease, transform .08s ease;
 }
-.gs-stepper button:hover { background: var(--button-hover-bg); }
+/* کم کردن قرمز، زیاد کردن سبز */
+.gs-stepper button[data-delta^="-"] { background: linear-gradient(180deg, #fb7185, #e11d48); }
+.gs-stepper button:not([data-delta^="-"]) { background: linear-gradient(180deg, #34d399, #059669); }
+.gs-stepper button:hover { filter: brightness(1.1); }
 .gs-stepper button:active { transform: scale(.92); }
 .gs-stepper button:disabled { background: var(--darkened-bg); color: var(--body-quiet-color); cursor: not-allowed; }
 .gs-stepper output {

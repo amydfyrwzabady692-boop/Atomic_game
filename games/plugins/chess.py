@@ -4,7 +4,7 @@ from core import texts
 from core.textutils import fa_num
 from games.chess.engine import Move, Position, square_name
 from games.chess.render import render_board
-from games.engine.base import BaseGame, IncomingCallback
+from games.engine.base import DANGER, PRIMARY, SUCCESS, BaseGame, Button, IncomingCallback
 from games.engine.registry import register_game
 
 BLANK = "⠀"  # کاراکتر نامرئی برای دکمه‌های خالی
@@ -23,6 +23,11 @@ class ChessGame(BaseGame):
     max_players = 2
     players_ceiling = 2
     move_seconds = 90
+    rules_fa = [
+        "اول مهره و بعد خانه‌ی مقصد را از کیبورد زیر تصویر بزن.",
+        "برای هر حرکت {move_seconds} ثانیه وقت داری؛ تمام شدن وقت یعنی باخت.",
+        "مات، تسلیم یا مساوی بازی را تمام می‌کند؛ پیاده خودکار وزیر می‌شود.",
+    ]
     max_plies = 300
 
     async def start(self) -> None:
@@ -89,15 +94,19 @@ class ChessGame(BaseGame):
             row = []
             for file in range(8):
                 index = rank * 8 + file
+                style = ""
                 if index == self.selected:
-                    label = "◉"
+                    label, style = "◉", PRIMARY
                 elif index in targets:
-                    label = "✕" if self.position.board[index] != "." else "•"
+                    capture = self.position.board[index] != "."
+                    label, style = ("✕", DANGER) if capture else ("•", SUCCESS)
                 else:
                     label = BLANK
-                row.append((label, f"q:{index}"))
+                row.append(Button(label, f"q:{index}", style))
             rows.append(row)
-        rows.append([(texts.CHESS_RESIGN_BTN, "resign"), (texts.CHESS_DRAW_BTN, "draw")])
+        rows.append(
+            [Button(texts.CHESS_RESIGN_BTN, "resign", DANGER), Button(texts.CHESS_DRAW_BTN, "draw", PRIMARY)]
+        )
         return rows
 
     async def _refresh(self) -> None:

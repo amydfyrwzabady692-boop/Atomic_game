@@ -24,6 +24,7 @@ from core.texts import fa_num
 from games import config as game_config
 from leaderboard.queries import announce_weekly_champions
 
+from .concurrency import PerChatUpdateProcessor
 from .db import db
 from .handlers import admin, arcade, flow, group, group_settings, private, shop
 from .runner import MatchManager
@@ -110,6 +111,12 @@ async def post_init(application: Application) -> None:
     logger.info("bot ready", extra={"username": me.username})
 
 
+async def post_shutdown(application: Application) -> None:
+    manager = application.bot_data.get("manager")
+    if manager is not None:
+        await manager.shutdown()
+
+
 def register_handlers(application: Application) -> None:
     add = application.add_handler
     add(CommandHandler("start", private.start))
@@ -141,6 +148,9 @@ def register_handlers(application: Application) -> None:
     add(CallbackQueryHandler(group.top_callback, pattern=r"^top:"))
     add(CallbackQueryHandler(group_settings.settings_callback, pattern=r"^set:"))
     add(CallbackQueryHandler(shop.shop_callback, pattern=r"^shop:"))
+    add(CallbackQueryHandler(group.rules_callback, pattern=r"^rules:"))
+    add(CallbackQueryHandler(group.rules_alert_callback, pattern=r"^rl:"))
+    add(CallbackQueryHandler(private.menu_callback, pattern=r"^pm:"))
 
     add(ChatMemberHandler(group.my_chat_member, ChatMemberHandler.MY_CHAT_MEMBER))
     add(MessageHandler(filters.StatusUpdate.MIGRATE, group.migrated))
@@ -160,7 +170,10 @@ def build_application() -> Application:
         ApplicationBuilder()
         .token(settings.BOT_TOKEN)
         .rate_limiter(AIORateLimiter(max_retries=2))
+        # چت‌های مختلف هم‌زمان پردازش می‌شوند تا کندی یک گروه بقیه را معطل نکند
+        .concurrent_updates(PerChatUpdateProcessor(settings.BOT_CONCURRENT_UPDATES))
         .post_init(post_init)
+        .post_shutdown(post_shutdown)
         .build()
     )
     register_handlers(application)

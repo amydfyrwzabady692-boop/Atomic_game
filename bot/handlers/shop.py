@@ -1,6 +1,8 @@
 """/shop — فروشگاه آیتم‌های ظاهری (فقط پیوی، فقط با سکه‌ی مجازی، غیرقابل برگشت)."""
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from html import escape
+
+from telegram import InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from core import texts
@@ -10,17 +12,18 @@ from shop import services
 from shop.models import ShopItem
 from shop.services import ShopError
 
+from .. import ui
 from ..db import db
 from ..tg import tg_call
 from .common import answer, callback, command, reply
 
 
-def _btn(text: str, data: str) -> InlineKeyboardButton:
-    return InlineKeyboardButton(text, callback_data=data)
+def _btn(text: str, data: str, style: str = ""):
+    return ui.button(text, data, style=style)
 
 
 def home_screen(user: TelegramUser):
-    rows = [[_btn(label, f"shop:k:{kind}")] for kind, label in texts.SHOP_KIND_BTN.items()]
+    rows = [[_btn(label, f"shop:k:{kind}", ui.PRIMARY)] for kind, label in texts.SHOP_KIND_BTN.items()]
     return texts.SHOP_HEADER.format(coins=fa_num(user.coins)), InlineKeyboardMarkup(rows)
 
 
@@ -30,9 +33,11 @@ def kind_screen(user: TelegramUser, kind: str, items):
         if owned:
             mark = "✅" if owned.equipped else "☑️"
             label = texts.SHOP_ITEM_OWNED_BTN.format(mark=mark, value=item.value)
+            style = ui.SUCCESS if owned.equipped else ""
         else:
             label = texts.SHOP_ITEM_BTN.format(value=item.value, price=fa_num(item.price))
-        rows.append([_btn(label, f"shop:i:{item.pk}")])
+            style = ui.PRIMARY
+        rows.append([_btn(label, f"shop:i:{item.pk}", style)])
     rows.append([_btn(texts.BACK_BTN, "shop:home")])
     text = texts.SHOP_HEADER.format(coins=fa_num(user.coins))
     if not items:
@@ -78,9 +83,17 @@ async def shop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user
             await answer(query, texts.SHOP_EQUIPPED if result.equipped else texts.SHOP_UNEQUIPPED)
         elif action == "i":
             keyboard = InlineKeyboardMarkup(
-                [[_btn(texts.SHOP_CONFIRM_BTN, f"shop:b:{item.pk}"), _btn(texts.BACK_BTN, f"shop:k:{item.kind}")]]
+                [
+                    [
+                        _btn(texts.SHOP_CONFIRM_BTN, f"shop:b:{item.pk}", ui.SUCCESS),
+                        _btn(texts.BACK_BTN, f"shop:k:{item.kind}"),
+                    ]
+                ]
             )
-            text = texts.SHOP_CONFIRM.format(name=item.name, value=item.value, price=fa_num(item.price))
+            # نام و مقدار آیتم از پنل ادمین می‌آید و ممکن است نویسه‌ی HTML داشته باشد
+            text = texts.SHOP_CONFIRM.format(
+                name=escape(item.name), value=escape(item.value), price=fa_num(item.price)
+            )
             await show((text, keyboard))
             return
         else:

@@ -3,11 +3,13 @@
 from html import escape
 
 from django.conf import settings
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardMarkup
 
 from core import texts
 from core.texts import fa_num
 from games.catalog import GameInfo
+
+from . import ui
 
 # پیام تلگرام حداکثر ۴۰۹۶ نویسه است؛ با ظرفیت‌های بزرگ، فهرست‌ها کوتاه می‌شوند
 LOBBY_NAMES_SHOWN = 30
@@ -15,6 +17,8 @@ BOARD_ROWS_SHOWN = 20
 RESULT_ROWS_SHOWN = 25
 RESULT_EXTRAS_SHOWN = 8
 NAME_CHARS = 24
+STARTING_NAMES_SHOWN = 30
+ALERT_CHARS = 200  # سقف متن answerCallbackQuery
 
 
 def short_name(name: str) -> str:
@@ -23,6 +27,41 @@ def short_name(name: str) -> str:
 
 def short_mention(user) -> str:
     return f'<a href="tg://user?id={user.tg_id}">{escape(short_name(user.display_name))}</a>'
+
+
+def names_line(names: list[str], limit: int = STARTING_NAMES_SHOWN) -> str:
+    """فهرست یک‌خطی نام‌ها؛ نام‌های بلند کوتاه و فهرست‌های طولانی بریده می‌شوند تا پیام از سقف تلگرام رد نشود."""
+    line = "، ".join(escape(short_name(name)) for name in names[:limit])
+    if len(names) > limit:
+        line += " " + texts.MORE_PLAYERS.format(n=fa_num(len(names) - limit))
+    return line
+
+
+def players_label(info: GameInfo) -> str:
+    if info.min_players == info.max_players:
+        return texts.RULES_PLAYERS_FIXED.format(n=fa_num(info.min_players))
+    return texts.RULES_PLAYERS_RANGE.format(min=fa_num(info.min_players), max=fa_num(info.max_players))
+
+
+def rules_lines(info: GameInfo) -> list[str]:
+    return [texts.RULES_LINE.format(line=line) for line in (info.rules or (info.description_fa,))]
+
+
+def rules_text(info: GameInfo) -> str:
+    """متن کامل قوانین یک بازی برای دستور /rules."""
+    text = texts.RULES_GAME.format(
+        emoji=info.emoji,
+        title=info.title_fa,
+        lines="\n".join(escape(line) for line in rules_lines(info)),
+        players=players_label(info),
+    )
+    return text + (texts.RULES_ARCADE_NOTE if info.is_arcade else "")
+
+
+def rules_alert(info: GameInfo) -> str:
+    """قوانین کوتاه برای پنجره‌ی هشدار دکمه‌ی «قوانین بازی» (حداکثر ۲۰۰ نویسه)."""
+    text = "\n".join(rules_lines(info))
+    return text if len(text) <= ALERT_CHARS else text[: ALERT_CHARS - 1] + "…"
 
 
 def split_label(split: list[int]) -> str:
@@ -83,16 +122,17 @@ def lobby_text(match, info: GameInfo, names: list[str], remaining: int) -> str:
     )
 
 
-def lobby_keyboard(match_id: int, username: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
+def lobby_keyboard(match_id: int, username: str, game_key: str = "") -> InlineKeyboardMarkup:
+    rows = [
         [
-            [
-                InlineKeyboardButton(texts.JOIN_BTN, callback_data=f"j:{match_id}"),
-                InlineKeyboardButton(texts.CANCEL_BTN, callback_data=f"x:{match_id}"),
-            ],
-            [InlineKeyboardButton(texts.START_BOT_BTN, url=start_link(username))],
+            ui.button(texts.JOIN_BTN, f"j:{match_id}", style=ui.SUCCESS),
+            ui.button(texts.CANCEL_BTN, f"x:{match_id}", style=ui.DANGER),
         ]
-    )
+    ]
+    if game_key:
+        rows.append([ui.button(texts.RULES_BTN, f"rl:{game_key}")])
+    rows.append([ui.button(texts.START_BOT_BTN, url=start_link(username), style=ui.PRIMARY)])
+    return InlineKeyboardMarkup(rows)
 
 
 def cancelled_text(reason: str, refunded: bool) -> str:
@@ -167,5 +207,8 @@ def arcade_text(match, info: GameInfo, standings, remaining: int, attempts: int,
     )
 
 
-def arcade_keyboard(username: str, token: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton(texts.ARCADE_PLAY_BTN, url=miniapp_link(username, token))]])
+def arcade_keyboard(username: str, token: str, game_key: str = "") -> InlineKeyboardMarkup:
+    rows = [[ui.button(texts.ARCADE_PLAY_BTN, url=miniapp_link(username, token), style=ui.SUCCESS)]]
+    if game_key:
+        rows.append([ui.button(texts.RULES_BTN, f"rl:{game_key}")])
+    return InlineKeyboardMarkup(rows)
