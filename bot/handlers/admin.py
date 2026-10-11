@@ -151,7 +151,7 @@ def _stats() -> dict:
 @command(superadmin=True)
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser):
     data = await _stats()
-    info = catalog().get(data["top_game"]) if data["top_game"] else None
+    info = catalog(include_disabled=True).get(data["top_game"]) if data["top_game"] else None
     await reply(
         update,
         texts.STATS.format(

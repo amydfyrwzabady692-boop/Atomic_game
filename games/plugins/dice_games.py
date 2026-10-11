@@ -26,6 +26,7 @@ class DiceGame(BaseGame):
     description_fa = "نوبتی دکمه‌ی «پرتاب» را بزن تا ربات به نام تو پرتاب کند. جمع امتیاز چند پرتاب ملاک است."
     min_players = 2
     max_players = 8
+    players_ceiling = 12
     rounds = 3  # تعداد پرتاب هر بازیکن
     turn_seconds = 20
     settle_seconds = 4  # صبر برای تمام شدن انیمیشن دایس

@@ -21,6 +21,7 @@ from telegram.ext import (
 
 from core import texts
 from core.texts import fa_num
+from games import config as game_config
 from leaderboard.queries import announce_weekly_champions
 
 from .db import db
@@ -32,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 ALLOWED_UPDATES = ["message", "callback_query", "my_chat_member"]
 TEHRAN = ZoneInfo("Asia/Tehran")
+GAME_SETTINGS_REFRESH_SECONDS = 15
 
 PRIVATE_COMMANDS = [
     ("start", "شروع"),
@@ -67,6 +69,11 @@ async def weekly_champions_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         )
 
 
+async def game_settings_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """تغییرهای پنل ادمین (تعداد شرکت‌کننده، فعال/غیرفعال) را به حافظه‌ی ربات می‌آورد."""
+    await db(game_config.reload)()
+
+
 async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error(
         "unhandled error",
@@ -89,6 +96,10 @@ async def post_init(application: Application) -> None:
         application.bot.set_my_commands,
         [BotCommand(c, d) for c, d in GROUP_COMMANDS],
         scope=BotCommandScopeAllGroupChats(),
+    )
+    await db(game_config.reload)()
+    application.job_queue.run_repeating(
+        game_settings_job, interval=GAME_SETTINGS_REFRESH_SECONDS, name="game_settings"
     )
     await manager.recover()
     # شنبه ساعت ۰۰:۰۵ تهران (در PTB روز ۶ = شنبه)، و یک بار هم موقع بالا آمدن برای جبران خاموشی

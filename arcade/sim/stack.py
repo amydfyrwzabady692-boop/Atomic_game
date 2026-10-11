@@ -25,7 +25,7 @@ def spawn(state: dict) -> None:
 class StackSimulator(ArcadeSimulator):
     key = "stack"
     title_fa = "برج‌ساز"
-    emoji = "🧱"
+    emoji = "🗼"
     description_fa = "بلوک‌ها را دقیق روی هم بینداز؛ هر چه بیرون بزند بریده می‌شود."
     howto_fa = "وقتی بلوک دقیقاً بالای برج است تپ کن."
     category = "skill"

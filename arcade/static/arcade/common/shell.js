@@ -153,9 +153,29 @@
   }
   readColors();
 
+  /* کیفیت تطبیقی: اگر دستگاه نتواند نرخ فریم را نگه دارد، اول وضوح بوم و بعد افکت‌های سنگین
+     کم می‌شوند. سطح انتخاب‌شده فقط تا یک روز به خاطر سپرده می‌شود تا کندی موقتی (مثلاً حالت
+     صرفه‌جویی باتری) برای همیشه کیفیت را پایین نگه ندارد. ۲ = کامل، ۱ = متوسط، ۰ = سبک */
+  var QUALITY = [
+    { dpr: 1, particles: 60 },
+    { dpr: 1.5, particles: 120 },
+    { dpr: 2, particles: 220 },
+  ];
+  var QUALITY_MEMORY_MS = 24 * 60 * 60 * 1000;
+  var quality = { level: 2, frames: 0, total: 0, slow: 0 };
+  try {
+    var savedQuality = JSON.parse(localStorage.getItem("arcade_quality") || "null");
+    if (savedQuality && (savedQuality.level === 0 || savedQuality.level === 1) && Date.now() - savedQuality.at < QUALITY_MEMORY_MS) {
+      quality.level = savedQuality.level;
+    }
+  } catch (e) { /* ممکن است در دسترس نباشد یا مقدار قدیمی باشد */ }
+
+  var sprites = {};
+  var spriteCount = 0;
+
   function resize() {
     var w = window.innerWidth, h = window.innerHeight;
-    view.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    view.dpr = Math.min(window.devicePixelRatio || 1, QUALITY[quality.level].dpr);
     view.scale = Math.min(w / 360, h / 520);
     view.W = 360;
     view.H = h / view.scale;
@@ -164,29 +184,102 @@
     canvas.height = Math.round(h * view.dpr);
     env.W = view.W;
     env.H = view.H;
+    env.res = Math.min(view.scale * view.dpr, 3);
+    env.quality = quality.level;
     env.safeTop = (parseFloat(css("--tg-content-safe-area-inset-top", "0")) || 0) / view.scale + 96;
+    // اندازه‌ها عوض شده: اسپرایت‌های کش‌شده دوباره (و فقط در صورت نیاز) ساخته می‌شوند
+    sprites = {};
+    spriteCount = 0;
+  }
+
+  function watchFrameRate(dt) {
+    if (quality.level === 0) return;
+    quality.frames++;
+    if (quality.frames <= 45) return; // فریم‌های اول صرف ساخت اسپرایت‌ها می‌شوند
+    quality.total += Math.min(dt, 100);
+    if (quality.frames < 45 + 120) return;
+    var average = quality.total / 120;
+    quality.frames = 45;
+    quality.total = 0;
+    // کمتر از حدود ۴۳ فریم در ثانیه در دو بازه‌ی پیاپی
+    quality.slow = average > 23 ? quality.slow + 1 : 0;
+    if (quality.slow >= 2) {
+      quality.slow = 0;
+      quality.frames = 0; // اسپرایت‌ها دوباره ساخته می‌شوند؛ آن فریم‌ها در سنجش بعدی حساب نشوند
+      quality.level--;
+      try {
+        localStorage.setItem("arcade_quality", JSON.stringify({ level: quality.level, at: Date.now() }));
+      } catch (e) { /* مهم نیست */ }
+      resize();
+    }
+  }
+
+  function paintDot(color) {
+    return function (s) {
+      var g = s.createRadialGradient(16, 16, 0, 16, 16, 16);
+      g.addColorStop(0, "rgba(255,255,255,1)");
+      g.addColorStop(0.4, "rgba(255,255,255,.8)");
+      g.addColorStop(1, "rgba(255,255,255,0)");
+      s.fillStyle = g;
+      s.fillRect(0, 0, 32, 32);
+      s.globalCompositeOperation = "source-in";
+      s.fillStyle = color;
+      s.fillRect(0, 0, 32, 32);
+    };
+  }
+  function dotSprite(color) {
+    return env.sprite("fx:dot:" + color, 32, 32, paintDot(color));
   }
 
   var fx = {
-    particles: [], texts: [], shakeMag: 0, flashAlpha: 0, flashColor: "#fff",
+    particles: [], chunks: [], rings: [], texts: [], shakeMag: 0, flashAlpha: 0, flashColor: "#fff",
     burst: function (x, y, color, count, speed) {
       count = count || 12;
       speed = speed || 3;
-      for (var i = 0; i < count && this.particles.length < 220; i++) {
+      var cap = QUALITY[quality.level].particles;
+      for (var i = 0; i < count && this.particles.length < cap; i++) {
         var a = Math.random() * Math.PI * 2, s = (0.4 + Math.random()) * speed;
         this.particles.push({ x: x, y: y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 1, life: 1, color: color, size: 2 + Math.random() * 3 });
       }
     },
-    shake: function (magnitude) { this.shakeMag = Math.max(this.shakeMag, magnitude); },
+    /* خرده‌های جامد چرخان (چوب، آجر، سنگ) که با جاذبه می‌افتند */
+    debris: function (x, y, color, count, speed, size) {
+      count = count || 8;
+      speed = speed || 4;
+      size = size || 5;
+      var cap = QUALITY[quality.level].particles;
+      for (var i = 0; i < count && this.chunks.length < cap / 2; i++) {
+        var a = Math.random() * Math.PI * 2, s = (0.5 + Math.random()) * speed;
+        this.chunks.push({
+          x: x, y: y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - speed * 0.6, life: 1, color: color,
+          w: size * (0.5 + Math.random()), h: size * (0.3 + Math.random() * 0.5), rot: Math.random() * 6.28, spin: (Math.random() - 0.5) * 0.5,
+        });
+      }
+    },
+    /* حلقه‌ی موج ضربه */
+    ring: function (x, y, color, from, to) {
+      if (this.rings.length < 12) this.rings.push({ x: x, y: y, color: color, from: from || 6, to: to || 46, life: 1 });
+    },
+    shake: function (magnitude) { this.shakeMag = Math.min(10, Math.max(this.shakeMag, magnitude)); },
     flash: function (color, alpha) { this.flashColor = color; this.flashAlpha = alpha || 0.5; },
     text: function (x, y, text, color) { this.texts.push({ x: x, y: y, text: text, color: color || colors.gold, life: 1 }); },
-    reset: function () { this.particles = []; this.texts = []; this.shakeMag = 0; this.flashAlpha = 0; },
+    reset: function () { this.particles = []; this.chunks = []; this.rings = []; this.texts = []; this.shakeMag = 0; this.flashAlpha = 0; },
     update: function (dt) {
       var k = dt / 16.7, i, p;
       for (i = this.particles.length - 1; i >= 0; i--) {
         p = this.particles[i];
         p.x += p.vx * k; p.y += p.vy * k; p.vy += 0.16 * k; p.life -= 0.022 * k;
         if (p.life <= 0) this.particles.splice(i, 1);
+      }
+      for (i = this.chunks.length - 1; i >= 0; i--) {
+        p = this.chunks[i];
+        p.x += p.vx * k; p.y += p.vy * k; p.vy += 0.34 * k; p.rot += p.spin * k; p.life -= 0.018 * k;
+        if (p.life <= 0) this.chunks.splice(i, 1);
+      }
+      for (i = this.rings.length - 1; i >= 0; i--) {
+        p = this.rings[i];
+        p.life -= 0.05 * k;
+        if (p.life <= 0) this.rings.splice(i, 1);
       }
       for (i = this.texts.length - 1; i >= 0; i--) {
         p = this.texts[i];
@@ -199,21 +292,45 @@
     },
     draw: function (c) {
       var i, p;
+      for (i = 0; i < this.chunks.length; i++) {
+        p = this.chunks[i];
+        c.globalAlpha = clamp(p.life * 2.5, 0, 1);
+        c.fillStyle = p.color;
+        var cos = Math.cos(p.rot), sin = Math.sin(p.rot);
+        c.beginPath();
+        c.moveTo(p.x - cos * p.w + sin * p.h, p.y - sin * p.w - cos * p.h);
+        c.lineTo(p.x + cos * p.w + sin * p.h, p.y + sin * p.w - cos * p.h);
+        c.lineTo(p.x + cos * p.w - sin * p.h, p.y + sin * p.w + cos * p.h);
+        c.lineTo(p.x - cos * p.w - sin * p.h, p.y - sin * p.w + cos * p.h);
+        c.fill();
+      }
+      for (i = 0; i < this.rings.length; i++) {
+        p = this.rings[i];
+        c.globalAlpha = clamp(p.life, 0, 1) * 0.8;
+        c.strokeStyle = p.color;
+        c.lineWidth = 1 + p.life * 3;
+        c.beginPath();
+        c.arc(p.x, p.y, p.from + (p.to - p.from) * (1 - p.life * p.life), 0, 6.2832);
+        c.stroke();
+      }
+      // جرقه‌ها: یک نقطه‌ی نرمِ کش‌شده برای هر رنگ (خیلی ارزان‌تر از کشیدن دایره در هر فریم)
       c.globalCompositeOperation = "lighter";
       for (i = 0; i < this.particles.length; i++) {
         p = this.particles[i];
         c.globalAlpha = clamp(p.life, 0, 1);
-        c.fillStyle = p.color;
-        c.beginPath();
-        c.arc(p.x, p.y, p.size, 0, 6.2832);
-        c.fill();
+        var d = p.size * 3.4;
+        c.drawImage(dotSprite(p.color).canvas, p.x - d / 2, p.y - d / 2, d, d);
       }
       c.globalCompositeOperation = "source-over";
       c.textAlign = "center";
       c.font = "900 21px Vazirmatn, Tahoma, sans-serif";
+      c.lineJoin = "round";
+      c.lineWidth = 4;
+      c.strokeStyle = "rgba(8,10,24,.7)";
       for (i = 0; i < this.texts.length; i++) {
         p = this.texts[i];
         c.globalAlpha = clamp(p.life * 1.4, 0, 1);
+        c.strokeText(p.text, p.x, p.y);
         c.fillStyle = p.color;
         c.fillText(p.text, p.x, p.y);
       }
@@ -225,11 +342,75 @@
     W: 360, H: 640, safeTop: 96, ctx: ctx, colors: colors, fa: fa, fx: fx, haptic: haptic, sound: sound,
     now: function () { return performance.now(); },
     font: function (size, weight) { return (weight || 700) + " " + size + "px Vazirmatn, Tahoma, sans-serif"; },
-    /* درخشش نئونی: glow(c, color, blur) و برای خاموش کردن glow(c) */
+    /* درخشش با سایه‌ی بوم: glow(c, color, blur) و برای خاموش کردن glow(c).
+       گران است؛ فقط داخل اسپرایت‌های کش‌شده استفاده شود. در کیفیت سبک خاموش است. */
     glow: function (c, color, blur) {
-      c.shadowColor = color || "transparent";
-      c.shadowBlur = color ? (blur || 14) * view.scale * view.dpr : 0;
+      var on = color && quality.level > 0;
+      c.shadowColor = on ? color : "transparent";
+      c.shadowBlur = on ? (blur || 14) * env.res : 0;
+      c.shadowOffsetX = c.shadowOffsetY = 0;
     },
+    /* سایه‌ی افتاده برای استفاده داخل اسپرایت‌ها؛ dropShadow(c) خاموشش می‌کند */
+    dropShadow: function (c, blur, dy, a) {
+      if (!blur) { c.shadowColor = "transparent"; c.shadowBlur = 0; c.shadowOffsetY = 0; return; }
+      c.shadowColor = "rgba(0,0,0," + (a === undefined ? 0.45 : a) + ")";
+      c.shadowBlur = blur * env.res;
+      c.shadowOffsetX = 0;
+      c.shadowOffsetY = (dy === undefined ? blur * 0.5 : dy) * env.res;
+    },
+    /* اسپرایت کش‌شده: paint(c, w, h) فقط یک بار (تا تغییر اندازه‌ی صفحه) اجرا می‌شود.
+       pad حاشیه‌ی اضافه برای سایه و هاله است. کلید باید هر چیزی را که شکل را عوض می‌کند داشته باشد. */
+    sprite: function (key, w, h, paint, pad) {
+      var sp = sprites[key];
+      if (sp) return sp;
+      if (spriteCount > 400) { sprites = {}; spriteCount = 0; } // محافظ در برابر کلیدهای بی‌شمار
+      pad = pad || 0;
+      var res = env.res;
+      var cv = document.createElement("canvas");
+      cv.width = Math.max(1, Math.ceil((w + pad * 2) * res));
+      cv.height = Math.max(1, Math.ceil((h + pad * 2) * res));
+      var sc = cv.getContext("2d");
+      sc.scale(res, res);
+      sc.translate(pad, pad);
+      paint(sc, w, h);
+      sp = sprites[key] = { canvas: cv, w: w, h: h, pad: pad, fw: w + pad * 2, fh: h + pad * 2 };
+      spriteCount++;
+      return sp;
+    },
+    /* آزاد کردن اسپرایتی که دیگر لازم نیست (برای اسپرایت‌های موقتی مثل طبقه‌های رد‌شده) */
+    forget: function (key) {
+      if (sprites[key]) {
+        delete sprites[key];
+        spriteCount--;
+      }
+    },
+    /* کشیدن اسپرایت با گوشه‌ی بالا-چپ در (x, y) */
+    blit: function (c, sp, x, y) {
+      c.drawImage(sp.canvas, x - sp.pad, y - sp.pad, sp.fw, sp.fh);
+    },
+    /* کشیدن اسپرایت با مرکز در (x, y)، با چرخش و مقیاس دلخواه */
+    blitC: function (c, sp, x, y, rot, sx, sy) {
+      if (sx === undefined) sx = 1;
+      if (sy === undefined) sy = sx;
+      if (!rot && sx === 1 && sy === 1) {
+        c.drawImage(sp.canvas, x - sp.fw / 2, y - sp.fh / 2, sp.fw, sp.fh);
+        return;
+      }
+      c.save();
+      c.translate(x, y);
+      if (rot) c.rotate(rot);
+      c.drawImage(sp.canvas, (-sp.fw / 2) * sx, (-sp.fh / 2) * sy, sp.fw * sx, sp.fh * sy);
+      c.restore();
+    },
+    /* پس‌زمینه‌ی تمام‌صفحه‌ی ثابت یک بازی. paint(c, w, h, bleed) باید از ‎-bleed تا w+bleed را پر کند
+       تا لرزش صفحه لبه‌ی خالی نشان ندهد. */
+    scene: function (c, key, paint) {
+      var bleed = 12;
+      var sp = env.sprite("scene:" + key, env.W, env.H, function (s, w, h) { paint(s, w, h, bleed); }, bleed);
+      c.drawImage(sp.canvas, -bleed, -bleed, sp.fw, sp.fh);
+    },
+    clamp: clamp,
+    lerp: function (a, b, t) { return a + (b - a) * t; },
     roundRect: function (c, x, y, w, h, r) {
       r = Math.min(r, w / 2, h / 2);
       c.beginPath();
@@ -241,6 +422,7 @@
       c.closePath();
     },
   };
+  env.art = window.ArcadeArt(env);
   resize();
   window.addEventListener("resize", function () { resize(); if (!run) drawIdle(); });
 
@@ -285,10 +467,16 @@
     ctx.globalAlpha = 1;
   }
 
+  var frameClipped = false;
   function beginFrame() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.shadowBlur = 0;
-    paintBackdrop();
+    ctx.shadowColor = "transparent";
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
+    // بازی‌هایی که خودشان کل صفحه را می‌کشند پس‌زمینه‌ی مشترک لازم ندارند (مگر در صفحه‌های پهن)
+    var own = game && game.renderer && game.renderer.ownBackground;
+    if (!own || view.offsetX > 0.5) paintBackdrop();
     var s = view.dpr * view.scale;
     var sx = 0, sy = 0;
     if (fx.shakeMag) {
@@ -296,11 +484,23 @@
       sy = (Math.random() - 0.5) * fx.shakeMag;
     }
     ctx.setTransform(s, 0, 0, s, (view.offsetX + sx * view.scale) * view.dpr, sy * view.scale * view.dpr);
+    // در صفحه‌های پهن، بازی فقط داخل ستون خودش کشیده می‌شود
+    frameClipped = view.offsetX > 0.5;
+    if (frameClipped) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, -20, view.W, view.H + 40);
+      ctx.clip();
+    }
   }
   function endFrame() {
     ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
     fx.draw(ctx);
+    if (frameClipped) {
+      ctx.restore();
+      frameClipped = false;
+    }
     if (fx.flashAlpha > 0) {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalAlpha = fx.flashAlpha;
@@ -385,15 +585,24 @@
     events.length = 0;
   }
 
+  var hudScoreEl = $("hud-score"), hudSubEl = $("hud-sub");
+  var hudShown = { score: null, sub: null };
   function updateHud() {
     var state = run ? run.state : game.idleState;
-    $("hud-score").textContent = fa(state ? state.score : 0);
+    var score = state ? state.score : 0;
+    if (score !== hudShown.score) {
+      hudShown.score = score;
+      hudScoreEl.textContent = fa(score);
+    }
     var sub = game.renderer.hud ? game.renderer.hud(state) : "";
     if (run && run.deadline) {
       var left = Math.max(0, Math.ceil((run.deadline - Date.now()) / 1000));
       if (left <= 60) sub = (sub ? sub + " · " : "") + "⏳ " + fa(left);
     }
-    $("hud-sub").textContent = sub;
+    if (sub !== hudShown.sub) {
+      hudShown.sub = sub;
+      hudSubEl.textContent = sub;
+    }
   }
 
   function frame(ts) {
@@ -438,6 +647,7 @@
     game.renderer.draw(ctx, state, run.ended ? 0 : run.acc / tickMs);
     endFrame();
     updateHud();
+    if (!run.ended) watchFrameRate(dt);
 
     if (run.ended && run.outro <= 0) {
       showOver();
@@ -456,6 +666,9 @@
       if (!res.ok) { fail(errorText(res.error)); return; }
       var config = Object.assign({}, res.level_config || {}, { assets: game.assets });
       fx.reset();
+      quality.frames = 0;
+      quality.total = 0;
+      quality.slow = 0;
       run = {
         sessionId: res.session_id,
         state: game.core.newState(res.seed, config),
@@ -649,11 +862,12 @@
       game.meta = res.game;
       game.key = res.game.key;
       var base = BOOT.staticBase + game.key + "/";
-      return loadScript(base + "core.js").then(function () { return loadScript(base + "render.js"); }).then(function () {
+      var ver = "?v=" + (BOOT.version || "1");
+      return loadScript(base + "core.js" + ver).then(function () { return loadScript(base + "render.js" + ver); }).then(function () {
         game.core = window.Arcade.cores[game.key];
         var names = game.core.assets || [];
         return Promise.all(names.map(function (name) {
-          return fetch(base + name).then(function (r) { return r.json(); }).then(function (data) { game.assets[name] = data; });
+          return fetch(base + name + ver).then(function (r) { return r.json(); }).then(function (data) { game.assets[name] = data; });
         }));
       }).then(function () {
         game.renderer = window.Arcade.renderers[game.key](env);
@@ -705,6 +919,18 @@
         endFrame();
         updateHud();
         window.__snap = { tick: tick, score: state.score, over: state.over, cause: state.cause };
+        // میانگین زمان کشیدن یک فریم (میلی‌ثانیه) برای مقایسه‌ی سرعت رندر
+        window.__bench = function (frames) {
+          var t0 = performance.now();
+          for (var n = 0; n < frames; n++) {
+            fx.update(16.7);
+            beginFrame();
+            game.renderer.draw(ctx, state, (n % 4) / 4);
+            endFrame();
+          }
+          ctx.getImageData(0, 0, 1, 1);
+          return (performance.now() - t0) / frames;
+        };
         run = null;
       });
   }

@@ -10,7 +10,7 @@ from django.db.models import Count, Max, Min, Q
 from django.utils import timezone
 
 from core.models import TelegramUser
-from games.catalog import ARCADE_PREFIX
+from games.catalog import ARCADE_PREFIX, arcade_enabled
 from games.models import Match, MatchPlayer, MatchStatus
 
 from .models import ArcadeRecord, ArcadeSession
@@ -71,7 +71,7 @@ def start_session(user: TelegramUser, game_key: str | None, match_token: str | N
             options = match.options
             session = ArcadeSession.objects.create(user=user, match=match, game_key=game_key, seed=match.seed)
     else:
-        if get_simulator(game_key or "") is None:
+        if get_simulator(game_key or "") is None or not arcade_enabled(game_key):
             raise ArcadeError("unknown_game", 404)
         seed = secrets.randbelow(2**31 - 1) + 1
         session = ArcadeSession.objects.create(user=user, game_key=game_key, seed=seed)

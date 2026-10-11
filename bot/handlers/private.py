@@ -66,7 +66,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Tel
 
 
 def profile_text(user: TelegramUser, stats: dict) -> str:
-    games = catalog()
+    games = catalog(include_disabled=True)
     best = games.get(stats["best_game"]) if stats["best_game"] else None
     decor = stats["decor"]
     win_rate = round(user.wins * 100 / user.games_played) if user.games_played else 0

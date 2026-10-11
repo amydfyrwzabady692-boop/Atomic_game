@@ -74,6 +74,10 @@ class FakeBot:
         self.edits.append({"chat_id": chat_id, "message_id": message_id, "text": text, **kwargs})
         return True
 
+    async def edit_message_media(self, chat_id=None, message_id=None, media=None, **kwargs):
+        self.edits.append({"chat_id": chat_id, "message_id": message_id, "text": getattr(media, "caption", None), **kwargs})
+        return True
+
     async def edit_message_reply_markup(self, chat_id=None, message_id=None, **kwargs):
         self.edits.append({"chat_id": chat_id, "message_id": message_id, "text": None, **kwargs})
         return True

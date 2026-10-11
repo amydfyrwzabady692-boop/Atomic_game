@@ -16,13 +16,14 @@ from dataclasses import dataclass, field
 from html import escape
 
 from django.utils import timezone
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 
 from arcade import services as arcade_services
 from core import texts
 from core.models import TelegramUser
 from core.redis import get_redis
 from core.texts import fa_num
+from games import config as game_config
 from games.catalog import GameInfo, get_info
 from games.content.provider import DbContentProvider, NoContent
 from games.engine import services
@@ -112,11 +113,27 @@ class TelegramGameContext:
         if message_id:
             self.manager.edits.edit(self.active.chat_id, message_id, text, self._markup(buttons), urgent=urgent)
 
-    async def send_photo(self, image: bytes, caption: str = "") -> int:
+    async def send_photo(self, image: bytes, caption: str = "", buttons=None) -> int:
         message = await tg_call(
-            self.bot.send_photo, self.active.chat_id, image, caption=caption or None, parse_mode="HTML"
+            self.bot.send_photo,
+            self.active.chat_id,
+            image,
+            caption=caption or None,
+            parse_mode="HTML",
+            reply_markup=self._markup(buttons),
         )
         return message.message_id if message else 0
+
+    async def edit_photo(self, message_id: int, image: bytes, caption: str = "", buttons=None) -> None:
+        if not message_id:
+            return
+        await tg_call(
+            self.bot.edit_message_media,
+            chat_id=self.active.chat_id,
+            message_id=message_id,
+            media=InputMediaPhoto(image, caption=caption or None, parse_mode="HTML"),
+            reply_markup=self._markup(buttons),
+        )
 
     async def send_dice(self, emoji: str) -> int:
         message = await tg_call(self.bot.send_dice, self.active.chat_id, emoji=emoji)
@@ -210,6 +227,11 @@ class MatchManager:
         try:
             if group.chat_id in self.active:
                 raise MatchError("active_match_exists")
+            # تعداد شرکت‌کننده و فعال بودن بازی همین لحظه از تنظیمات پنل ادمین خوانده می‌شود
+            await db(game_config.reload)()
+            info = get_info(info.key) or info
+            if not info.enabled:
+                raise MatchError("game_disabled")
             match = await db(services.create_match)(
                 group,
                 creator,

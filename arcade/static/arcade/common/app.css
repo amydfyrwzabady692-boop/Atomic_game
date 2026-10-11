@@ -48,10 +48,9 @@ html, body {
   min-width: 92px;
   padding: 4px 22px 6px;
   border-radius: 999px;
-  background: rgba(10, 13, 34, .55);
+  /* بدون backdrop-filter: تار کردن بومِ در حال حرکت در هر فریم روی گوشی خیلی گران است */
+  background: rgba(10, 13, 34, .72);
   border: 1px solid var(--stroke);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   font-size: 38px;
   font-weight: 900;
   line-height: 1.15;
@@ -80,9 +79,7 @@ html, body {
   width: 42px; height: 42px;
   border: 1px solid var(--stroke);
   border-radius: 14px;
-  background: rgba(10, 13, 34, .55);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(10, 13, 34, .72);
   color: var(--ink);
   font-size: 18px;
   pointer-events: auto;
@@ -104,6 +101,8 @@ html, body {
   text-align: center;
   animation: fade-in .25s ease-out;
   overflow-y: auto;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 #screen-loading, #screen-menu {
   background:

@@ -13,10 +13,12 @@ from core import texts
 from core.models import TelegramGroup, TelegramUser
 from core.redis import get_redis
 from core.texts import fa_num
+from games import config as game_config
 from games.catalog import ARCADE_CATEGORIES, GameInfo, catalog
 from games.engine.services import MatchError
 
 from .. import render
+from ..db import db
 from ..tg import tg_call
 from ..users import ensure_group, is_group_admin
 from .common import answer, callback, command, manager_of, reply
@@ -26,6 +28,7 @@ STEPS = ["variant", "fee", "split", "window", "join"]
 
 ERROR_TEXTS = {
     "active_match_exists": texts.ACTIVE_MATCH_EXISTS,
+    "game_disabled": texts.GAME_DISABLED,
     "fee_not_allowed": texts.FEE_NOT_ALLOWED,
     "lobby_closed": texts.LOBBY_CLOSED,
     "lobby_full": texts.LOBBY_FULL,
@@ -152,6 +155,7 @@ async def game(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Telegra
     if not group.allow_user_created_games and not await is_group_admin(context.bot, chat.id, user.tg_id):
         await reply(update, texts.USERS_CANNOT_CREATE)
         return
+    await db(game_config.reload)()
     if not enabled_games(group):
         await reply(update, texts.NO_GAMES_ENABLED)
         return

@@ -56,6 +56,12 @@ def backdate(session_id, ms):
 
 
 # ====================================================================== initData
+def test_site_root_redirects_to_the_arcade_menu(client):
+    response = client.get("/")
+    assert response.status_code == 302 and response["Location"] == "/arcade/"
+    assert client.get("/arcade/").status_code == 200
+
+
 def test_valid_init_data_accepted(make_user):
     user = make_user()
     data = validate_init_data(init_data_for(user, start_param="abc"))

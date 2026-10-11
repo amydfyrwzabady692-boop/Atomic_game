@@ -161,13 +161,51 @@ ul.messagelist li { border-radius: 12px; margin: 0 24px 10px; }
 .form-row { padding: 12px 16px; }
 a.addlink, a.changelink, a.viewlink { font-weight: 600; }
 
+/* دکمه‌ی اصلی فرم‌ها */
+.submit-row input.default, .submit-row input[type="submit"].default {
+  background: linear-gradient(120deg, #4f46e5, #7c3aed);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(79, 70, 229, .3);
+}
+.submit-row input.default:hover { filter: brightness(1.08); }
+
 /* صفحه‌ی ورود */
-body.login { background: linear-gradient(135deg, #1e1b4b, #4f46e5); }
-.login #container { border-radius: 20px; overflow: hidden; border: 0; box-shadow: 0 24px 60px rgba(0, 0, 0, .35); }
-.login #header { justify-content: center; box-shadow: none; }
+body.login {
+  background:
+    radial-gradient(60% 50% at 15% 10%, rgba(124, 58, 237, .55), transparent 70%),
+    radial-gradient(50% 45% at 90% 90%, rgba(56, 189, 248, .35), transparent 70%),
+    linear-gradient(135deg, #14122e, #312e81);
+  min-height: 100vh;
+}
+.login #container {
+  width: min(92vw, 400px);
+  margin: 12vh auto 0;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .08);
+  background: var(--module-bg);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .45);
+}
+.login #header { justify-content: center; box-shadow: none; padding: 22px 20px; }
+.login #content { padding: 24px 26px 28px; }
+.login .form-row { padding: 0 0 14px !important; }
+.login .form-row label { display: block; margin-bottom: 6px; font-weight: 700; font-size: 13px; }
+.login .form-row input { width: 100%; box-sizing: border-box; padding: 11px 12px; font-size: 15px; }
+.login .submit-row { margin: 6px 0 0; padding: 0; border: 0; background: transparent; }
+.login .submit-row input {
+  width: 100%; margin: 0; padding: 12px; font-size: 15px;
+  background: linear-gradient(120deg, #4f46e5, #7c3aed); color: #fff;
+  box-shadow: 0 10px 24px rgba(79, 70, 229, .35);
+}
+.login .password-reset-link { text-align: center; }
 
 /* ---------------------------------------------------------------- داشبورد آمار */
-.dash-actions { margin: 0 0 18px; }
+.dash-actions { margin: 0 0 18px; display: flex; flex-wrap: wrap; gap: 10px; }
+.dash-link.alt { background: linear-gradient(120deg, #059669, #10b981); box-shadow: 0 8px 22px rgba(16, 185, 129, .28); }
+.dash-link.ghost {
+  background: var(--module-bg); color: var(--body-loud-color) !important;
+  border: 1px solid var(--hairline-color); box-shadow: none;
+}
 .dash-link {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 12px 18px; border-radius: 14px; font-weight: 800;
@@ -200,3 +238,61 @@ body.login { background: linear-gradient(135deg, #1e1b4b, #4f46e5); }
 .muted-note { color: var(--body-quiet-color); font-size: 12.5px; }
 
 .aligned .form-row, form .form-row { padding-inline: 18px !important; }
+
+/* ---------------------------------------------------------------- تنظیمات بازی‌ها */
+.model-gamesetting.change-list #result_list th, .model-gamesetting.change-list #result_list td {
+  white-space: nowrap; vertical-align: middle;
+}
+.gs-help {
+  margin: 0 0 16px; padding: 14px 18px; border-radius: 14px; font-size: 13px;
+  background: var(--selected-bg); border: 1px solid var(--hairline-color);
+}
+.gs-help p { margin: 0 0 6px; }
+.gs-help ul { margin: 0; padding-inline-start: 18px; color: var(--body-quiet-color); }
+.gs-help li { list-style: disc; margin: 2px 0; }
+.gs-help kbd {
+  display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 6px; text-align: center;
+  font-family: inherit; font-weight: 800; background: var(--module-bg); border: 1px solid var(--border-color);
+}
+.gs-game { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; white-space: nowrap; }
+.gs-game i {
+  display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 10px;
+  font-style: normal; font-size: 18px; background: var(--darkened-bg);
+}
+.gs-stepper {
+  display: inline-flex; align-items: center; direction: ltr; border-radius: 12px; overflow: hidden;
+  border: 1px solid var(--border-color); background: var(--module-bg);
+}
+.gs-stepper button {
+  width: 34px; height: 34px; border: 0; padding: 0; cursor: pointer;
+  font: 800 18px/1 var(--font-family-primary); color: var(--primary-fg); background: var(--button-bg);
+  transition: background .15s ease, transform .08s ease;
+}
+.gs-stepper button:hover { background: var(--button-hover-bg); }
+.gs-stepper button:active { transform: scale(.92); }
+.gs-stepper button:disabled { background: var(--darkened-bg); color: var(--body-quiet-color); cursor: not-allowed; }
+.gs-stepper output {
+  display: inline-block; min-width: 46px; padding: 0 6px; text-align: center;
+  font-weight: 900; font-size: 16px; font-variant-numeric: tabular-nums; color: var(--body-loud-color);
+}
+.gs-stepper output.bump { animation: gs-bump .25s ease-out; }
+@keyframes gs-bump { 0% { transform: scale(1.35); color: var(--primary); } 100% { transform: none; } }
+.gs-fixed { color: var(--body-quiet-color); font-weight: 700; white-space: nowrap; }
+.gs-switch {
+  display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border-color); background: var(--darkened-bg); color: var(--body-quiet-color);
+  font: 700 12.5px/1 var(--font-family-primary); direction: ltr; transition: background .15s ease;
+}
+.gs-switch i { width: 22px; height: 22px; border-radius: 50%; background: #9ca3af; transition: background .15s ease; }
+.gs-switch.on { background: rgba(16, 185, 129, .14); border-color: rgba(16, 185, 129, .45); color: #059669; }
+.gs-switch.on i { background: #10b981; }
+tr.gs-off .gs-game, tr.gs-off .gs-stepper { opacity: .45; }
+tr.gs-busy { opacity: .6; pointer-events: none; }
+#gs-toast {
+  position: fixed; bottom: 22px; left: 50%; transform: translate(-50%, 30px); opacity: 0; z-index: 1000;
+  padding: 10px 18px; border-radius: 12px; font-weight: 800; font-size: 13px; pointer-events: none;
+  background: #059669; color: #fff; box-shadow: 0 10px 30px rgba(0, 0, 0, .25);
+  transition: transform .2s ease, opacity .2s ease;
+}
+#gs-toast.show { transform: translate(-50%, 0); opacity: 1; }
+#gs-toast.bad { background: #e11d48; }

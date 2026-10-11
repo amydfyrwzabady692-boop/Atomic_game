@@ -85,7 +85,12 @@ class EditQueue:
         finally:
             self._tasks.pop(key, None)
             if key in self._pending:  # در حین ارسال، محتوای تازه‌تری رسیده
-                self._tasks[key] = asyncio.create_task(self._flush(key, self.interval))
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:  # حلقه‌ی رویداد در حال بسته شدن است
+                    self._pending.pop(key, None)
+                else:
+                    self._tasks[key] = loop.create_task(self._flush(key, self.interval))
 
     async def flush_now(self, chat_id: int, message_id: int) -> None:
         """منتظر می‌ماند تا ویرایش‌های معوق این پیام تمام شود."""

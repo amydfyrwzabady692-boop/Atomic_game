@@ -17,7 +17,7 @@ from .textutils import fa_num
 
 def collect_stats(now=None) -> dict:
     today = day_start(now)
-    games = catalog()
+    games = catalog(include_disabled=True)
 
     daily = []
     for offset in range(13, -1, -1):

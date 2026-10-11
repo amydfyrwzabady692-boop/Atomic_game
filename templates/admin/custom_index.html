@@ -1,5 +1,10 @@
 {% extends "admin/index.html" %}
 {% block content %}
-<p class="dash-actions"><a class="dash-link" href="{% url 'admin_dashboard' %}">📊 داشبورد آمار</a></p>
+<p class="dash-actions">
+  <a class="dash-link" href="{% url 'admin_dashboard' %}">📊 داشبورد آمار</a>
+  <a class="dash-link alt" href="{% url 'admin:games_gamesetting_changelist' %}">🎮 تنظیمات بازی‌ها و تعداد شرکت‌کننده</a>
+  <a class="dash-link ghost" href="{% url 'admin:games_match_changelist' %}">🏁 مسابقه‌ها</a>
+  <a class="dash-link ghost" href="{% url 'admin:core_telegramuser_changelist' %}">👤 کاربران</a>
+</p>
 {{ block.super }}
 {% endblock %}

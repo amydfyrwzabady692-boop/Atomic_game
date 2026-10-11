@@ -9,6 +9,21 @@ from core import texts
 from core.texts import fa_num
 from games.catalog import GameInfo
 
+# پیام تلگرام حداکثر ۴۰۹۶ نویسه است؛ با ظرفیت‌های بزرگ، فهرست‌ها کوتاه می‌شوند
+LOBBY_NAMES_SHOWN = 30
+BOARD_ROWS_SHOWN = 20
+RESULT_ROWS_SHOWN = 25
+RESULT_EXTRAS_SHOWN = 8
+NAME_CHARS = 24
+
+
+def short_name(name: str) -> str:
+    return name if len(name) <= NAME_CHARS else name[: NAME_CHARS - 1] + "…"
+
+
+def short_mention(user) -> str:
+    return f'<a href="tg://user?id={user.tg_id}">{escape(short_name(user.display_name))}</a>'
+
 
 def split_label(split: list[int]) -> str:
     key = "-".join(str(x) for x in split)
@@ -39,7 +54,18 @@ def miniapp_link(username: str, token: str) -> str:
 
 
 def lobby_text(match, info: GameInfo, names: list[str], remaining: int) -> str:
-    players = "\n".join(f"• {escape(n)}" for n in names) if names else texts.LOBBY_NO_PLAYERS
+    if names:
+        players = "\n".join(
+            texts.LOBBY_PLAYER.format(n=fa_num(i), name=escape(short_name(n)))
+            for i, n in enumerate(names[:LOBBY_NAMES_SHOWN], start=1)
+        )
+        if len(names) > LOBBY_NAMES_SHOWN:
+            players += "\n" + texts.MORE_PLAYERS.format(n=fa_num(len(names) - LOBBY_NAMES_SHOWN))
+    else:
+        players = texts.LOBBY_NO_PLAYERS
+    total = 60
+    if match.created_at and match.join_deadline:
+        total = max(1, int((match.join_deadline - match.created_at).total_seconds()))
     return texts.LOBBY.format(
         emoji=info.emoji,
         title=info.title_fa,
@@ -53,6 +79,7 @@ def lobby_text(match, info: GameInfo, names: list[str], remaining: int) -> str:
         players=players,
         remaining=fa_num(max(remaining, 0)),
         min=fa_num(match.min_players),
+        bar=texts.progress_bar(max(remaining, 0) / total),
     )
 
 
@@ -77,17 +104,20 @@ def cancelled_text(reason: str, refunded: bool) -> str:
 
 def result_text(result, info: GameInfo) -> str:
     lines = [texts.RESULT_HEADER.format(title=info.title_fa)]
-    for r in sorted(result.players, key=lambda p: p.rank):
+    ranked = sorted(result.players, key=lambda p: p.rank)
+    for r in ranked[:RESULT_ROWS_SHOWN]:
         prize = texts.RESULT_PRIZE.format(prize=fa_num(r.prize)) if r.prize else ""
         lines.append(
             texts.RESULT_LINE.format(
                 medal=texts.MEDALS.get(r.rank, texts.MEDAL_OTHER),
-                name=r.user.mention_html,
+                name=short_mention(r.user),
                 score=fa_num(r.score),
                 prize=prize,
                 xp=fa_num(r.xp),
             )
         )
+    if len(ranked) > RESULT_ROWS_SHOWN:
+        lines.append(texts.MORE_PLAYERS.format(n=fa_num(len(ranked) - RESULT_ROWS_SHOWN)) + "\n")
     lines.append(
         texts.RESULT_FOOTER.format(pot=fa_num(result.match.pot)) if result.match.pot else texts.RESULT_FREE
     )
@@ -101,22 +131,30 @@ def result_text(result, info: GameInfo) -> str:
                 + texts.ACHIEVEMENT_UNLOCKED.format(emoji=a.emoji, title=a.title, reward=fa_num(a.reward_coins))
             )
     if extras:
-        lines.append("\n\n" + "\n".join(extras))
+        lines.append("\n\n" + "\n".join(extras[:RESULT_EXTRAS_SHOWN]))
     return "".join(lines)
 
 
 def arcade_text(match, info: GameInfo, standings, remaining: int, attempts: int, flash: str = "") -> str:
     rows = []
-    for i, s in enumerate(standings, start=1):
+    for i, s in enumerate(standings[:BOARD_ROWS_SHOWN], start=1):
         medal = texts.MEDALS.get(i, texts.MEDAL_OTHER)
         score = fa_num(s.score) if s.attempts else "—"
         rows.append(
             texts.ARCADE_ROW.format(
-                medal=medal, name=escape(s.name), score=score, used=fa_num(s.attempts), total=fa_num(attempts)
+                medal=medal,
+                name=escape(short_name(s.name)),
+                score=score,
+                used=fa_num(s.attempts),
+                total=fa_num(attempts),
             )
         )
+    if len(standings) > BOARD_ROWS_SHOWN:
+        rows.append(texts.MORE_PLAYERS.format(n=fa_num(len(standings) - BOARD_ROWS_SHOWN)))
     minutes, seconds = divmod(max(remaining, 0), 60)
+    window = int(match.options.get("window_minutes") or 5) * 60
     return texts.ARCADE_RUNNING.format(
+        bar=texts.progress_bar(max(remaining, 0) / window, 8),
         emoji=info.emoji,
         title=info.title_fa,
         variant=variant_suffix(info, match.options),

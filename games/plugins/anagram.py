@@ -29,7 +29,7 @@ class AnagramGame(RoundGame):
         await self.next_round()
 
     def _question(self, hint: str = "") -> str:
-        return texts.ANAGRAM_QUESTION.format(header=self.header(), letters=" ".join(self.scrambled), hint=hint)
+        return texts.ANAGRAM_QUESTION.format(header=self.header(), letters="  ".join(self.scrambled), hint=hint)
 
     async def begin_round(self) -> None:
         self.word = self.words[self.round_no - 1]

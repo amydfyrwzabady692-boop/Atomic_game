@@ -8,7 +8,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E🎮%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
-<link rel="stylesheet" href="{% static 'arcade/common/app.css' %}">
+<link rel="stylesheet" href="{% static 'arcade/common/app.css' %}?v={{ version }}">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -70,11 +70,13 @@ window.ARCADE_BOOT = {
   apiBase: "{% url 'arcade:app' %}api/",
   playBase: "{% url 'arcade:app' %}play/",
   devAuth: {{ dev_auth|yesno:"true,false" }},
+  version: "{{ version }}",
   games: JSON.parse(document.getElementById("games-data").textContent)
 };
 </script>
-<script src="{% static 'arcade/common/registry.js' %}"></script>
-<script src="{% static 'arcade/common/rng.js' %}"></script>
-<script src="{% static 'arcade/common/shell.js' %}"></script>
+<script src="{% static 'arcade/common/registry.js' %}?v={{ version }}"></script>
+<script src="{% static 'arcade/common/rng.js' %}?v={{ version }}"></script>
+<script src="{% static 'arcade/common/art.js' %}?v={{ version }}"></script>
+<script src="{% static 'arcade/common/shell.js' %}?v={{ version }}"></script>
 </body>
 </html>

@@ -135,7 +135,7 @@ def top_text(rows, scope: str, period: str) -> str:
         if row.title:
             name += f" «{escape(row.title)}»"
         text += texts.TOP_LINE.format(
-            rank=texts.MEDALS.get(row.rank, fa_num(row.rank)),
+            rank=texts.MEDALS.get(row.rank, f"{fa_num(row.rank)}."),
             badge=f"{row.badge} " if row.badge else "",
             name=name,
             coins=fa_num(row.coins),

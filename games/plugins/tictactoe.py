@@ -24,6 +24,7 @@ class TicTacToeGame(BaseGame):
     description_fa = "دوز دونفره با تایمر هر حرکت. اگر وقتت تمام شود می‌بازی."
     min_players = 2
     max_players = 2
+    players_ceiling = 2
     move_seconds = 30
 
     async def start(self) -> None:

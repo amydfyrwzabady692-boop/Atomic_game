@@ -4,6 +4,7 @@ import pytest
 from django.db import connection
 
 from core.models import TelegramGroup, TelegramUser
+from games import config as game_config
 from wallet.models import TxType
 from wallet.services import apply_transaction
 
@@ -30,3 +31,11 @@ def make_user(db):
 @pytest.fixture
 def group(db):
     return TelegramGroup.objects.create(chat_id=-100123, title="گروه تست")
+
+
+@pytest.fixture(autouse=True)
+def fresh_game_settings():
+    """کش تنظیمات بازی‌ها بین تست‌ها نشت نکند."""
+    game_config.reset()
+    yield
+    game_config.reset()
