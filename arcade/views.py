@@ -145,6 +145,12 @@ def app(request, game_key: str | None = None):
     خود صفحه از ``start_param`` می‌فهمد مربوط به کدام مسابقه است."""
     if game_key is not None and get_simulator(game_key) is None:
         raise Http404
+    start_param = request.GET.get("tgWebAppStartParam", "")
+    if game_key is None and start_param:
+        from . import board, board_views
+
+        if board.live_match(start_param[:32]) is not None:
+            return board_views.render_page(request, start_param[:32])
     games = [game_meta(sim) for key, sim in all_simulators().items() if arcade_enabled(key)]
     return render(
         request,
@@ -168,6 +174,13 @@ def info(request, user, payload):
     """اطلاعات صفحه‌ی شروع: بازی، تعداد تلاش باقی‌مانده، زمان باقی‌مانده و رکورد."""
     token = payload.get("match_token") or ""
     if token:
+        from django.urls import reverse
+
+        from . import board
+
+        if board.live_match(str(token)[:32]) is not None:
+            # مسابقه‌ی شطرنج است: کلاینت به صفحه‌ی گرافیکی خودش می‌رود
+            return JsonResponse({"ok": True, "mode": "board", "url": reverse("arcade:board", args=[str(token)[:32]])})
         match = services.match_for_token(str(token)[:32])
         sim = get_simulator(match.game_type[len("arcade_") :])
         if sim is None:

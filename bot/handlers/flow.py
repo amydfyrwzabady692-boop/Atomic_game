@@ -173,6 +173,10 @@ async def game(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Telegra
         await reply(update, texts.NO_GAMES_ENABLED)
         return
     text, keyboard = main_menu(group)
+    if context.bot_data.get("reads_all") is False and not await is_group_admin(
+        context.bot, chat.id, context.bot_data.get("bot_id", 0)
+    ):
+        text += texts.GAME_MENU_CANNOT_READ
     message = await reply(update, text, keyboard)
     if message:
         await _save_draft(chat.id, message.message_id, {"creator": user.tg_id})

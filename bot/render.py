@@ -212,6 +212,16 @@ def arcade_text(match, info: GameInfo, standings, remaining: int, attempts: int,
     )
 
 
+def live_keyboard(username: str, token: str, game_key: str) -> InlineKeyboardMarkup:
+    """دکمه‌ی باز کردن صفحه‌ی گرافیکی بازی دونفره (شطرنج) در مینی‌اپ."""
+    return InlineKeyboardMarkup(
+        [
+            [ui.button(texts.CHESS_PLAY_BTN, url=miniapp_link(username, token), style=ui.SUCCESS)],
+            [ui.button(texts.RULES_BTN, f"rl:{game_key}")],
+        ]
+    )
+
+
 def arcade_keyboard(username: str, token: str, game_key: str = "") -> InlineKeyboardMarkup:
     rows = [[ui.button(texts.ARCADE_PLAY_BTN, url=miniapp_link(username, token), style=ui.SUCCESS)]]
     if game_key:

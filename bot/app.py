@@ -86,6 +86,9 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def post_init(application: Application) -> None:
     me = await application.bot.get_me()
     application.bot_data["username"] = me.username
+    application.bot_data["bot_id"] = me.id
+    # اگر Privacy Mode روشن باشد ربات فقط در گروه‌هایی که ادمین است پیام‌ها را می‌بیند
+    application.bot_data["reads_all"] = bool(getattr(me, "can_read_all_group_messages", False))
     manager = MatchManager(application)
     application.bot_data["manager"] = manager
     await tg_call(

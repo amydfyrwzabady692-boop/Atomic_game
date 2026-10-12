@@ -1,0 +1,69 @@
+{% load static %}<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#141a2e">
+<title>شطرنج</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E♟%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
+<link rel="stylesheet" href="{% static 'arcade/board/chess.css' %}?v={{ version }}">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+<main id="game" class="hidden">
+  <section class="player" id="bar-top">
+    <span class="avatar" id="top-avatar"></span>
+    <div class="who"><b id="top-name"></b><div class="taken" id="top-taken"></div></div>
+    <div class="clock" id="top-clock"></div>
+  </section>
+
+  <div id="board-wrap">
+    <div id="board" role="grid" aria-label="صفحه‌ی شطرنج"></div>
+    <div id="promo" class="hidden" role="dialog" aria-label="انتخاب مهره برای ارتقا"></div>
+  </div>
+
+  <section class="player" id="bar-bottom">
+    <span class="avatar" id="bottom-avatar"></span>
+    <div class="who"><b id="bottom-name"></b><div class="taken" id="bottom-taken"></div></div>
+    <div class="clock" id="bottom-clock"></div>
+  </section>
+
+  <p id="status" aria-live="polite"></p>
+
+  <div id="actions">
+    <button id="draw-btn" class="btn violet" type="button">🤝 پیشنهاد مساوی</button>
+    <button id="resign-btn" class="btn danger" type="button">🏳 تسلیم</button>
+  </div>
+</main>
+
+<section id="loading" class="overlay">
+  <div class="spinner"></div>
+  <p id="loading-text">در حال آماده‌سازی صفحه‌ی شطرنج…</p>
+</section>
+
+<section id="result" class="overlay hidden">
+  <div class="card">
+    <div class="result-icon" id="result-icon">🏆</div>
+    <h1 id="result-title"></h1>
+    <p class="muted" id="result-reason"></p>
+    <button id="result-close" class="btn go" type="button">برگشت به گروه</button>
+    <button id="result-view" class="btn violet" type="button">دیدن صفحه</button>
+  </div>
+</section>
+
+<div id="toast" class="hidden" role="alert"></div>
+
+<script>
+window.BOARD_BOOT = {
+  token: "{{ token|escapejs }}",
+  apiBase: "{% url 'arcade:app' %}api/",
+  pieceBase: "{{ piece_base|escapejs }}",
+  devAuth: {{ dev_auth|yesno:"true,false" }},
+  version: "{{ version }}"
+};
+</script>
+<script src="{% static 'arcade/board/chess.js' %}?v={{ version }}"></script>
+</body>
+</html>

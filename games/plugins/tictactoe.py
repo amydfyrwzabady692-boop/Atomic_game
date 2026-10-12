@@ -8,7 +8,6 @@ from games.engine.registry import register_game
 
 MARKS = {"X": "❌", "O": "⭕️"}
 MARK_STYLES = {"X": DANGER, "O": PRIMARY}
-SIZES = {"3": 3, "4": 4}  # گزینه‌ی انتخابی هنگام ساخت مسابقه ← اندازه‌ی صفحه
 
 
 def lines_for(size: int) -> list[tuple[int, ...]]:
@@ -33,21 +32,19 @@ class TicTacToeGame(BaseGame):
     key = "tictactoe"
     title_fa = "دوز"
     emoji = "⭕️"
-    description_fa = "دوز دونفره (۳×۳ یا ۴×۴) با تایمر هر حرکت. اگر وقتت تمام شود می‌بازی."
+    description_fa = "دوز دونفره‌ی ۳×۳ با تایمر هر حرکت. اگر وقتت تمام شود می‌بازی."
     min_players = 2
     max_players = 2
     players_ceiling = 2
     move_seconds = 30
     rules_fa = [
-        "به‌نوبت یک خانه را بزن؛ پر کردن یک ردیف، ستون یا قطر کامل (۳ یا ۴ خانه) یعنی برد.",
+        "به‌نوبت یک خانه را بزن؛ سه علامت در یک ردیف، ستون یا قطر یعنی برد.",
         "برای هر حرکت {move_seconds} ثانیه وقت داری؛ تمام شدن وقت یعنی باخت.",
         "اگر صفحه پر شود و کسی نبرد، بازی مساوی است.",
     ]
-    variant_title_fa = "اندازه‌ی صفحه"
-    variants = dict(texts.XO_VARIANTS)
+    size = 3
 
     async def start(self) -> None:
-        self.size = SIZES.get(str(self.ctx.options.get("variant") or "3"), 3)
         order = list(self.players)
         self.ctx.rng.shuffle(order)
         self.x, self.o = order

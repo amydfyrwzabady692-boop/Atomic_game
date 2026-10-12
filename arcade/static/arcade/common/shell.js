@@ -875,6 +875,8 @@
   function refreshInfo() {
     var body = game.matchToken ? { match_token: game.matchToken } : { game: game.key };
     return api("info", body).then(function (res) {
+      // مسابقه‌ی شطرنج صفحه‌ی گرافیکی خودش را دارد
+      if (res.ok && res.mode === "board" && res.url) { location.replace(res.url + location.search + location.hash); return new Promise(function () {}); }
       if (res.ok) { game.info = res; game.infoAt = Date.now(); }
       return res;
     });

@@ -18,6 +18,7 @@ from html import escape
 from django.utils import timezone
 from telegram import InlineKeyboardMarkup, InputMediaPhoto
 
+from arcade import board as live_board
 from arcade import services as arcade_services
 from core import texts
 from core.models import TelegramUser
@@ -25,6 +26,9 @@ from core.redis import get_redis
 from core.texts import fa_num
 from games import config as game_config
 from games.catalog import GameInfo, get_info
+from games.chess import live as chess_live
+from games.chess.engine import Move, square_name
+from games.chess.render import render_board
 from games.content.provider import DbContentProvider, NoContent
 from games.engine import services
 from games.engine.base import BaseGame, IncomingCallback, IncomingMessage, Player
@@ -40,6 +44,8 @@ from .tg import EditQueue, tg_call
 logger = logging.getLogger(__name__)
 
 LOBBY_REFRESH_SECONDS = 10
+LIVE_POLL_SECONDS = 2
+LIVE_EDIT_MIN_GAP = 3  # فاصله‌ی ویرایش عکس صفحه در گروه (حد نرخ تلگرام)
 ARCADE_POLL_SECONDS = 5
 ARCADE_FLASH_MIN_GAP = 20
 WATCHDOG_SECONDS = 15
@@ -66,6 +72,9 @@ class ActiveMatch:
     leader: tuple[int, int] | None = None
     last_flash_at: float = 0.0
     flash: str = ""
+    # بازی دونفره‌ی گرافیکی (شطرنج در مینی‌اپ)
+    live_version: int = 0
+    live_edit_at: float = 0.0
 
 
 class TelegramGameContext:
@@ -370,6 +379,10 @@ class MatchManager:
             if info.is_arcade:
                 await self._start_arcade(active, match)
                 return
+            if info.key in live_board.LIVE_GAMES and render.arcade_ready():
+                # صفحه‌ی گرافیکی در مینی‌اپ؛ بدون مینی‌اپ همان نسخه‌ی داخل گفت‌وگو اجرا می‌شود
+                await self._start_live(active, match, players)
+                return
             cls = get_game(info.key)
             active.ctx = TelegramGameContext(self, active, players, dict(match.options), match.seed)
             active.game = cls(active.ctx)
@@ -584,6 +597,111 @@ class MatchManager:
                 )
             await self._payout(active, [Standing(s.user_id, s.score, s.reached_at) for s in standings])
 
+    # ================================================================ شطرنج زنده (مینی‌اپ)
+    def _live_view(self, active: ActiveMatch, state: dict) -> tuple[bytes, str]:
+        """عکس صفحه و متن وضعیت برای پیام گروه (تماشاچی‌ها همین را می‌بینند)."""
+        by_id = {p.user_id: p for p in active.players_by_tg.values()}
+        white, black = by_id[state["w"]], by_id[state["b"]]
+        position = chess_live.position_of(state)
+        over = state["over"]
+        if over:
+            winner = by_id.get(over["winner"])
+            loser = black if winner is white else white
+            if over["reason"] == "checkmate":
+                status = texts.CHESS_END_MATE.format(name=winner.mention)
+            elif over["reason"] == "resign":
+                status = texts.CHESS_END_RESIGN.format(loser=escape(loser.name), winner=winner.mention)
+            elif over["reason"] == "timeout":
+                status = texts.CHESS_END_TIMEOUT.format(loser=escape(loser.name), winner=winner.mention)
+            else:
+                status = texts.CHESS_END_DRAW.format(reason=texts.CHESS_DRAW_REASONS.get(over["reason"], ""))
+        else:
+            current = white if position.turn == "w" else black
+            status = texts.CHESS_TURN.format(
+                name=escape(current.name),
+                color=texts.CHESS_WHITE if position.turn == "w" else texts.CHESS_BLACK,
+                seconds=fa_num(state["move_seconds"]),
+            )
+            if position.in_check():
+                status += texts.CHESS_CHECK
+        last, last_move = "", None
+        if state["last"]:
+            last_move = Move(state["last"][0], state["last"][1])
+            last = texts.CHESS_LAST.format(move=f"{square_name(last_move.src)} → {square_name(last_move.dst)}")
+        if not over:
+            last += texts.CHESS_LIVE_HINT
+        caption = texts.CHESS_CAPTION.format(
+            white=escape(white.name), black=escape(black.name), status=status, last=last
+        )
+        return render_board(position, last_move), caption
+
+    async def _start_live(self, active: ActiveMatch, match: Match, players: list[Player]) -> None:
+        order = list(players)
+        random.Random(match.seed).shuffle(order)
+        state = chess_live.new_state(order[0].user_id, order[1].user_id, time.time())
+        await db(live_board.start)(match.pk, state)
+        active.live_version = state["version"]
+        image, caption = await asyncio.to_thread(self._live_view, active, state)
+        message = await tg_call(
+            self.bot.send_photo,
+            active.chat_id,
+            image,
+            caption=caption,
+            parse_mode="HTML",
+            reply_markup=render.live_keyboard(self.username, match.token, active.info.key),
+        )
+        active.board_message_id = message.message_id if message else None
+        if active.board_message_id:
+            await db(live_board.remember)(match.pk, board_message_id=active.board_message_id)
+        self._arm_live(active)
+
+    def _arm_live(self, active: ActiveMatch) -> None:
+        self._arm_watchdog(active)
+        self._schedule(active, "live_poll", LIVE_POLL_SECONDS, lambda: self.poll_live(active), repeat=True)
+
+    async def _edit_live(self, active: ActiveMatch, state: dict, final: bool = False) -> None:
+        if not active.board_message_id:
+            return
+        image, caption = await asyncio.to_thread(self._live_view, active, state)
+        active.live_edit_at = time.monotonic()
+        await tg_call(
+            self.bot.edit_message_media,
+            chat_id=active.chat_id,
+            message_id=active.board_message_id,
+            media=InputMediaPhoto(image, caption=caption, parse_mode="HTML"),
+            reply_markup=None if final else render.live_keyboard(self.username, active.token, active.info.key),
+        )
+
+    async def poll_live(self, active: ActiveMatch) -> None:
+        """وضعیت بازی را از دیتابیس می‌خواند: پایان مهلت، به‌روزرسانی عکس گروه و اعلام نتیجه."""
+        if active.phase != "running":
+            return
+        state = await db(live_board.tick)(active.match_id)
+        if state is None:
+            return
+        if state["over"]:
+            await self.finish_live(active, state)
+            return
+        if state["version"] != active.live_version and time.monotonic() - active.live_edit_at >= LIVE_EDIT_MIN_GAP:
+            active.live_version = state["version"]
+            await self._edit_live(active, state)
+
+    async def finish_live(self, active: ActiveMatch, state: dict) -> None:
+        async with active.lock:
+            if active.phase != "running":
+                return
+            active.phase = "done"
+            self._cancel_all_jobs(active)
+            self.active.pop(active.chat_id, None)
+            await self._edit_live(active, state, final=True)
+            winner = state["over"]["winner"]
+            now = time.time()
+            standings = [
+                Standing(uid, 1 if uid == winner else 0, now if uid == winner else None)
+                for uid in (state["w"], state["b"])
+            ]
+            await self._payout(active, standings)
+
     # ================================================================ بازیابی بعد از ری‌استارت
     async def recover(self) -> None:
         matches = await db(
@@ -629,6 +747,18 @@ class MatchManager:
             else:
                 self._arm_arcade(active, remaining)
             logger.info("arcade match recovered", extra={"match_id": match.pk})
+            return
+        if info.key in live_board.LIVE_GAMES and (match.state or {}).get("board"):
+            # وضعیت شطرنج زنده در دیتابیس است؛ بازی از همان‌جا ادامه پیدا می‌کند
+            entries = await db(lambda: list(match.players.select_related("user")))()
+            active.players_by_tg = {
+                e.user.tg_id: Player(e.user_id, e.user.tg_id, render.short_name(e.user.display_name)) for e in entries
+            }
+            active.phase = "running"
+            active.board_message_id = match.state.get("board_message_id")
+            self.active[chat_id] = active
+            self._arm_live(active)
+            logger.info("live match recovered", extra={"match_id": match.pk})
             return
         # بازی متنیِ در حال اجرا قابل ادامه نیست: لغو و برگشت کامل ورودی‌ها
         active.phase = "running"

@@ -552,13 +552,13 @@ async def test_game_menu_shows_every_game_on_one_screen(app):
     buttons = buttons_of(menu.replies[0]["reply_markup"])
     games = [b for b in buttons if (b.callback_data or "").startswith("n:g:")]
     arcade = [b for b in games if b.callback_data.startswith("n:g:arcade_")]
-    assert len(games) == 25 and len(arcade) == 14
+    assert len(games) == 26 and len(arcade) == 14
     assert {style_of(b) for b in arcade} == {"success"}
     assert {style_of(b) for b in games if b not in arcade} == {"primary"}
     labels = " ".join(b.text for b in games)
-    for title in ("هیزم‌شکن", "موش‌زن", "مار کلاسیک", "شطرنج", "دوز", "کوییز"):
+    for title in ("هیزم‌شکن", "موش‌زن", "مار کلاسیک", "شطرنج", "دوز چهارتایی", "کوییز"):
         assert title in labels
-    assert "۱۱ بازی گروهی" in menu.replies[0]["text"] and "۱۴ بازی آرکید" in menu.replies[0]["text"]
+    assert "۱۲ بازی گروهی" in menu.replies[0]["text"] and "۱۴ بازی آرکید" in menu.replies[0]["text"]
     # دکمه‌ی عنوان بخش آرکید فقط توضیح می‌دهد و منو را عوض نمی‌کند
     header = await click(app, 251, "n:h", menu_id)
     assert header.answers[0] == (texts.ARCADE_HEADER_NOTE, True) and header.edits == []
@@ -575,7 +575,7 @@ async def test_arcade_games_are_not_offered_until_the_mini_app_is_set_up(app, se
     menu, menu_id = await open_game_menu(app, 261)
     data = [b.callback_data for b in buttons_of(menu.replies[0]["reply_markup"])]
     assert not any((d or "").startswith("n:g:arcade_") for d in data) and "n:h" not in data
-    assert "راه‌اندازی مینی‌اپ" in menu.replies[0]["text"] and "۱۱ بازی گروهی" in menu.replies[0]["text"]
+    assert "راه‌اندازی مینی‌اپ" in menu.replies[0]["text"] and "۱۲ بازی گروهی" in menu.replies[0]["text"]
     stale = await click(app, 261, "n:g:arcade_timber", menu_id)
     assert stale.answers[0] == (texts.MENU_EXPIRED, True)
 
@@ -600,18 +600,12 @@ async def test_practice_menu_lists_all_arcade_games_when_set_up(app):
     assert len(buttons) == 14 and all(b.web_app.url.startswith("https://arcade.test/arcade/play/") for b in buttons)
 
 
-async def test_tictactoe_asks_for_the_board_size(app):
-    await start_user(app, 281)
-    await start_user(app, 282)
-    _, menu_id = await open_game_menu(app, 281)
-    step = await click(app, 281, "n:g:tictactoe", menu_id)
-    assert "اندازه‌ی صفحه" in step.edits[-1]["text"]
-    sizes = [b.text for b in buttons_of(step.edits[-1]["reply_markup"]) if (b.callback_data or "").startswith("n:v:")]
-    assert sizes == ["۳×۳ (سه‌تایی)", "۴×۴ (چهارتایی)"]
-    await click(app, 281, "n:v:4", menu_id)
-    await click(app, 281, "n:f:0", menu_id)
-    await click(app, 281, "n:t:60", menu_id)
-    match = await sync_to_async(Match.objects.get)()
-    assert match.game_type == "tictactoe" and match.options["variant"] == "4"
-    lobby = app.bot.edits[-1]["text"] if app.bot.edits else app.bot.sent[-1]["text"]
-    assert "۴×۴" in lobby
+async def test_game_menu_warns_when_the_bot_cannot_read_group_messages(app):
+    await start_user(app, 291)
+    app.bot_data["reads_all"] = False  # Privacy Mode روشن است
+    menu, _ = await open_game_menu(app, 291)
+    assert texts.GAME_MENU_CANNOT_READ in menu.replies[0]["text"]
+    app.bot.admins.add((GROUP_ID, 0))  # ربات ادمین گروه شد
+    reset_clients()
+    menu, _ = await open_game_menu(app, 291)
+    assert texts.GAME_MENU_CANNOT_READ not in menu.replies[0]["text"]
