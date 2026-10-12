@@ -38,7 +38,7 @@ services:
       sh -c "python manage.py migrate --noinput &&
              gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3"
     ports:
-      - "8000:8000"
+      - "${WEB_PORT:-8120}:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
       interval: 5s
@@ -60,7 +60,7 @@ services:
       REDIS_URL: redis://redis:6379/0
     command: python manage.py runbot
     ports:
-      - "8443:8443"
+      - "${BOT_PORT:-8473}:8443"
     depends_on:
       # web اول migrate را اجرا می‌کند؛ ربات بعد از آماده شدنش بالا می‌آید
       web:
