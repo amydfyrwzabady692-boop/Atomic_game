@@ -30,9 +30,11 @@ PIECE_CODES = {f"{color}{kind}" for color in "wb" for kind in "kqrbnp"}
 
 
 def render_page(request, token: str):
+    match = board.live_match(token)
+    template = "arcade/board.html" if match is None or match.game_type == "chess" else "arcade/grid.html"
     return render(
         request,
-        "arcade/board.html",
+        template,
         {
             "token": token,
             "version": asset_version(),
@@ -68,12 +70,13 @@ def piece(request, code: str):
 
 
 def _names(state: dict) -> dict:
-    users = {u.pk: u.display_name for u in TelegramUser.objects.filter(pk__in=[state["w"], state["b"]])}
-    return {"w": users.get(state["w"], ""), "b": users.get(state["b"], "")}
+    sides = board.rules_for(state).players(state)
+    users = {u.pk: u.display_name for u in TelegramUser.objects.filter(pk__in=list(sides.values()))}
+    return {side: users.get(uid, "") for side, uid in sides.items()}
 
 
 def _response(match, state: dict, user) -> JsonResponse:
-    data = live.view(state, user.pk, time.time())
+    data = board.rules_for(state).view(state, user.pk, time.time())
     data["players"] = _names(state)
     data["cancelled"] = match.status == MatchStatus.CANCELLED
     return JsonResponse({"ok": True, "changed": True, "state": data})
@@ -103,7 +106,9 @@ def state(request, user, payload):
     current = match.state["board"]
     now = time.time()
     if match.status == MatchStatus.RUNNING and not current["over"] and now > (current["deadline"] or now):
-        match, current, _ = _guard(lambda: board.update(match.pk, lambda s: live.check_timeout(s, now)))
+        match, current, _ = _guard(
+            lambda: board.update(match.pk, lambda s: board.rules_for(s).check_timeout(s, now))
+        )
     if payload.get("version") == current["version"] and match.status != MatchStatus.CANCELLED:
         left = max(0, int(current["deadline"] - now)) if current["deadline"] else 0
         return JsonResponse({"ok": True, "changed": False, "seconds_left": left})
@@ -124,11 +129,12 @@ def move(request, user, payload):
     match = _match(payload)
     if match.status != MatchStatus.RUNNING:
         raise ArcadeError("match_not_running", 409)
-    src, dst = _int(payload.get("src")), _int(payload.get("dst"))
+    # در دوز و دوز چهارتایی فقط ``src`` (خانه یا ستون) لازم است
+    src, dst = _int(payload.get("src")), _int(payload.get("dst", 0))
     promo = str(payload.get("promo") or "")[:1]
     now = time.time()
     match, current, _ = _guard(
-        lambda: board.update(match.pk, lambda s: live.apply_move(s, user.pk, src, dst, promo, now))
+        lambda: board.update(match.pk, lambda s: board.rules_for(s).apply_move(s, user.pk, src, dst, promo, now))
     )
     return _response(match, current, user)
 
@@ -144,9 +150,9 @@ def action(request, user, payload):
         raise ArcadeError("match_not_running", 409)
     kind = payload.get("action")
     if kind == "resign":
-        change = lambda s: live.resign(s, user.pk)  # noqa: E731
+        change = lambda s: board.rules_for(s).resign(s, user.pk)  # noqa: E731
     elif kind == "draw":
-        change = lambda s: live.offer_draw(s, user.pk)  # noqa: E731
+        change = lambda s: board.rules_for(s).offer_draw(s, user.pk)  # noqa: E731
     else:
         raise ArcadeError("bad_action", 400)
     match, current, _ = _guard(lambda: board.update(match.pk, change))

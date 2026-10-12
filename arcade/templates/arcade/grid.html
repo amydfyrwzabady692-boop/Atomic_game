@@ -1,0 +1,63 @@
+{% load static %}<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#141a2e">
+<title>دوز</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E🎮%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
+<link rel="stylesheet" href="{% static 'arcade/board/chess.css' %}?v={{ version }}">
+<link rel="stylesheet" href="{% static 'arcade/board/grid.css' %}?v={{ version }}">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+<main id="game" class="hidden">
+  <h1 id="title"></h1>
+  <section class="player" id="bar-top">
+    <span class="disc" id="top-disc"></span>
+    <div class="who"><b id="top-name"></b></div>
+    <div class="clock" id="top-clock"></div>
+  </section>
+
+  <div id="grid-wrap"><div id="grid" role="grid" aria-label="صفحه‌ی بازی"></div></div>
+
+  <section class="player" id="bar-bottom">
+    <span class="disc" id="bottom-disc"></span>
+    <div class="who"><b id="bottom-name"></b></div>
+    <div class="clock" id="bottom-clock"></div>
+  </section>
+
+  <p id="status" aria-live="polite"></p>
+  <div id="actions"><button id="resign-btn" class="btn danger" type="button">🏳 تسلیم</button></div>
+</main>
+
+<section id="loading" class="overlay">
+  <div class="spinner"></div>
+  <p id="loading-text">در حال آماده‌سازی صفحه‌ی بازی…</p>
+</section>
+
+<section id="result" class="overlay hidden">
+  <div class="card">
+    <div class="result-icon" id="result-icon">🏆</div>
+    <h1 id="result-title"></h1>
+    <p class="muted" id="result-reason"></p>
+    <button id="result-close" class="btn go" type="button">برگشت به گروه</button>
+    <button id="result-view" class="btn violet" type="button">دیدن صفحه</button>
+  </div>
+</section>
+
+<div id="toast" class="hidden" role="alert"></div>
+
+<script>
+window.BOARD_BOOT = {
+  token: "{{ token|escapejs }}",
+  apiBase: "{% url 'arcade:app' %}api/",
+  devAuth: {{ dev_auth|yesno:"true,false" }},
+  version: "{{ version }}"
+};
+</script>
+<script src="{% static 'arcade/board/grid.js' %}?v={{ version }}"></script>
+</body>
+</html>

@@ -25,6 +25,7 @@ from core.models import TelegramUser
 from core.redis import get_redis
 from core.texts import fa_num
 from games import config as game_config
+from games import gridlive
 from games.catalog import GameInfo, get_info
 from games.chess import live as chess_live
 from games.chess.engine import Move, square_name
@@ -598,8 +599,51 @@ class MatchManager:
             await self._payout(active, [Standing(s.user_id, s.score, s.reached_at) for s in standings])
 
     # ================================================================ شطرنج زنده (مینی‌اپ)
-    def _live_view(self, active: ActiveMatch, state: dict) -> tuple[bytes, str]:
+    def _grid_view(self, active: ActiveMatch, state: dict) -> tuple[None, str]:
+        """متن وضعیت دوز/دوز چهارتایی برای پیام گروه (صفحه با ایموجی)."""
+        by_id = {p.user_id: p for p in active.players_by_tg.values()}
+        spec = gridlive.GAMES[state["game"]]
+        first, second = spec["sides"]
+        marks = {"X": "❌", "O": "⭕️", "R": "🔴", "Y": "🟡"}
+        wins = {"X": "❎", "O": "🅾️", "R": "🟥", "Y": "🟨"}
+        rows = []
+        order = range(spec["rows"] - 1, -1, -1) if spec["gravity"] else range(spec["rows"])
+        for row in order:
+            line = ""
+            for column in range(spec["cols"]):
+                index = row * spec["cols"] + column
+                mark = state["cells"][index]
+                line += (wins if index in state["win"] else marks).get(mark, "⚪️" if spec["gravity"] else "▫️")
+            rows.append(line)
+        grid = "\n".join(rows)
+        over = state["over"]
+        if over:
+            winner = by_id.get(over["winner"])
+            if winner is None:
+                status = texts.XO_DRAW
+            else:
+                loser = next(p for uid, p in by_id.items() if uid != over["winner"])
+                if over["reason"] == "timeout":
+                    status = texts.XO_TIMEOUT.format(loser=escape(loser.name), winner=winner.mention)
+                elif over["reason"] == "resign":
+                    status = texts.LIVE_RESIGN.format(loser=escape(loser.name), winner=winner.mention)
+                else:
+                    status = texts.XO_WIN.format(name=winner.mention)
+        else:
+            current = by_id[state["sides"][state["turn"]]]
+            status = texts.XO_TURN.format(
+                name=escape(current.name), mark=marks[state["turn"]], seconds=fa_num(state["move_seconds"])
+            )
+            status += texts.LIVE_HINT
+        names = {side: escape(by_id[uid].name) for side, uid in state["sides"].items()}
+        if state["game"] == "connect4":
+            return None, texts.C4_BOARD.format(red=names[first], yellow=names[second], grid=grid, status=status)
+        return None, texts.XO_BOARD.format(size=fa_num(spec["cols"]), x=names[first], o=names[second], status=grid + "\n\n" + status)
+
+    def _live_view(self, active: ActiveMatch, state: dict) -> tuple[bytes | None, str]:
         """عکس صفحه و متن وضعیت برای پیام گروه (تماشاچی‌ها همین را می‌بینند)."""
+        if state.get("game", "chess") != "chess":
+            return self._grid_view(active, state)
         by_id = {p.user_id: p for p in active.players_by_tg.values()}
         white, black = by_id[state["w"]], by_id[state["b"]]
         position = chess_live.position_of(state)
@@ -638,18 +682,19 @@ class MatchManager:
     async def _start_live(self, active: ActiveMatch, match: Match, players: list[Player]) -> None:
         order = list(players)
         random.Random(match.seed).shuffle(order)
-        state = chess_live.new_state(order[0].user_id, order[1].user_id, time.time())
+        state = live_board.new_state(active.info.key, order[0].user_id, order[1].user_id, time.time())
         await db(live_board.start)(match.pk, state)
         active.live_version = state["version"]
         image, caption = await asyncio.to_thread(self._live_view, active, state)
-        message = await tg_call(
-            self.bot.send_photo,
-            active.chat_id,
-            image,
-            caption=caption,
-            parse_mode="HTML",
-            reply_markup=render.live_keyboard(self.username, match.token, active.info.key),
-        )
+        keyboard = render.live_keyboard(self.username, match.token, active.info.key)
+        if image is None:
+            message = await tg_call(
+                self.bot.send_message, active.chat_id, caption, parse_mode="HTML", reply_markup=keyboard
+            )
+        else:
+            message = await tg_call(
+                self.bot.send_photo, active.chat_id, image, caption=caption, parse_mode="HTML", reply_markup=keyboard
+            )
         active.board_message_id = message.message_id if message else None
         if active.board_message_id:
             await db(live_board.remember)(match.pk, board_message_id=active.board_message_id)
@@ -664,6 +709,17 @@ class MatchManager:
             return
         image, caption = await asyncio.to_thread(self._live_view, active, state)
         active.live_edit_at = time.monotonic()
+        keyboard = None if final else render.live_keyboard(self.username, active.token, active.info.key)
+        if image is None:
+            await tg_call(
+                self.bot.edit_message_text,
+                chat_id=active.chat_id,
+                message_id=active.board_message_id,
+                text=caption,
+                parse_mode="HTML",
+                reply_markup=keyboard,
+            )
+            return
         await tg_call(
             self.bot.edit_message_media,
             chat_id=active.chat_id,
@@ -698,7 +754,7 @@ class MatchManager:
             now = time.time()
             standings = [
                 Standing(uid, 1 if uid == winner else 0, now if uid == winner else None)
-                for uid in (state["w"], state["b"])
+                for uid in live_board.rules_for(state).players(state).values()
             ]
             await self._payout(active, standings)
 

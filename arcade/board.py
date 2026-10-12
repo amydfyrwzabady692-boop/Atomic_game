@@ -8,10 +8,22 @@ import time
 
 from django.db import transaction
 
+from games import gridlive
 from games.chess import live
 from games.models import Match
 
-LIVE_GAMES = ("chess",)
+LIVE_GAMES = ("chess", "tictactoe", "connect4")
+
+
+def rules_for(state: dict):
+    """ماژول قوانین بازیِ این وضعیت (شطرنج یا بازی‌های خانه‌ای)."""
+    return live if state.get("game", "chess") == "chess" else gridlive
+
+
+def new_state(game: str, first_id: int, second_id: int, now: float) -> dict:
+    if game == "chess":
+        return live.new_state(first_id, second_id, now)
+    return gridlive.new_state(game, first_id, second_id, now)
 
 
 def live_match(token: str) -> Match | None:
@@ -69,5 +81,5 @@ def tick(match_id: int, now: float | None = None) -> dict | None:
     if state is None:
         return None
     if not state["over"] and state["deadline"] is not None and now > state["deadline"]:
-        _, state, _ = update(match_id, lambda s: live.check_timeout(s, now))
+        _, state, _ = update(match_id, lambda s: rules_for(s).check_timeout(s, now))
     return state

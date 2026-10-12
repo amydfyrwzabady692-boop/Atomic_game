@@ -363,3 +363,101 @@ async def test_connect4_full_column_and_timeout():
     assert outside.answers == []
     await ctx.fire("move")  # وقت قرمز تمام شد
     assert ctx.ended and game.scores[game.yellow.user_id] == 1 and "وقت" in ctx.edits[-1]["text"]
+
+
+# ------------------------------------------------------------------ دوز و دوز چهارتایی در مینی‌اپ
+def test_grid_tictactoe_rules():
+    from games import gridlive
+
+    state = gridlive.new_state("tictactoe", 1, 2, 1000.0)
+    assert gridlive.view(state, 1, 1000.0)["legal"] == list(range(9)) and gridlive.view(state, 2, 1000.0)["legal"] == []
+    with pytest.raises(live.LiveError, match="not_your_turn"):
+        gridlive.apply_move(state, 2, 0, 0, "", 1000.0)
+    for user, cell in [(1, 0), (2, 3), (1, 1), (2, 4)]:
+        gridlive.apply_move(state, user, cell, 0, "", 1000.0)
+    with pytest.raises(live.LiveError, match="illegal_move"):
+        gridlive.apply_move(state, 1, 3, 0, "", 1000.0)
+    gridlive.apply_move(state, 1, 2, 0, "", 1000.0)
+    assert state["over"] == {"reason": "line", "side": "X", "winner": 1} and state["win"] == [0, 1, 2]
+    with pytest.raises(live.LiveError, match="game_over"):
+        gridlive.apply_move(state, 2, 5, 0, "", 1000.0)
+
+    state = gridlive.new_state("tictactoe", 1, 2, 1000.0)
+    for user, cell in [(1, 0), (2, 1), (1, 2), (2, 4), (1, 3), (2, 5), (1, 7), (2, 6), (1, 8)]:
+        gridlive.apply_move(state, user, cell, 0, "", 1000.0)
+    assert state["over"] == {"reason": "full", "side": None, "winner": None}
+    with pytest.raises(live.LiveError, match="bad_action"):
+        gridlive.offer_draw(state, 1)
+
+
+def test_grid_connect4_gravity_timeout_and_resign():
+    from games import gridlive
+
+    state = gridlive.new_state("connect4", 1, 2, 1000.0)
+    assert gridlive.apply_move(state, 1, 3, 0, "", 1000.0) == 3
+    assert gridlive.apply_move(state, 2, 3, 0, "", 1000.0) == 10  # روی مهره‌ی قبلی می‌نشیند
+    for user, column in [(1, 0), (2, 6), (1, 1), (2, 6), (1, 2)]:
+        gridlive.apply_move(state, user, column, 0, "", 1000.0)
+    assert state["over"]["winner"] == 1 and state["win"] == [0, 1, 2, 3]
+    with pytest.raises(live.LiveError, match="illegal_move"):
+        gridlive.apply_move(gridlive.new_state("connect4", 1, 2, 0.0), 1, 7, 0, "", 0.0)
+
+    state = gridlive.new_state("connect4", 1, 2, 1000.0)
+    assert gridlive.check_timeout(state, 1031.0) and state["over"] == {"reason": "timeout", "side": "Y", "winner": 2}
+    state = gridlive.new_state("connect4", 1, 2, 1000.0)
+    gridlive.resign(state, 2)
+    assert state["over"]["winner"] == 1
+
+
+def test_grid_page_and_api(client, group, make_user):
+    red, yellow = make_user(first_name="قرمز"), make_user(first_name="زرد")
+    match = Match.objects.create(
+        group=group,
+        creator=red,
+        game_type="connect4",
+        status=MatchStatus.RUNNING,
+        min_players=2,
+        max_players=2,
+        join_deadline=timezone.now(),
+    )
+    board.start(match.pk, board.new_state("connect4", red.pk, yellow.pk, time.time()))
+    page = client.get(f"/arcade/board/{match.token}/").content.decode()
+    assert 'id="grid"' in page and "grid.js" in page
+    status, data = post(client, "board/state", red, match_token=match.token)
+    assert data["state"]["game"] == "connect4" and data["state"]["players"] == {"R": "قرمز", "Y": "زرد"}
+    assert data["state"]["cols"] == 7 and data["state"]["legal"] == list(range(7))
+    status, data = post(client, "board/move", red, match_token=match.token, src=3)
+    assert status == 200 and data["state"]["cells"][3] == "R" and data["state"]["turn"] == "Y"
+    assert post(client, "board/move", red, match_token=match.token, src=3)[1]["error"] == "not_your_turn"
+    assert post(client, "board/action", yellow, match_token=match.token, action="draw")[0] == 409
+    status, data = post(client, "board/action", yellow, match_token=match.token, action="resign")
+    assert data["state"]["over"]["winner"] == red.pk
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_bot_runs_tictactoe_through_the_mini_app(_fresh_redis):
+    from games import gridlive
+
+    app = FakeApplication()
+    group, users = await make_world()
+    manager = MatchManager(app)
+    active = await manager.create_lobby(
+        group, users[0], get_info("tictactoe"), fee=0, split=[100], join_seconds=60, options={}
+    )
+    for user in users:
+        await manager.join(active, user)
+    await app.job_queue.fire("lobby_close")
+    opening = app.bot.sent[-1]
+    assert active.game is None and "photo" not in opening and "دوز ۳×۳" in opening["text"]
+    assert opening["text"].count("▫️") == 9 and "صفحه‌ی بازی باز شود" in opening["text"]
+    state = (await sync_to_async(Match.objects.get)(pk=active.match_id)).state["board"]
+    x, o = state["sides"]["X"], state["sides"]["O"]
+    for user, cell in [(x, 0), (o, 3), (x, 1), (o, 4), (x, 2)]:
+        await sync_to_async(board.update)(
+            active.match_id, lambda s, user=user, cell=cell: gridlive.apply_move(s, user, cell, 0, "", time.time())
+        )
+    await manager.poll_live(active)
+    assert active.phase == "done" and "برد" in app.bot.edits[-1]["text"] and "❎❎❎" in app.bot.edits[-1]["text"]
+    assert "پایان دوز" in app.bot.sent[-1]["text"]
+    winner = await sync_to_async(TelegramUser.objects.get)(pk=x)
+    assert winner.wins == 1

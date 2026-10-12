@@ -39,6 +39,10 @@ def position_of(state: dict) -> Position:
     return Position.from_fen(state["fen"])
 
 
+def players(state: dict) -> dict:
+    return {"w": state["w"], "b": state["b"]}
+
+
 def side_of(state: dict, user_id: int) -> str | None:
     if state["w"] == user_id:
         return "w"
@@ -160,6 +164,7 @@ def view(state: dict, viewer_id: int | None, now: float) -> dict:
                 targets.append(move.dst)
     offer = state["draw_offer"]
     return {
+        "game": "chess",
         "board": "".join(position.board),
         "turn": position.turn,
         "you": side,

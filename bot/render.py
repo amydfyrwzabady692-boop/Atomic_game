@@ -216,7 +216,13 @@ def live_keyboard(username: str, token: str, game_key: str) -> InlineKeyboardMar
     """دکمه‌ی باز کردن صفحه‌ی گرافیکی بازی دونفره (شطرنج) در مینی‌اپ."""
     return InlineKeyboardMarkup(
         [
-            [ui.button(texts.CHESS_PLAY_BTN, url=miniapp_link(username, token), style=ui.SUCCESS)],
+            [
+                ui.button(
+                    texts.CHESS_PLAY_BTN if game_key == "chess" else texts.LIVE_PLAY_BTN,
+                    url=miniapp_link(username, token),
+                    style=ui.SUCCESS,
+                )
+            ],
             [ui.button(texts.RULES_BTN, f"rl:{game_key}")],
         ]
     )
