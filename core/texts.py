@@ -124,11 +124,15 @@ ACHIEVEMENT_UNLOCKED = "{emoji} <b>دستاورد جدید:</b> {title}  (+{rewa
 LEVEL_UP = "⭐ {name} به سطح {level} رسید!"
 
 # ------------------------------------------------------------------ ساخت بازی و لابی
-GAME_MENU = "🎮 <b>چه بازی‌ای بسازیم؟</b>\n<i>یک بازی را انتخاب کن.</i>"
-GAME_MENU_ARCADE = (
-    "🕹 <b>بازی‌های آرکید — {category}</b>\n<i>بازی داخل تلگرام باز می‌شود و بهترین امتیازت حساب می‌شود.</i>"
+GAME_MENU = "🎮 <b>چه بازی‌ای بسازیم؟</b>\n{counts}\n<i>یک بازی را انتخاب کن.</i>"
+GAME_MENU_TEXT_COUNT = "🔵 {n} بازی گروهی"
+GAME_MENU_ARCADE_COUNT = "🟢 {n} بازی آرکید"
+GAME_MENU_ARCADE_OFF = "\n\n<i>🕹 بازی‌های آرکید بعد از راه‌اندازی مینی‌اپ روی این ربات فعال می‌شوند.</i>"
+ARCADE_HEADER_BTN = "🕹 بازی‌های آرکید ({n} بازی) 👇"
+ARCADE_HEADER_NOTE = (
+    "بازی‌های آرکید داخل تلگرام باز می‌شوند و بهترین امتیاز هر نفر در مهلت مسابقه حساب می‌شود. "
+    "یکی از بازی‌های زیر این دکمه را انتخاب کن."
 )
-ARCADE_BTN = "🕹 آرکید: {category}"
 BACK_BTN = "‹ برگشت"
 CLOSE_BTN = "✖️ بستن"
 CHOOSE_VARIANT = "{emoji} <b>{title}</b>\n<blockquote>{description}</blockquote>\n{variant_title} را انتخاب کن:"
@@ -304,7 +308,13 @@ ARCADE_ROW = "{medal} <b>{name}</b>  {score}   <i>({used} از {total})</i>"
 ARCADE_PLAY_BTN = "🎮 بازی کن"
 ARCADE_RECORD = "🔥 {name} رکورد زد: {score}!"
 ARCADE_PRACTICE = "🕹 <b>تمرین آزاد</b>\n<i>بدون سکه، فقط برای رکورد شخصی.</i>\n\nیک بازی انتخاب کن:"
-ARCADE_NOT_CONFIGURED = "بازی‌های آرکید هنوز روی این ربات راه‌اندازی نشده است."
+ARCADE_NOT_CONFIGURED = "🕹 بازی‌های آرکید هنوز روی این ربات راه‌اندازی نشده است."
+ARCADE_SETUP_HINT = (
+    "\n\n<b>راه‌اندازی (فقط برای مدیر ربات):</b>\n"
+    "۱. سرویس web را پشت یک آدرس HTTPS بگذار.\n"
+    "۲. در BotFather با /newapp مینی‌اپ بساز؛ آدرس: <code>https://دامنه/arcade/</code> و نام کوتاه: <code>{short}</code>\n"
+    "۳. در فایل .env مقدار <code>MINIAPP_BASE_URL=https://دامنه</code> را بگذار و ربات را دوباره راه‌اندازی کن."
+)
 
 # ------------------------------------------------------------------ بازی‌های متنی
 NOT_A_PLAYER = "تو عضو این مسابقه نیستی."
@@ -391,7 +401,9 @@ DICE_VARIANTS = {
     "bowling": "🎳 بولینگ",
 }
 
-XO_BOARD = "❌⭕️ <b>دوز</b>\n" + DIVIDER + "\n❌ {x}\n⭕️ {o}\n" + DIVIDER + "\n{status}"
+XO_BOARD = "❌⭕️ <b>دوز {size}×{size}</b>\n" + DIVIDER + "\n❌ {x}\n⭕️ {o}\n" + DIVIDER + "\n{status}"
+XO_VARIANTS = {"3": "۳×۳ (سه‌تایی)", "4": "۴×۴ (چهارتایی)"}
+XO_HINT = "\n<i>برای برد، {n} علامت را در یک ردیف، ستون یا قطر کنار هم بگذار.</i>"
 XO_TURN = "👉 نوبت <b>{name}</b> ({mark})   ⏱ {seconds} ثانیه"
 XO_WIN = "🏆 {name} برد!"
 XO_DRAW = "🤝 مساوی شد!"

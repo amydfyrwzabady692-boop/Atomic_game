@@ -84,6 +84,11 @@ def bot_username(context=None) -> str:
     return settings.BOT_USERNAME
 
 
+def arcade_ready() -> bool:
+    """مینی‌اپ آرکید فقط با آدرس عمومی HTTPS کار می‌کند؛ تا تنظیم نشود بازی‌های آرکید پیشنهاد نمی‌شوند."""
+    return settings.MINIAPP_BASE_URL.startswith("https://")
+
+
 def start_link(username: str, payload: str = "join") -> str:
     return f"https://t.me/{username}?start={payload}"
 

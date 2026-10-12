@@ -418,8 +418,57 @@ def test_xo_winner_detection():
     assert winner_of(["X", "O", "X", "X", "O", "O", "O", "X", "X"]) is None
 
 
-async def start_xo():
-    ctx = FakeContext(n_players=2)
+def test_xo_winner_detection_on_a_four_by_four_board():
+    empty = [""] * 16
+
+    def board(mark, cells):
+        filled = list(empty)
+        for cell in cells:
+            filled[cell] = mark
+        return filled
+
+    assert winner_of(board("X", [4, 5, 6, 7])) == "X"  # ردیف
+    assert winner_of(board("O", [2, 6, 10, 14])) == "O"  # ستون
+    assert winner_of(board("X", [0, 5, 10, 15])) == "X"  # قطر اصلی
+    assert winner_of(board("O", [3, 6, 9, 12])) == "O"  # قطر فرعی
+    assert winner_of(board("X", [0, 1, 2])) is None  # سه‌تایی در صفحه‌ی ۴×۴ کافی نیست
+    assert winner_of(board("X", [0, 1, 2, 4])) is None
+    assert winner_of(empty) is None
+
+
+async def test_xo_four_by_four_needs_four_in_a_line():
+    ctx, game, x, o = await start_xo("4")
+    first = ctx.sent[-1]
+    assert len(first["buttons"]) == 4 and all(len(row) == 4 for row in first["buttons"])
+    assert "دوز ۴×۴" in first["text"] and "۴ علامت" in first["text"]
+    # سه علامت پشت‌سرهم هنوز برد نیست
+    for player, cell in [(x, 0), (o, 4), (x, 1), (o, 5), (x, 2), (o, 6)]:
+        await game.on_callback(ctx.cb(player, f"m:{cell}"))
+    assert not ctx.ended and "علامت را در یک ردیف" not in ctx.edits[-1]["text"]
+    outside = ctx.cb(x, "m:16")
+    await game.on_callback(outside)
+    assert not ctx.ended and outside.answers == []
+    await game.on_callback(ctx.cb(x, "m:3"))
+    assert ctx.ended and game.scores[game.x.user_id] == 1 and "برد" in ctx.edits[-1]["text"]
+    assert len(ctx.edits[-1]["buttons"]) == 4
+
+
+async def test_xo_four_by_four_draw_and_default_size():
+    ctx, game, x, o = await start_xo("4")
+    # چیدمانی بدون هیچ خط کامل:  X X O O / O O X X / X X O O / O O X X
+    x_cells, o_cells = [0, 1, 6, 7, 8, 9, 14, 15], [2, 3, 4, 5, 10, 11, 12, 13]
+    for a, b in zip(x_cells, o_cells, strict=True):
+        await game.on_callback(ctx.cb(x, f"m:{a}"))
+        await game.on_callback(ctx.cb(o, f"m:{b}"))
+    assert ctx.ended and "مساوی" in ctx.edits[-1]["text"]
+    assert {s.score for s in await game.finish()} == {0}
+
+    ctx, game, _, _ = await start_xo("nonsense")  # گزینه‌ی ناشناخته: همان ۳×۳
+    assert game.size == 3 and "دوز ۳×۳" in ctx.sent[-1]["text"]
+
+
+async def start_xo(variant=None):
+    ctx = FakeContext(n_players=2, options={"variant": variant} if variant else None)
     game = TicTacToeGame(ctx)
     await game.start()
     return ctx, game, ctx.players.index(game.x), ctx.players.index(game.o)

@@ -14,7 +14,7 @@ from core.models import TelegramGroup, TelegramUser
 from core.redis import get_redis
 from core.texts import fa_num
 from games import config as game_config
-from games.catalog import ARCADE_CATEGORIES, GameInfo, catalog
+from games.catalog import GameInfo, catalog
 from games.engine.services import MatchError
 
 from .. import render, ui
@@ -68,29 +68,31 @@ def _rows(buttons: list, per_row: int) -> list[list]:
 
 
 def enabled_games(group: TelegramGroup) -> dict[str, GameInfo]:
-    return {k: g for k, g in catalog().items() if group.game_enabled(k)}
+    """بازی‌های قابل‌ساخت در این گروه. بازی‌های آرکید تا راه‌اندازی مینی‌اپ پیشنهاد نمی‌شوند."""
+    arcade = render.arcade_ready()
+    return {k: g for k, g in catalog().items() if group.game_enabled(k) and (arcade or not g.is_arcade)}
 
 
 # ------------------------------------------------------------------ صفحه‌ها
 def main_menu(group: TelegramGroup):
+    """همه‌ی بازی‌ها روی یک صفحه: بازی‌های گروهی (آبی) و زیر آن همه‌ی بازی‌های آرکید (سبز)."""
     games = enabled_games(group)
-    text_games = [
-        _btn(f"{g.emoji} {g.title_fa}", f"n:g:{g.key}", ui.PRIMARY) for g in games.values() if not g.is_arcade
-    ]
-    rows = _rows(text_games, 2)
-    for category, label in ARCADE_CATEGORIES.items():
-        if any(g.is_arcade and g.category == category for g in games.values()):
-            rows.append([_btn(texts.ARCADE_BTN.format(category=label), f"n:c:{category}", ui.SUCCESS)])
+    text_games = [g for g in games.values() if not g.is_arcade]
+    arcade_games = [g for g in games.values() if g.is_arcade]
+    rows = _rows([_btn(f"{g.emoji} {g.title_fa}", f"n:g:{g.key}", ui.PRIMARY) for g in text_games], 2)
+    counts = []
+    if text_games:
+        counts.append(texts.GAME_MENU_TEXT_COUNT.format(n=fa_num(len(text_games))))
+    if arcade_games:
+        counts.append(texts.GAME_MENU_ARCADE_COUNT.format(n=fa_num(len(arcade_games))))
+        # این دکمه فقط عنوان بخش است؛ با زدنش توضیح کوتاهی نشان داده می‌شود
+        rows.append([_btn(texts.ARCADE_HEADER_BTN.format(n=fa_num(len(arcade_games))), "n:h")])
+        rows += _rows([_btn(f"{g.emoji} {g.title_fa}", f"n:g:{g.key}", ui.SUCCESS) for g in arcade_games], 2)
     rows.append([_btn(texts.CLOSE_BTN, "n:x", ui.DANGER)])
-    return texts.GAME_MENU, InlineKeyboardMarkup(rows)
-
-
-def arcade_menu(group: TelegramGroup, category: str):
-    games = [g for g in enabled_games(group).values() if g.is_arcade and g.category == category]
-    rows = _rows([_btn(f"{g.emoji} {g.title_fa}", f"n:g:{g.key}", ui.SUCCESS) for g in games], 2)
-    rows.append([_btn(texts.BACK_BTN, "n:m")])
-    label = ARCADE_CATEGORIES.get(category, "")
-    return texts.GAME_MENU_ARCADE.format(category=label), InlineKeyboardMarkup(rows)
+    text = texts.GAME_MENU.format(counts="  ·  ".join(counts))
+    if not render.arcade_ready():
+        text += texts.GAME_MENU_ARCADE_OFF
+    return text, InlineKeyboardMarkup(rows)
 
 
 def steps_for(info: GameInfo) -> list[str]:
@@ -208,18 +210,14 @@ async def new_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await _save_draft(chat.id, message_id, draft)
         await _show(query, *main_menu(group))
         return
-    if action == "c":
-        if value not in ARCADE_CATEGORIES:
-            return
-        draft = {"creator": user.tg_id, "category": value}
-        await _save_draft(chat.id, message_id, draft)
-        await _show(query, *arcade_menu(group, value))
+    if action == "h":
+        await answer(query, texts.ARCADE_HEADER_NOTE, alert=True)
         return
     if action == "g":
         if value not in games:
             await answer(query, texts.MENU_EXPIRED, alert=True)
             return
-        draft = {"creator": user.tg_id, "game": value, "category": draft.get("category", "")}
+        draft = {"creator": user.tg_id, "game": value}
     info = games.get(draft.get("game", ""))
     if info is None:
         await _show(query, *main_menu(group))
@@ -228,10 +226,9 @@ async def new_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     if action == "b":
         done = [s for s in steps_for(info) if s in draft]
         if not done:
-            category = draft.get("category")
-            draft = {"creator": user.tg_id, "category": category or ""}
+            draft = {"creator": user.tg_id}
             await _save_draft(chat.id, message_id, draft)
-            await _show(query, *(arcade_menu(group, category) if category else main_menu(group)))
+            await _show(query, *main_menu(group))
             return
         draft.pop(done[-1])
     elif action == "v" and value in info.variants:
