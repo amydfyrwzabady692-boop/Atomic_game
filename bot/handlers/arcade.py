@@ -9,15 +9,18 @@ from core import texts
 from core.models import TelegramUser
 from games.catalog import arcade_enabled
 
-from .. import ui
-from .common import command, reply
+from .. import render, ui
+from .common import command, is_superadmin, reply
 
 
 @command(private=True)
 async def arcade(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser):
     base = settings.MINIAPP_BASE_URL.rstrip("/")
-    if not base.startswith("https://"):
-        await reply(update, texts.ARCADE_NOT_CONFIGURED)
+    if not render.arcade_ready():
+        text = texts.ARCADE_NOT_CONFIGURED
+        if is_superadmin(user.tg_id):
+            text += texts.ARCADE_SETUP_HINT.format(short=settings.MINIAPP_SHORT_NAME)
+        await reply(update, text)
         return
     buttons = [
         ui.button(f"{sim.emoji} {sim.title_fa}", web_app=WebAppInfo(url=f"{base}/arcade/play/{key}/"), style=ui.PRIMARY)

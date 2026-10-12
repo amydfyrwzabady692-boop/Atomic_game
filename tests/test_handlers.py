@@ -316,9 +316,8 @@ async def test_group_can_restrict_game_creation_to_admins(app):
 
 async def test_arcade_flow_asks_for_play_window(app):
     await start_user(app, 95)
-    _, menu_id = await open_game_menu(app, 95)
-    category = await click(app, 95, "n:c:stage", menu_id)
-    assert any("سیخ‌زن" in b.text for b in buttons_of(category.edits[-1]["reply_markup"]))
+    menu, menu_id = await open_game_menu(app, 95)
+    assert any("سیخ‌زن" in b.text for b in buttons_of(menu.replies[0]["reply_markup"]))
     await click(app, 95, "n:g:arcade_pins", menu_id)
     await click(app, 95, "n:f:0", menu_id)
     step = await click(app, 95, "n:s:70-30", menu_id)
@@ -544,3 +543,75 @@ async def test_shop_confirmation_escapes_item_names(app):
     assert "&lt;b&gt;تند&lt;/b&gt;" in text and "A&amp;B" in text
     confirm = buttons_of(update.edits[-1]["reply_markup"])[0]
     assert style_of(confirm) == "success"
+
+
+# ====================================================================== منوی کامل بازی‌ها و آرکیدِ راه‌اندازی‌نشده
+async def test_game_menu_shows_every_game_on_one_screen(app):
+    await start_user(app, 251)
+    menu, menu_id = await open_game_menu(app, 251)
+    buttons = buttons_of(menu.replies[0]["reply_markup"])
+    games = [b for b in buttons if (b.callback_data or "").startswith("n:g:")]
+    arcade = [b for b in games if b.callback_data.startswith("n:g:arcade_")]
+    assert len(games) == 25 and len(arcade) == 14
+    assert {style_of(b) for b in arcade} == {"success"}
+    assert {style_of(b) for b in games if b not in arcade} == {"primary"}
+    labels = " ".join(b.text for b in games)
+    for title in ("هیزم‌شکن", "موش‌زن", "مار کلاسیک", "شطرنج", "دوز", "کوییز"):
+        assert title in labels
+    assert "۱۱ بازی گروهی" in menu.replies[0]["text"] and "۱۴ بازی آرکید" in menu.replies[0]["text"]
+    # دکمه‌ی عنوان بخش آرکید فقط توضیح می‌دهد و منو را عوض نمی‌کند
+    header = await click(app, 251, "n:h", menu_id)
+    assert header.answers[0] == (texts.ARCADE_HEADER_NOTE, True) and header.edits == []
+    assert len(texts.ARCADE_HEADER_NOTE) <= 200
+    # برگشت از اولین مرحله‌ی یک بازی آرکید به همان منوی کامل می‌رسد
+    await click(app, 251, "n:g:arcade_timber", menu_id)
+    back = await click(app, 251, "n:b", menu_id)
+    assert len(buttons_of(back.edits[-1]["reply_markup"])) == len(buttons)
+
+
+async def test_arcade_games_are_not_offered_until_the_mini_app_is_set_up(app, settings):
+    settings.MINIAPP_BASE_URL = ""
+    await start_user(app, 261)
+    menu, menu_id = await open_game_menu(app, 261)
+    data = [b.callback_data for b in buttons_of(menu.replies[0]["reply_markup"])]
+    assert not any((d or "").startswith("n:g:arcade_") for d in data) and "n:h" not in data
+    assert "راه‌اندازی مینی‌اپ" in menu.replies[0]["text"] and "۱۱ بازی گروهی" in menu.replies[0]["text"]
+    stale = await click(app, 261, "n:g:arcade_timber", menu_id)
+    assert stale.answers[0] == (texts.MENU_EXPIRED, True)
+
+    from bot.handlers import arcade as arcade_handlers
+
+    update, context = make_update(app, 261, text="/arcade")
+    await arcade_handlers.arcade(update, context)
+    assert update.replies[0]["text"] == texts.ARCADE_NOT_CONFIGURED
+    await start_user(app, 999)  # سوپرادمین تست راهنمای راه‌اندازی را هم می‌بیند
+    update, context = make_update(app, 999, text="/arcade")
+    await arcade_handlers.arcade(update, context)
+    assert "MINIAPP_BASE_URL" in update.replies[0]["text"] and "/newapp" in update.replies[0]["text"]
+
+
+async def test_practice_menu_lists_all_arcade_games_when_set_up(app):
+    from bot.handlers import arcade as arcade_handlers
+
+    await start_user(app, 271)
+    update, context = make_update(app, 271, text="/arcade")
+    await arcade_handlers.arcade(update, context)
+    buttons = buttons_of(update.replies[0]["reply_markup"])
+    assert len(buttons) == 14 and all(b.web_app.url.startswith("https://arcade.test/arcade/play/") for b in buttons)
+
+
+async def test_tictactoe_asks_for_the_board_size(app):
+    await start_user(app, 281)
+    await start_user(app, 282)
+    _, menu_id = await open_game_menu(app, 281)
+    step = await click(app, 281, "n:g:tictactoe", menu_id)
+    assert "اندازه‌ی صفحه" in step.edits[-1]["text"]
+    sizes = [b.text for b in buttons_of(step.edits[-1]["reply_markup"]) if (b.callback_data or "").startswith("n:v:")]
+    assert sizes == ["۳×۳ (سه‌تایی)", "۴×۴ (چهارتایی)"]
+    await click(app, 281, "n:v:4", menu_id)
+    await click(app, 281, "n:f:0", menu_id)
+    await click(app, 281, "n:t:60", menu_id)
+    match = await sync_to_async(Match.objects.get)()
+    assert match.game_type == "tictactoe" and match.options["variant"] == "4"
+    lobby = app.bot.edits[-1]["text"] if app.bot.edits else app.bot.sent[-1]["text"]
+    assert "۴×۴" in lobby

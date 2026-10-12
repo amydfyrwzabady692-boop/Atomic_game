@@ -49,3 +49,4 @@ STORAGES = {
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
 }
 LOGGING = {"version": 1, "disable_existing_loggers": False}
+MINIAPP_BASE_URL = "https://arcade.test"
