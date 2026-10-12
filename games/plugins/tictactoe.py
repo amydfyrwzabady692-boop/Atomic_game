@@ -2,11 +2,12 @@ from html import escape
 
 from core import texts
 from core.textutils import fa_num
-from games.engine.base import BaseGame, IncomingCallback
+from games.engine.base import DANGER, PRIMARY, BaseGame, Button, IncomingCallback
 from games.engine.registry import register_game
 
 LINES = [(0, 1, 2), (3, 4, 5), (6, 7, 8), (0, 3, 6), (1, 4, 7), (2, 5, 8), (0, 4, 8), (2, 4, 6)]
 MARKS = {"X": "❌", "O": "⭕️"}
+MARK_STYLES = {"X": DANGER, "O": PRIMARY}
 
 
 def winner_of(board: list[str]) -> str | None:
@@ -24,7 +25,13 @@ class TicTacToeGame(BaseGame):
     description_fa = "دوز دونفره با تایمر هر حرکت. اگر وقتت تمام شود می‌بازی."
     min_players = 2
     max_players = 2
+    players_ceiling = 2
     move_seconds = 30
+    rules_fa = [
+        "به‌نوبت یک خانه را بزن؛ سه علامت در یک ردیف، ستون یا قطر یعنی برد.",
+        "برای هر حرکت {move_seconds} ثانیه وقت داری؛ تمام شدن وقت یعنی باخت.",
+        "اگر صفحه پر شود و کسی نبرد، بازی مساوی است.",
+    ]
 
     async def start(self) -> None:
         order = list(self.players)
@@ -55,7 +62,8 @@ class TicTacToeGame(BaseGame):
             row = []
             for c in range(3):
                 i = r * 3 + c
-                row.append((MARKS.get(self.board[i], "▫️"), f"m:{i}" if active else "noop"))
+                mark = self.board[i]
+                row.append(Button(MARKS.get(mark, "▫️"), f"m:{i}" if active else "noop", MARK_STYLES.get(mark, "")))
             rows.append(row)
         return rows
 

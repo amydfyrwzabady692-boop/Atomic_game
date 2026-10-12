@@ -54,4 +54,8 @@ class RoundGame(BaseGame):
     def header(self) -> str:
         from core import texts
 
-        return texts.ROUND_HEADER.format(n=texts.fa_num(self.round_no), total=texts.fa_num(self.total_rounds))
+        return texts.ROUND_HEADER.format(
+            n=texts.fa_num(self.round_no),
+            total=texts.fa_num(self.total_rounds),
+            dots=texts.round_dots(self.round_no, self.total_rounds),
+        )

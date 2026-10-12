@@ -66,3 +66,40 @@ def parse_int(text: str) -> int | None:
     if re.fullmatch(r"-?\d{1,12}", text):
         return int(text)
     return None
+
+
+JALALI_MONTHS = (
+    "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
+    "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند",
+)  # fmt: skip
+
+
+def to_jalali(year: int, month: int, day: int) -> tuple[int, int, int]:
+    """تاریخ میلادی را به هجری شمسی تبدیل می‌کند (الگوریتم استاندارد ۳۳ساله)."""
+    cumulative = (0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334)
+    leap_year = year + 1 if month > 2 else year
+    days = (
+        355666
+        + 365 * year
+        + (leap_year + 3) // 4
+        - (leap_year + 99) // 100
+        + (leap_year + 399) // 400
+        + day
+        + cumulative[month - 1]
+    )
+    jalali_year = -1595 + 33 * (days // 12053)
+    days %= 12053
+    jalali_year += 4 * (days // 1461)
+    days %= 1461
+    if days > 365:
+        jalali_year += (days - 1) // 365
+        days = (days - 1) % 365
+    if days < 186:
+        return jalali_year, 1 + days // 31, 1 + days % 31
+    return jalali_year, 7 + (days - 186) // 30, 1 + (days - 186) % 30
+
+
+def fa_date(moment) -> str:
+    """تاریخ و ساعت کوتاه شمسی: «۱۹ مهر ۱۴:۳۰»"""
+    _, month, day = to_jalali(moment.year, moment.month, moment.day)
+    return f"{fa_digits(day)} {JALALI_MONTHS[month - 1]} {fa_digits(moment.strftime('%H:%M'))}"

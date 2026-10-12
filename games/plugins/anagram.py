@@ -21,6 +21,11 @@ class AnagramGame(RoundGame):
     emoji = "🔀"
     description_fa = "حروف یک کلمه به‌هم ریخته؛ اولین نفری که کلمه را درست بنویسد امتیاز می‌گیرد."
     rounds = 6
+    rules_fa = [
+        "حروف یک کلمه درهم فرستاده می‌شود؛ کلمه‌ی درست را بنویس.",
+        "فقط اولین جواب درست {points} امتیاز می‌گیرد.",
+        "{rounds} راند، هر راند {round_seconds} ثانیه؛ وسط راند راهنمایی می‌آید.",
+    ]
     round_seconds = 30
     points = 10
 
@@ -29,7 +34,7 @@ class AnagramGame(RoundGame):
         await self.next_round()
 
     def _question(self, hint: str = "") -> str:
-        return texts.ANAGRAM_QUESTION.format(header=self.header(), letters=" ".join(self.scrambled), hint=hint)
+        return texts.ANAGRAM_QUESTION.format(header=self.header(), letters="  ".join(self.scrambled), hint=hint)
 
     async def begin_round(self) -> None:
         self.word = self.words[self.round_no - 1]

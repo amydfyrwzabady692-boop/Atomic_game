@@ -12,6 +12,11 @@ class GuessNumberGame(RoundGame):
     emoji = "🔢"
     description_fa = "ربات عددی بین ۱ تا ۱۰۰۰ انتخاب می‌کند و می‌گوید حدس شما بزرگ‌تر است یا کوچک‌تر."
     rounds = 3
+    rules_fa = [
+        "ربات عددی بین {low_bound} و {high_bound} انتخاب می‌کند؛ حدست را بفرست.",
+        "ربات می‌گوید عدد بزرگ‌تر است یا کوچک‌تر.",
+        "اولین نفری که عدد را پیدا کند {points} امتیاز می‌گیرد؛ {rounds} راند.",
+    ]
     round_seconds = 90
     points = 10
     low_bound = 1

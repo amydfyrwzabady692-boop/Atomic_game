@@ -1,7 +1,10 @@
 import secrets
 
+from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Q
+
+from . import config
 
 
 def _new_token() -> str:
@@ -156,3 +159,50 @@ class TypingSentence(models.Model):
 
     def __str__(self) -> str:
         return self.text[:60]
+
+
+class GameSetting(models.Model):
+    """تنظیمات سراسری یک بازی که ادمین از پنل عوض می‌کند (پیش‌فرض‌ها در کلاس خود بازی است)."""
+
+    game_key = models.CharField(verbose_name="کلید بازی", max_length=32, unique=True)
+    is_enabled = models.BooleanField(verbose_name="فعال", default=True)
+    min_players = models.PositiveSmallIntegerField(verbose_name="حداقل شرکت‌کننده", default=2)
+    max_players = models.PositiveSmallIntegerField(verbose_name="حداکثر شرکت‌کننده", default=20)
+    updated_at = models.DateTimeField(verbose_name="آخرین تغییر", auto_now=True)
+
+    class Meta:
+        verbose_name = "تنظیمات بازی"
+        verbose_name_plural = "تنظیمات بازی‌ها"
+        ordering = ["id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(min_players__gte=1) & Q(max_players__gte=F("min_players")),
+                name="game_setting_players_range",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        from .catalog import defaults
+
+        info = defaults().get(self.game_key)
+        return f"{info.emoji} {info.title_fa}" if info else self.game_key
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        config.invalidate()
+
+    def clean(self):
+        from .catalog import defaults
+
+        info = defaults().get(self.game_key)
+        if info is None:
+            raise ValidationError("این بازی در ربات وجود ندارد.")
+        errors = {}
+        if not info.floor <= self.max_players <= info.ceiling:
+            errors["max_players"] = f"برای این بازی باید بین {info.floor} و {info.ceiling} باشد."
+        if not info.floor <= self.min_players <= info.ceiling:
+            errors["min_players"] = f"برای این بازی باید بین {info.floor} و {info.ceiling} باشد."
+        elif self.min_players > self.max_players:
+            errors["min_players"] = "حداقل نمی‌تواند از حداکثر بیشتر باشد."
+        if errors:
+            raise ValidationError(errors)

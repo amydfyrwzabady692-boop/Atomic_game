@@ -85,7 +85,12 @@ class EditQueue:
         finally:
             self._tasks.pop(key, None)
             if key in self._pending:  # در حین ارسال، محتوای تازه‌تری رسیده
-                self._tasks[key] = asyncio.create_task(self._flush(key, self.interval))
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:  # حلقه‌ی رویداد در حال بسته شدن است
+                    self._pending.pop(key, None)
+                else:
+                    self._tasks[key] = loop.create_task(self._flush(key, self.interval))
 
     async def flush_now(self, chat_id: int, message_id: int) -> None:
         """منتظر می‌ماند تا ویرایش‌های معوق این پیام تمام شود."""
@@ -105,6 +110,16 @@ class EditQueue:
                 disable_web_page_preview=True,
                 **payload,
             )
+
+    async def close(self) -> None:
+        """هنگام خاموش شدن ربات: ویرایش‌های معوق دور ریخته و taskهای در انتظار لغو می‌شوند."""
+        self._pending.clear()
+        tasks = [task for task in self._tasks.values() if not task.done()]
+        self._tasks.clear()
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     def forget(self, chat_id: int, message_id: int) -> None:
         key = (chat_id, message_id)

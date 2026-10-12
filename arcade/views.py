@@ -17,6 +17,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from core.models import TelegramUser
 from core.redis import get_sync_redis
+from games.catalog import arcade_enabled
 from games.models import MatchPlayer, MatchStatus
 
 from . import services
@@ -94,7 +95,10 @@ def authenticated(view):
 def user_from_init_data(init_data: str) -> TelegramUser:
     # حالت توسعه: فقط وقتی صریحاً فعال شده باشد، بدون تلگرام هم می‌شود صفحه را در مرورگر تست کرد
     if settings.DEBUG and getattr(settings, "ARCADE_DEV_AUTH", False) and init_data.startswith("dev:"):
-        tg_id = int(init_data[4:])
+        try:
+            tg_id = int(init_data[4:])
+        except ValueError as exc:
+            raise InitDataError("malformed") from exc
         user, _ = TelegramUser.objects.get_or_create(tg_id=tg_id, defaults={"first_name": f"dev{tg_id}"})
         return user
     data = validate_init_data(init_data)
@@ -109,12 +113,27 @@ def user_from_init_data(init_data: str) -> TelegramUser:
     return user
 
 
+_asset_version_cache: dict[str, str] = {}
+
+
+def asset_version() -> str:
+    """نسخه‌ی فایل‌های استاتیک بازی‌ها (از زمان آخرین تغییر) تا مرورگر و تلگرام نسخه‌ی کهنه را کش نکنند."""
+    if settings.DEBUG or "v" not in _asset_version_cache:
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent / "static" / "arcade"
+        latest = max((p.stat().st_mtime for p in root.rglob("*") if p.is_file()), default=0)
+        _asset_version_cache["v"] = format(int(latest), "x")
+    return _asset_version_cache["v"]
+
+
 def game_meta(sim) -> dict:
     return {
         "key": sim.key,
         "title": sim.title_fa,
         "emoji": sim.emoji,
         "howto": sim.howto_fa,
+        "rules": list(sim.rules_fa),
         "tick_ms": sim.TICK_MS,
     }
 
@@ -126,7 +145,7 @@ def app(request, game_key: str | None = None):
     خود صفحه از ``start_param`` می‌فهمد مربوط به کدام مسابقه است."""
     if game_key is not None and get_simulator(game_key) is None:
         raise Http404
-    games = [game_meta(sim) for sim in all_simulators().values()]
+    games = [game_meta(sim) for key, sim in all_simulators().items() if arcade_enabled(key)]
     return render(
         request,
         "arcade/app.html",
@@ -134,6 +153,7 @@ def app(request, game_key: str | None = None):
             "game_key": game_key or "",
             "start_param": request.GET.get("tgWebAppStartParam", ""),
             "games": games,
+            "version": asset_version(),
             "dev_auth": settings.DEBUG and getattr(settings, "ARCADE_DEV_AUTH", False),
         },
     )
@@ -173,7 +193,7 @@ def info(request, user, payload):
         }
     else:
         sim = get_simulator(str(payload.get("game") or ""))
-        if sim is None:
+        if sim is None or not arcade_enabled(sim.key):
             raise ArcadeError("unknown_game", 404)
         data = {"mode": "practice", "attempts_left": -1, "attempts_total": -1, "seconds_left": -1, "best": 0}
     record = ArcadeRecord.objects.filter(user=user, game_key=sim.key).first()

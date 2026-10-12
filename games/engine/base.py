@@ -13,7 +13,39 @@ from typing import ClassVar, Protocol
 
 from .payout import Standing
 
-Buttons = list[list[tuple[str, str]]]  # ردیف‌هایی از (متن، داده‌ی callback محلی بازی)
+PRIMARY, SUCCESS, DANGER = "primary", "success", "danger"  # رنگ‌های دکمه در تلگرام: آبی، سبز، قرمز
+
+
+class Button(tuple):
+    """دکمه‌ی اینلاین بازی: مثل ``(متن، داده)`` رفتار می‌کند و رنگ دکمه را هم نگه می‌دارد."""
+
+    style: str
+
+    def __new__(cls, text: str, data: str, style: str = ""):
+        self = super().__new__(cls, (text, data))
+        self.style = style
+        return self
+
+
+Buttons = list[list[tuple[str, str]]]  # ردیف‌هایی از (متن، داده‌ی callback محلی بازی) یا ``Button``
+
+
+class _RuleValues(dict):
+    """جای‌خالی‌های متن قوانین را از ثابت‌های همان کلاس بازی پر می‌کند تا عددها همیشه درست بمانند."""
+
+    def __init__(self, owner):
+        super().__init__()
+        self.owner = owner
+
+    def __missing__(self, key):
+        from core.textutils import fa_num
+
+        value = getattr(self.owner, key)
+        return fa_num(value) if isinstance(value, int) else str(value)
+
+
+def format_rules(owner, lines) -> tuple[str, ...]:
+    return tuple(line.format_map(_RuleValues(owner)) for line in lines)
 
 
 @dataclass(frozen=True)
@@ -75,7 +107,10 @@ class GameContext(Protocol):
     async def edit(
         self, message_id: int, text: str, buttons: Buttons | None = None, urgent: bool = False
     ) -> None: ...
-    async def send_photo(self, image: bytes, caption: str = "") -> int: ...
+    async def send_photo(self, image: bytes, caption: str = "", buttons: Buttons | None = None) -> int: ...
+    async def edit_photo(
+        self, message_id: int, image: bytes, caption: str = "", buttons: Buttons | None = None
+    ) -> None: ...
     async def send_dice(self, emoji: str) -> int: ...
     async def flash(self, text: str, seconds: int = 6) -> None: ...
     def set_timer(self, name: str, seconds: float, callback: Callable[[], Awaitable[None]]) -> None: ...
@@ -93,9 +128,15 @@ class BaseGame:
     key: ClassVar[str] = ""
     title_fa: ClassVar[str] = ""
     description_fa: ClassVar[str] = ""
+    # قوانین کوتاه بازی (سه خط)؛ ``{نام}`` با ثابت هم‌نام کلاس پر می‌شود. جمع سه خط باید در یک
+    # پنجره‌ی هشدار تلگرام (۲۰۰ نویسه) جا شود.
+    rules_fa: ClassVar[list[str]] = []
     emoji: ClassVar[str] = "🎮"
     min_players: ClassVar[int] = 2
     max_players: ClassVar[int] = 20
+    # سقف و کف مجاز برای تنظیم تعداد شرکت‌کننده از پنل ادمین (min/max بالا فقط پیش‌فرض‌اند)
+    players_floor: ClassVar[int] = 2
+    players_ceiling: ClassVar[int] = 50
     rounds: ClassVar[int] = 5
     # گزینه‌ای که موقع ساخت بازی پرسیده می‌شود (مثل دسته‌ی کوییز): {مقدار: برچسب}
     variant_title_fa: ClassVar[str] = ""
@@ -110,6 +151,10 @@ class BaseGame:
         self.total_rounds: int = int(ctx.options.get("rounds") or self.rounds)
         self.round_no = 0
         self.finished = False
+
+    @classmethod
+    def rules(cls) -> tuple[str, ...]:
+        return format_rules(cls, cls.rules_fa)
 
     # ------------------------------------------------------------ امتیاز
     def add_score(self, user_id: int, points: int) -> None:

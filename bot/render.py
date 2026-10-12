@@ -3,11 +3,65 @@
 from html import escape
 
 from django.conf import settings
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardMarkup
 
 from core import texts
 from core.texts import fa_num
 from games.catalog import GameInfo
+
+from . import ui
+
+# پیام تلگرام حداکثر ۴۰۹۶ نویسه است؛ با ظرفیت‌های بزرگ، فهرست‌ها کوتاه می‌شوند
+LOBBY_NAMES_SHOWN = 30
+BOARD_ROWS_SHOWN = 20
+RESULT_ROWS_SHOWN = 25
+RESULT_EXTRAS_SHOWN = 8
+NAME_CHARS = 24
+STARTING_NAMES_SHOWN = 30
+ALERT_CHARS = 200  # سقف متن answerCallbackQuery
+
+
+def short_name(name: str) -> str:
+    return name if len(name) <= NAME_CHARS else name[: NAME_CHARS - 1] + "…"
+
+
+def short_mention(user) -> str:
+    return f'<a href="tg://user?id={user.tg_id}">{escape(short_name(user.display_name))}</a>'
+
+
+def names_line(names: list[str], limit: int = STARTING_NAMES_SHOWN) -> str:
+    """فهرست یک‌خطی نام‌ها؛ نام‌های بلند کوتاه و فهرست‌های طولانی بریده می‌شوند تا پیام از سقف تلگرام رد نشود."""
+    line = "، ".join(escape(short_name(name)) for name in names[:limit])
+    if len(names) > limit:
+        line += " " + texts.MORE_PLAYERS.format(n=fa_num(len(names) - limit))
+    return line
+
+
+def players_label(info: GameInfo) -> str:
+    if info.min_players == info.max_players:
+        return texts.RULES_PLAYERS_FIXED.format(n=fa_num(info.min_players))
+    return texts.RULES_PLAYERS_RANGE.format(min=fa_num(info.min_players), max=fa_num(info.max_players))
+
+
+def rules_lines(info: GameInfo) -> list[str]:
+    return [texts.RULES_LINE.format(line=line) for line in (info.rules or (info.description_fa,))]
+
+
+def rules_text(info: GameInfo) -> str:
+    """متن کامل قوانین یک بازی برای دستور /rules."""
+    text = texts.RULES_GAME.format(
+        emoji=info.emoji,
+        title=info.title_fa,
+        lines="\n".join(escape(line) for line in rules_lines(info)),
+        players=players_label(info),
+    )
+    return text + (texts.RULES_ARCADE_NOTE if info.is_arcade else "")
+
+
+def rules_alert(info: GameInfo) -> str:
+    """قوانین کوتاه برای پنجره‌ی هشدار دکمه‌ی «قوانین بازی» (حداکثر ۲۰۰ نویسه)."""
+    text = "\n".join(rules_lines(info))
+    return text if len(text) <= ALERT_CHARS else text[: ALERT_CHARS - 1] + "…"
 
 
 def split_label(split: list[int]) -> str:
@@ -39,7 +93,18 @@ def miniapp_link(username: str, token: str) -> str:
 
 
 def lobby_text(match, info: GameInfo, names: list[str], remaining: int) -> str:
-    players = "\n".join(f"• {escape(n)}" for n in names) if names else texts.LOBBY_NO_PLAYERS
+    if names:
+        players = "\n".join(
+            texts.LOBBY_PLAYER.format(n=fa_num(i), name=escape(short_name(n)))
+            for i, n in enumerate(names[:LOBBY_NAMES_SHOWN], start=1)
+        )
+        if len(names) > LOBBY_NAMES_SHOWN:
+            players += "\n" + texts.MORE_PLAYERS.format(n=fa_num(len(names) - LOBBY_NAMES_SHOWN))
+    else:
+        players = texts.LOBBY_NO_PLAYERS
+    total = 60
+    if match.created_at and match.join_deadline:
+        total = max(1, int((match.join_deadline - match.created_at).total_seconds()))
     return texts.LOBBY.format(
         emoji=info.emoji,
         title=info.title_fa,
@@ -53,19 +118,21 @@ def lobby_text(match, info: GameInfo, names: list[str], remaining: int) -> str:
         players=players,
         remaining=fa_num(max(remaining, 0)),
         min=fa_num(match.min_players),
+        bar=texts.progress_bar(max(remaining, 0) / total),
     )
 
 
-def lobby_keyboard(match_id: int, username: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
+def lobby_keyboard(match_id: int, username: str, game_key: str = "") -> InlineKeyboardMarkup:
+    rows = [
         [
-            [
-                InlineKeyboardButton(texts.JOIN_BTN, callback_data=f"j:{match_id}"),
-                InlineKeyboardButton(texts.CANCEL_BTN, callback_data=f"x:{match_id}"),
-            ],
-            [InlineKeyboardButton(texts.START_BOT_BTN, url=start_link(username))],
+            ui.button(texts.JOIN_BTN, f"j:{match_id}", style=ui.SUCCESS),
+            ui.button(texts.CANCEL_BTN, f"x:{match_id}", style=ui.DANGER),
         ]
-    )
+    ]
+    if game_key:
+        rows.append([ui.button(texts.RULES_BTN, f"rl:{game_key}")])
+    rows.append([ui.button(texts.START_BOT_BTN, url=start_link(username), style=ui.PRIMARY)])
+    return InlineKeyboardMarkup(rows)
 
 
 def cancelled_text(reason: str, refunded: bool) -> str:
@@ -77,17 +144,20 @@ def cancelled_text(reason: str, refunded: bool) -> str:
 
 def result_text(result, info: GameInfo) -> str:
     lines = [texts.RESULT_HEADER.format(title=info.title_fa)]
-    for r in sorted(result.players, key=lambda p: p.rank):
+    ranked = sorted(result.players, key=lambda p: p.rank)
+    for r in ranked[:RESULT_ROWS_SHOWN]:
         prize = texts.RESULT_PRIZE.format(prize=fa_num(r.prize)) if r.prize else ""
         lines.append(
             texts.RESULT_LINE.format(
                 medal=texts.MEDALS.get(r.rank, texts.MEDAL_OTHER),
-                name=r.user.mention_html,
+                name=short_mention(r.user),
                 score=fa_num(r.score),
                 prize=prize,
                 xp=fa_num(r.xp),
             )
         )
+    if len(ranked) > RESULT_ROWS_SHOWN:
+        lines.append(texts.MORE_PLAYERS.format(n=fa_num(len(ranked) - RESULT_ROWS_SHOWN)) + "\n")
     lines.append(
         texts.RESULT_FOOTER.format(pot=fa_num(result.match.pot)) if result.match.pot else texts.RESULT_FREE
     )
@@ -101,22 +171,30 @@ def result_text(result, info: GameInfo) -> str:
                 + texts.ACHIEVEMENT_UNLOCKED.format(emoji=a.emoji, title=a.title, reward=fa_num(a.reward_coins))
             )
     if extras:
-        lines.append("\n\n" + "\n".join(extras))
+        lines.append("\n\n" + "\n".join(extras[:RESULT_EXTRAS_SHOWN]))
     return "".join(lines)
 
 
 def arcade_text(match, info: GameInfo, standings, remaining: int, attempts: int, flash: str = "") -> str:
     rows = []
-    for i, s in enumerate(standings, start=1):
+    for i, s in enumerate(standings[:BOARD_ROWS_SHOWN], start=1):
         medal = texts.MEDALS.get(i, texts.MEDAL_OTHER)
         score = fa_num(s.score) if s.attempts else "—"
         rows.append(
             texts.ARCADE_ROW.format(
-                medal=medal, name=escape(s.name), score=score, used=fa_num(s.attempts), total=fa_num(attempts)
+                medal=medal,
+                name=escape(short_name(s.name)),
+                score=score,
+                used=fa_num(s.attempts),
+                total=fa_num(attempts),
             )
         )
+    if len(standings) > BOARD_ROWS_SHOWN:
+        rows.append(texts.MORE_PLAYERS.format(n=fa_num(len(standings) - BOARD_ROWS_SHOWN)))
     minutes, seconds = divmod(max(remaining, 0), 60)
+    window = int(match.options.get("window_minutes") or 5) * 60
     return texts.ARCADE_RUNNING.format(
+        bar=texts.progress_bar(max(remaining, 0) / window, 8),
         emoji=info.emoji,
         title=info.title_fa,
         variant=variant_suffix(info, match.options),
@@ -129,5 +207,8 @@ def arcade_text(match, info: GameInfo, standings, remaining: int, attempts: int,
     )
 
 
-def arcade_keyboard(username: str, token: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton(texts.ARCADE_PLAY_BTN, url=miniapp_link(username, token))]])
+def arcade_keyboard(username: str, token: str, game_key: str = "") -> InlineKeyboardMarkup:
+    rows = [[ui.button(texts.ARCADE_PLAY_BTN, url=miniapp_link(username, token), style=ui.SUCCESS)]]
+    if game_key:
+        rows.append([ui.button(texts.RULES_BTN, f"rl:{game_key}")])
+    return InlineKeyboardMarkup(rows)

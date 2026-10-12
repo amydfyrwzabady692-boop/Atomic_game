@@ -4,6 +4,7 @@ import pytest
 from django.db import connection
 
 from core.models import TelegramGroup, TelegramUser
+from games import config as game_config
 from wallet.models import TxType
 from wallet.services import apply_transaction
 
@@ -30,3 +31,34 @@ def make_user(db):
 @pytest.fixture
 def group(db):
     return TelegramGroup.objects.create(chat_id=-100123, title="گروه تست")
+
+
+@pytest.fixture(autouse=True)
+def fresh_game_settings():
+    """کش تنظیمات بازی‌ها بین تست‌ها نشت نکند."""
+    game_config.reset()
+    yield
+    game_config.reset()
+
+
+@pytest.fixture(autouse=True)
+def close_edit_queues(monkeypatch):
+    """ویرایش‌های معوق هر تست بسته می‌شوند تا task نیمه‌کاره‌ای بعد از پایان تست باقی نماند."""
+    from bot.tg import EditQueue
+
+    created = []
+    original = EditQueue.__init__
+
+    def tracking(self, *args, **kwargs):
+        original(self, *args, **kwargs)
+        created.append(self)
+
+    monkeypatch.setattr(EditQueue, "__init__", tracking)
+    yield
+    for queue in created:
+        tasks = [task for task in queue._tasks.values() if not task.done()]
+        if not tasks:
+            continue
+        loop = tasks[0].get_loop()
+        if not loop.is_closed() and not loop.is_running():
+            loop.run_until_complete(queue.close())

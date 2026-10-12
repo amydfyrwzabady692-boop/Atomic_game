@@ -12,6 +12,11 @@ class HangmanGame(RoundGame):
     emoji = "🪢"
     description_fa = "حرف‌به‌حرف کلمه را پیدا کنید. حدس غلط از جان مشترک گروه کم می‌کند."
     rounds = 4
+    rules_fa = [
+        "یک حرف بفرست یا کل کلمه را حدس بزن.",
+        "حرف درست {letter_points} امتیاز و کلمه‌ی کامل {word_points} امتیاز دارد.",
+        "هر حدس غلط یکی از {lives_per_round} جان مشترک گروه را کم می‌کند؛ {rounds} راند.",
+    ]
     round_seconds = 90
     lives_per_round = 6
     letter_points = 2

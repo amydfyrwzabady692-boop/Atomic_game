@@ -13,6 +13,9 @@
   --gold: #ffc857;
   --danger: #ff5c7a;
   --good: #5ee6a8;
+  --go1: #b8f76a;
+  --go2: #34d399;
+  --go3: #10b6a0;
   --safe-top: calc(env(safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px) + var(--tg-safe-area-inset-top, 0px));
   --safe-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--tg-safe-area-inset-bottom, 0px));
 }
@@ -48,10 +51,9 @@ html, body {
   min-width: 92px;
   padding: 4px 22px 6px;
   border-radius: 999px;
-  background: rgba(10, 13, 34, .55);
+  /* بدون backdrop-filter: تار کردن بومِ در حال حرکت در هر فریم روی گوشی خیلی گران است */
+  background: rgba(10, 13, 34, .72);
   border: 1px solid var(--stroke);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   font-size: 38px;
   font-weight: 900;
   line-height: 1.15;
@@ -80,9 +82,7 @@ html, body {
   width: 42px; height: 42px;
   border: 1px solid var(--stroke);
   border-radius: 14px;
-  background: rgba(10, 13, 34, .55);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(10, 13, 34, .72);
   color: var(--ink);
   font-size: 18px;
   pointer-events: auto;
@@ -95,7 +95,8 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* وسط‌چینی با margin خودکار (نه justify-content) تا اگر محتوا از صفحه بلندتر شد، بالایش بریده نشود */
+  justify-content: flex-start;
   gap: 12px;
   padding: calc(var(--safe-top) + 16px) 18px calc(var(--safe-bottom) + 16px);
   background: rgba(9, 11, 28, .55);
@@ -104,6 +105,8 @@ html, body {
   text-align: center;
   animation: fade-in .25s ease-out;
   overflow-y: auto;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 #screen-loading, #screen-menu {
   background:
@@ -112,7 +115,10 @@ html, body {
     radial-gradient(120% 80% at 50% 0%, var(--bg2), var(--bg) 70%);
   backdrop-filter: none;
 }
-#screen-menu { justify-content: flex-start; padding-top: calc(var(--safe-top) + 28px); }
+.screen > :first-child { margin-top: auto; }
+.screen > :last-child { margin-bottom: auto; }
+#screen-menu { padding-top: calc(var(--safe-top) + 28px); }
+#screen-menu > :first-child { margin-top: 0; }
 @keyframes fade-in { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
 
 .card {
@@ -150,20 +156,35 @@ p { margin: 6px 0; line-height: 1.8; }
 }
 @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
 
-.howto {
+/* قوانین بازی: سه ردیف کوتاه با نشان رنگی */
+.rules { list-style: none; margin: 10px 0 14px; padding: 0; display: grid; gap: 8px; text-align: right; }
+.rules li {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin: 8px 0 14px;
-  padding: 11px 12px;
+  gap: 11px;
+  padding: 9px 12px;
   border-radius: 16px;
-  background: rgba(255, 255, 255, .06);
+  background: rgba(255, 255, 255, .055);
   border: 1px solid var(--stroke);
-  font-size: 14px;
 }
-.howto p { margin: 0; }
-.tap-hint { font-size: 24px; animation: tap 1.1s ease-in-out infinite; }
+.rule-icon {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  font-size: 18px;
+  background: linear-gradient(140deg, rgba(110, 231, 255, .34), rgba(110, 231, 255, .1));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25);
+}
+.rules li:nth-child(2) .rule-icon { background: linear-gradient(140deg, rgba(255, 200, 87, .4), rgba(255, 200, 87, .12)); }
+.rules li:nth-child(3) .rule-icon { background: linear-gradient(140deg, rgba(255, 92, 122, .4), rgba(255, 92, 122, .12)); }
+.rules b { display: block; font-size: 11.5px; font-weight: 800; color: var(--accent); letter-spacing: .2px; }
+.rules li:nth-child(2) b { color: var(--gold); }
+.rules li:nth-child(3) b { color: #ff8fa3; }
+.rules span:not(.rule-icon) { display: block; font-size: 13.5px; line-height: 1.65; color: var(--ink); }
+.tap-hint { animation: tap 1.1s ease-in-out infinite; }
 @keyframes tap { 0%, 100% { transform: translateY(0) scale(1); } 45% { transform: translateY(5px) scale(.86); } }
 
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; margin: 12px 0 16px; }
@@ -186,9 +207,13 @@ p { margin: 6px 0; line-height: 1.8; }
 @keyframes pop { from { transform: scale(.5); opacity: 0; } to { transform: none; opacity: 1; } }
 
 .btn {
-  display: block;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   width: 100%;
-  margin-top: 10px;
+  margin-top: 12px;
   padding: 15px;
   border: 1px solid var(--stroke);
   border-radius: 18px;
@@ -197,16 +222,68 @@ p { margin: 6px 0; line-height: 1.8; }
   font: inherit;
   font-size: 17px;
   font-weight: 800;
-  transition: transform .08s ease, filter .15s ease;
+  /* لبه‌ی پایینی تیره‌تر به دکمه حجم می‌دهد؛ با فشردن، دکمه پایین می‌نشیند */
+  box-shadow: 0 5px 0 var(--edge, rgba(0, 0, 0, .28)), 0 14px 28px var(--halo, rgba(0, 0, 0, .25));
+  transition: transform .08s ease, box-shadow .08s ease, filter .15s ease;
 }
-.btn:active { transform: scale(.97); }
-.btn.primary {
+.btn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--edge, rgba(0, 0, 0, .28)), 0 6px 14px var(--halo, rgba(0, 0, 0, .25)); }
+.btn-icon { font-size: 15px; line-height: 1; }
+.btn.go, .btn.primary, .btn.danger {
+  overflow: hidden;
   border: 0;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .35);
+}
+/* سبز: شروع بازی */
+.btn.go {
+  --edge: #0a7d68;
+  --halo: rgba(52, 211, 153, .38);
+  background: linear-gradient(180deg, var(--go1), var(--go2) 55%, var(--go3));
+  color: #06281f;
+}
+/* آبی-بنفش: دوباره بازی کن */
+.btn.primary {
+  --edge: #4a55c9;
+  --halo: rgba(110, 231, 255, .3);
   background: linear-gradient(120deg, var(--accent), #7aa2ff 50%, var(--accent2));
   color: var(--accent-ink);
-  box-shadow: 0 12px 30px rgba(110, 231, 255, .3), inset 0 1px 0 rgba(255, 255, 255, .5);
 }
-.btn:disabled { opacity: .4; filter: grayscale(.6); box-shadow: none; }
+/* قرمز: بستن صفحه‌ی خطا */
+.btn.danger {
+  --edge: #a3213f;
+  --halo: rgba(255, 92, 122, .32);
+  background: linear-gradient(180deg, #ff9aa9, var(--danger) 60%, #e6375a);
+  color: #3d0514;
+}
+/* بنفش کم‌رنگ: برگشت */
+.btn.violet {
+  --edge: rgba(74, 58, 150, .9);
+  --halo: rgba(167, 139, 250, .2);
+  border-color: rgba(167, 139, 250, .55);
+  background: linear-gradient(180deg, rgba(167, 139, 250, .3), rgba(167, 139, 250, .14));
+  color: #efeaff;
+}
+.btn.go::before, .btn.primary::before, .btn.danger::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 52% 0;
+  border-radius: 18px 18px 60% 60% / 18px 18px 22% 22%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .42), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+/* برق نوری که هر چند ثانیه از روی دکمه‌ی اصلی رد می‌شود */
+.btn.go::after, .btn.primary::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0;
+  left: -40%;
+  width: 34%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .55), transparent);
+  transform: skewX(-18deg);
+  animation: sheen 3.2s ease-in-out infinite;
+}
+.btn:disabled::after, .btn:disabled::before { display: none; }
+@keyframes sheen { 0%, 60% { left: -40%; } 100% { left: 130%; } }
+.btn:disabled { opacity: .45; filter: grayscale(.7); box-shadow: none; transform: none; }
 
 /* ---------------------------------------------------------------- منوی تمرین */
 .menu-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: min(100%, 400px); padding-bottom: 20px; }
@@ -235,7 +312,37 @@ p { margin: 6px 0; line-height: 1.8; }
   background: radial-gradient(closest-side, var(--tint, rgba(110, 231, 255, .35)), transparent);
   pointer-events: none;
 }
-.menu-item .game-emoji { font-size: 38px; display: block; margin-bottom: 6px; animation: none; filter: drop-shadow(0 6px 12px rgba(0, 0, 0, .4)); }
+.menu-item .game-emoji { font-size: 38px; display: block; margin-bottom: 8px; animation: none; filter: drop-shadow(0 6px 12px rgba(0, 0, 0, .4)); }
+.game-icon { display: block; margin: 0 auto; border-radius: 23%; }
+.card .game-emoji .game-icon { box-shadow: 0 10px 28px rgba(0, 0, 0, .45); }
+
+/* ---------------------------------------------------------------- رکورد جدید */
+.badge {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: linear-gradient(120deg, #ffd257, #ff9f43);
+  color: #3a2200;
+  font-weight: 900;
+  font-size: 14px;
+  box-shadow: 0 8px 22px rgba(255, 180, 60, .4);
+  animation: pop .5s cubic-bezier(.2, 1.6, .4, 1);
+}
+#confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: inherit; }
+#confetti i {
+  position: absolute;
+  top: -12px;
+  width: 8px;
+  height: 13px;
+  border-radius: 2px;
+  opacity: 0;
+  animation: confetti-fall 1.6s ease-in forwards;
+}
+@keyframes confetti-fall {
+  0% { opacity: 1; top: -12px; }
+  100% { opacity: 0; top: 105%; transform: rotate(540deg) translateX(18px); }
+}
 .menu-item:nth-child(4n+1) { --tint: rgba(110, 231, 255, .35); }
 .menu-item:nth-child(4n+2) { --tint: rgba(167, 139, 250, .4); }
 .menu-item:nth-child(4n+3) { --tint: rgba(255, 200, 87, .32); }
@@ -255,11 +362,26 @@ p { margin: 6px 0; line-height: 1.8; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* گوشی‌های کوتاه: کارت فشرده‌تر می‌شود تا دکمه‌ی شروع بدون اسکرول دیده شود */
+@media (max-height: 720px) {
+  .card { padding: 16px 16px 14px; }
+  .card .game-emoji .game-icon { width: 64px !important; height: 64px !important; }
+  h1 { font-size: 21px; margin: 4px 0 6px; }
+  .rules { gap: 6px; margin: 8px 0 10px; }
+  .rules li { padding: 7px 10px; }
+  .rule-icon { flex-basis: 30px; width: 30px; height: 30px; font-size: 15px; border-radius: 10px; }
+  .rules span:not(.rule-icon) { font-size: 12.5px; line-height: 1.55; }
+  .stats { margin: 8px 0 10px; }
+  .stat { padding: 7px 6px; }
+  .stat b { font-size: 17px; }
+  .btn { padding: 13px; margin-top: 10px; }
+  .big-score { font-size: 56px; }
+}
 @media (max-height: 520px) {
   .game-emoji { font-size: 36px; }
-  .big-score { font-size: 48px; }
-  .card { padding: 14px; }
+  .big-score { font-size: 44px; }
+  .card { padding: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .game-emoji, .tap-hint, .menu-item, .screen { animation: none; }
+  .game-emoji, .tap-hint, .menu-item, .screen, .btn.go::after, .btn.primary::after, #confetti i, .badge { animation: none; }
 }

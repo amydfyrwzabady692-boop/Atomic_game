@@ -16,13 +16,14 @@ from dataclasses import dataclass, field
 from html import escape
 
 from django.utils import timezone
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardMarkup, InputMediaPhoto
 
 from arcade import services as arcade_services
 from core import texts
 from core.models import TelegramUser
 from core.redis import get_redis
 from core.texts import fa_num
+from games import config as game_config
 from games.catalog import GameInfo, get_info
 from games.content.provider import DbContentProvider, NoContent
 from games.engine import services
@@ -32,7 +33,7 @@ from games.engine.registry import get_game
 from games.engine.services import MatchError
 from games.models import ACTIVE_STATUSES, Match, MatchPlayer, MatchStatus
 
-from . import render
+from . import cards, render, ui
 from .db import db
 from .tg import EditQueue, tg_call
 
@@ -94,7 +95,10 @@ class TelegramGameContext:
             return None
         prefix = f"g:{self.active.match_id}:"
         return InlineKeyboardMarkup(
-            [[InlineKeyboardButton(text, callback_data=prefix + data) for text, data in row] for row in buttons]
+            [
+                [ui.button(cell[0], prefix + cell[1], style=getattr(cell, "style", "")) for cell in row]
+                for row in buttons
+            ]
         )
 
     async def send(self, text, buttons=None) -> int:
@@ -112,11 +116,27 @@ class TelegramGameContext:
         if message_id:
             self.manager.edits.edit(self.active.chat_id, message_id, text, self._markup(buttons), urgent=urgent)
 
-    async def send_photo(self, image: bytes, caption: str = "") -> int:
+    async def send_photo(self, image: bytes, caption: str = "", buttons=None) -> int:
         message = await tg_call(
-            self.bot.send_photo, self.active.chat_id, image, caption=caption or None, parse_mode="HTML"
+            self.bot.send_photo,
+            self.active.chat_id,
+            image,
+            caption=caption or None,
+            parse_mode="HTML",
+            reply_markup=self._markup(buttons),
         )
         return message.message_id if message else 0
+
+    async def edit_photo(self, message_id: int, image: bytes, caption: str = "", buttons=None) -> None:
+        if not message_id:
+            return
+        await tg_call(
+            self.bot.edit_message_media,
+            chat_id=self.active.chat_id,
+            message_id=message_id,
+            media=InputMediaPhoto(image, caption=caption or None, parse_mode="HTML"),
+            reply_markup=self._markup(buttons),
+        )
 
     async def send_dice(self, emoji: str) -> int:
         message = await tg_call(self.bot.send_dice, self.active.chat_id, emoji=emoji)
@@ -148,6 +168,10 @@ class MatchManager:
     @property
     def username(self) -> str:
         return self.application.bot_data.get("username") or render.bot_username()
+
+    async def shutdown(self) -> None:
+        """قبل از بسته شدن حلقه‌ی رویداد، ویرایش‌های در صف را لغو می‌کند."""
+        await self.edits.close()
 
     # ================================================================ ابزار زمان‌بندی
     def _schedule(self, active: ActiveMatch, name: str, seconds: float, coro_fn, repeat: bool = False):
@@ -210,6 +234,11 @@ class MatchManager:
         try:
             if group.chat_id in self.active:
                 raise MatchError("active_match_exists")
+            # تعداد شرکت‌کننده و فعال بودن بازی همین لحظه از تنظیمات پنل ادمین خوانده می‌شود
+            await db(game_config.reload)()
+            info = get_info(info.key) or info
+            if not info.enabled:
+                raise MatchError("game_disabled")
             match = await db(services.create_match)(
                 group,
                 creator,
@@ -227,7 +256,7 @@ class MatchManager:
             await redis.delete(lock_key)
 
         text = render.lobby_text(match, info, [], join_seconds)
-        keyboard = render.lobby_keyboard(match.pk, self.username)
+        keyboard = render.lobby_keyboard(match.pk, self.username, info.key)
         message_id = None
         if menu_message_id:
             edited = await tg_call(
@@ -286,7 +315,7 @@ class MatchManager:
             active.chat_id,
             active.lobby_message_id,
             render.lobby_text(match, active.info, names, remaining),
-            render.lobby_keyboard(active.match_id, self.username),
+            render.lobby_keyboard(active.match_id, self.username, active.info.key),
             urgent=urgent,
         )
 
@@ -320,7 +349,8 @@ class MatchManager:
                 await self._cancel_locked(active, reason)
                 return
             entries = await db(lambda: list(match.players.select_related("user")))()
-            players = [Player(e.user_id, e.user.tg_id, e.user.display_name) for e in entries]
+            # نام‌های خیلی بلند کوتاه می‌شوند تا هیچ پیام بازی از سقف طول تلگرام رد نشود
+            players = [Player(e.user_id, e.user.tg_id, render.short_name(e.user.display_name)) for e in entries]
             active.players_by_tg = {p.tg_id: p for p in players}
             active.phase = "running"
             if active.lobby_message_id:
@@ -331,7 +361,7 @@ class MatchManager:
                     message_id=active.lobby_message_id,
                     text=texts.MATCH_STARTING.format(
                         title=info.title_fa + render.variant_suffix(info, match.options),
-                        players="، ".join(escape(p.name) for p in players),
+                        players=render.names_line([p.name for p in players]),
                         pot=fa_num(match.pot),
                     ),
                     parse_mode="HTML",
@@ -371,6 +401,7 @@ class MatchManager:
                 parse_mode="HTML",
             )
             if edited:
+                logger.info("match cancelled", extra={"match_id": active.match_id, "reason": reason})
                 return
         if active.board_message_id:
             self.edits.forget(active.chat_id, active.board_message_id)
@@ -441,13 +472,7 @@ class MatchManager:
         result = await db(services.finish_match)(active.match_id, standings)
         if result is None:
             return
-        await tg_call(
-            self.bot.send_message,
-            active.chat_id,
-            render.result_text(result, active.info),
-            parse_mode="HTML",
-            disable_web_page_preview=True,
-        )
+        await self._announce_result(active, result)
         for referrer, invitee in result.referral_rewards:
             from django.conf import settings
 
@@ -464,6 +489,24 @@ class MatchManager:
             extra={"match_id": active.match_id, "pot": result.match.pot, "players": len(result.players)},
         )
 
+    async def _announce_result(self, active: ActiveMatch, result) -> None:
+        """نتیجه را با کارت تصویری سکو می‌فرستد؛ اگر کارت ساخته یا فرستاده نشد، فقط متن."""
+        text = render.result_text(result, active.info)
+        card = await asyncio.to_thread(cards.result_card, result, active.info)
+        if card and cards.visible_length(text) <= cards.CAPTION_LIMIT:
+            if await tg_call(self.bot.send_photo, active.chat_id, card, caption=text, parse_mode="HTML"):
+                return
+        elif card:
+            # متن نتیجه از سقف کپشن بلندتر است: کارت جدا و متن کامل زیر آن
+            await tg_call(self.bot.send_photo, active.chat_id, card)
+        await tg_call(
+            self.bot.send_message,
+            active.chat_id,
+            text,
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+        )
+
     # ================================================================ آرکید
     async def _start_arcade(self, active: ActiveMatch, match: Match) -> None:
         remaining = int((match.play_deadline - timezone.now()).total_seconds())
@@ -473,7 +516,7 @@ class MatchManager:
             active.chat_id,
             text,
             parse_mode="HTML",
-            reply_markup=render.arcade_keyboard(self.username, match.token),
+            reply_markup=render.arcade_keyboard(self.username, match.token, active.info.key),
             disable_web_page_preview=True,
         )
         active.board_message_id = message.message_id if message else None
@@ -523,7 +566,7 @@ class MatchManager:
                 active.chat_id,
                 active.board_message_id,
                 text,
-                render.arcade_keyboard(self.username, active.token),
+                render.arcade_keyboard(self.username, active.token, active.info.key),
             )
 
     async def finish_arcade(self, active: ActiveMatch) -> None:
@@ -574,7 +617,9 @@ class MatchManager:
             return
         if info.is_arcade and match.play_deadline:
             entries = await db(lambda: list(match.players.select_related("user")))()
-            active.players_by_tg = {e.user.tg_id: Player(e.user_id, e.user.tg_id, e.user.display_name) for e in entries}
+            active.players_by_tg = {
+                e.user.tg_id: Player(e.user_id, e.user.tg_id, render.short_name(e.user.display_name)) for e in entries
+            }
             active.phase = "running"
             active.board_message_id = (match.state or {}).get("board_message_id")
             self.active[chat_id] = active

@@ -27,6 +27,11 @@ class FlappySimulator(ArcadeSimulator):
     emoji = "🐤"
     description_fa = "با هر تپ بپر و از بین موانع رد شو؛ موانع کم‌کم تنگ‌تر و سریع‌تر می‌شوند."
     howto_fa = "تپ کن تا بپرد؛ به موانع و زمین نخور."
+    rules_fa = [
+        "با هر تپ پرنده بالا می‌پرد.",
+        "هر مانعی که رد کنی ۱ امتیاز دارد.",
+        "برخورد با مانع یا زمین یعنی پایان بازی.",
+    ]
     category = "skill"
     suggested_minutes = 3
     TICK_MS = 16

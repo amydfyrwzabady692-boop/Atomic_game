@@ -1,104 +1,141 @@
 """همه‌ی متن‌های ربات یک‌جا، تا ویرایش لحن و جمله‌ها راحت باشد.
 
-قالب پیام‌ها HTML است. سکه فقط ارز مجازی تفریحی است و هیچ متنی نباید خلاف این را القا کند.
+قالب پیام‌ها HTML است. لحن: خطاب دوستانه‌ی «تو» با فعل‌های نوشتاری («می‌شود»، نه «می‌شه») تا متن‌ها
+یک‌دست و واضح بمانند. سکه فقط ارز مجازی تفریحی است و هیچ متنی نباید خلاف این را القا کند.
 """
 
 from core.textutils import fa_digits, fa_num  # noqa: F401  (برای استفاده‌ی راحت در بقیه‌ی ماژول‌ها)
 
 COIN = "🪙"
+DIVIDER = "━━━━━━━━━━━━━━"
+COINS_NOTE = "ℹ️ سکه فقط امتیاز مجازی داخل ربات است؛ خرید، فروش، برداشت یا انتقال آن ممکن نیست."
 
 # ------------------------------------------------------------------ عمومی
 START_NEW = (
     "سلام {name}! 👋\n"
-    "به ربات بازی‌های گروهی خوش اومدی.\n\n"
-    "🎁 <b>{bonus} سکه</b> هدیه‌ی شروع گرفتی!\n\n"
-    "منو به گروهت اضافه کن و با /game یه مسابقه راه بنداز.\n"
-    "هر روز هم با /daily سکه‌ی رایگان بگیر.\n\n"
-    "ℹ️ سکه‌ها فقط امتیاز مجازی داخل ربات هستن و ارزش پولی ندارن."
+    "به ربات بازی‌های گروهی خوش آمدی.\n\n"
+    "🎁 <b>{bonus} سکه</b> هدیه‌ی شروع گرفتی.\n\n"
+    "<b>چطور شروع کنم؟</b>\n"
+    "۱. ربات را به گروهت اضافه کن.\n"
+    "۲. در گروه /game را بفرست و مسابقه بساز.\n"
+    "۳. هر روز با /daily سکه‌ی رایگان بگیر.\n\n" + COINS_NOTE
 )
-START_BACK = "خوش برگشتی {name}! 👋\nموجودی: <b>{coins}</b> " + COIN + "\n\nراهنما: /help"
-START_JOIN_HINT = "✅ حله! حالا برگرد به گروه و دکمه‌ی «شرکت» رو بزن."
+START_BACK = "خوش برگشتی {name}! 👋\n" + COIN + " موجودی: <b>{coins}</b>\n\nاز دکمه‌های زیر یکی را انتخاب کن."
+START_JOIN_HINT = "✅ آماده‌ای! حالا به گروه برگرد و دکمه‌ی «شرکت» را بزن."
 REFERRED_BY = "🤝 با دعوت {name} وارد شدی."
+MENU_ADD_BTN = "➕ افزودن ربات به گروه"
+MENU_DAILY_BTN = "🎁 جایزه‌ی روزانه"
+MENU_PROFILE_BTN = "👤 پروفایل"
+MENU_INVITE_BTN = "🤝 دعوت دوستان"
+MENU_SHOP_BTN = "🛍 فروشگاه"
+MENU_ARCADE_BTN = "🕹 تمرین آرکید"
+MENU_RULES_BTN = "📜 قوانین"
+MENU_HELP_BTN = "📖 راهنما"
 HELP_PRIVATE = (
-    "📖 <b>راهنما</b>\n\n"
+    "📖 <b>راهنما</b>\n" + DIVIDER + "\n"
+    "<b>در پیوی ربات</b>\n"
     "/me — پروفایل و آمار\n"
     "/daily — جایزه‌ی روزانه\n"
     "/invite — دعوت دوستان\n"
-    "/shop — فروشگاه (آیتم‌های ظاهری)\n"
+    "/shop — فروشگاه آیتم‌های ظاهری\n"
     "/history — ۲۰ تراکنش آخر سکه\n"
-    "/arcade — تمرین آزاد بازی‌های آرکید\n\n"
-    "<b>داخل گروه:</b>\n"
+    "/arcade — تمرین آزاد بازی‌های آرکید\n"
+    "/gtop — برترین‌های کل ربات\n\n"
+    "<b>در گروه</b>\n"
     "/game — ساخت مسابقه\n"
     "/top — رتبه‌بندی گروه\n"
-    "/rules — قوانین\n\n"
-    "ℹ️ سکه فقط امتیاز مجازی و تفریحیه: خرید و فروش، برداشت یا انتقالش ممکن نیست."
+    "/rules — قوانین و راهنمای هر بازی\n"
+    "/cancel — لغو مسابقه (سازنده یا ادمین)\n"
+    "/settings — تنظیمات گروه (ادمین)\n\n" + COINS_NOTE
 )
 RULES = (
-    "📜 <b>قوانین</b>\n\n"
-    "• با /game مسابقه بساز؛ بقیه با دکمه‌ی «شرکت» وارد می‌شن.\n"
-    "• ورودی هر نفر به جایزه‌ی کل اضافه می‌شه و بین برنده‌ها تقسیم می‌شه.\n"
-    "• اگه بازیکن کافی نیاد یا بازی لغو بشه، ورودی‌ها کامل برمی‌گرده.\n"
-    "• فقط جواب بازیکن‌های عضو مسابقه حساب می‌شه؛ پیام ادیت‌شده و فورواردی قبول نیست.\n"
-    "• در تساوی، کسی که زودتر به اون امتیاز رسیده جلوتره.\n"
-    "• سکه فقط امتیاز مجازی تفریحیه و هیچ ارزش پولی نداره."
+    "📜 <b>قوانین کلی</b>\n" + DIVIDER + "\n"
+    "۱. با /game مسابقه بساز؛ بقیه با دکمه‌ی «شرکت» وارد می‌شوند.\n"
+    "۲. ورودی هر نفر به جایزه‌ی کل اضافه و بین برنده‌ها تقسیم می‌شود.\n"
+    "۳. اگر بازیکن کافی نیاید یا مسابقه لغو شود، ورودی همه کامل برمی‌گردد.\n"
+    "۴. فقط جواب بازیکن‌های عضو مسابقه حساب می‌شود؛ پیام ویرایش‌شده و فورواردی قبول نیست.\n"
+    "۵. در تساوی، کسی که زودتر به آن امتیاز رسیده جلوتر است.\n"
+    "۶. در بازی‌های آرکید، بهترین امتیاز هر نفر در مهلت مسابقه حساب می‌شود.\n\n"
+    + COINS_NOTE
+    + "\n\n<i>برای دیدن قوانین هر بازی، یکی از دسته‌های زیر را انتخاب کن.</i>"
 )
-BANNED = "⛔️ حساب شما مسدود شده."
-ONLY_GROUP = "این دستور فقط داخل گروه کار می‌کنه."
-ONLY_PRIVATE = "این دستور رو توی پیوی ربات بزن 🙂"
+RULES_TEXT_GAMES_BTN = "🎮 بازی‌های گروهی"
+RULES_ARCADE_BTN = "🕹 بازی‌های آرکید"
+RULES_LIST_TEXT = "🎮 <b>بازی‌های گروهی</b>\nقوانین کدام بازی را می‌خواهی؟"
+RULES_LIST_ARCADE = "🕹 <b>بازی‌های آرکید</b>\nقوانین کدام بازی را می‌خواهی؟"
+RULES_GAME = "{emoji} <b>قوانین {title}</b>\n" + DIVIDER + "\n{lines}\n\n👥 {players}"
+RULES_LINE = "• {line}"
+RULES_PLAYERS_RANGE = "{min} تا {max} بازیکن"
+RULES_PLAYERS_FIXED = "{n} بازیکن"
+RULES_ARCADE_NOTE = "\n🕹 بازی داخل تلگرام باز می‌شود و بهترین امتیازت حساب می‌شود."
+RULES_BTN = "📖 قوانین بازی"
+BANNED = "⛔️ حساب تو مسدود شده است."
+ONLY_GROUP = "این دستور فقط در گروه کار می‌کند."
+ONLY_PRIVATE = "این دستور را در پیوی ربات بفرست 🙂"
 ONLY_PRIVATE_BTN = "🤖 رفتن به پیوی ربات"
-ONLY_ADMIN = "این کار فقط برای ادمین‌های گروهه."
-TOO_FAST = "یواش‌تر! 🙂"
-ERROR_GENERIC = "یه مشکلی پیش اومد. دوباره امتحان کن."
+ONLY_ADMIN = "این کار فقط برای ادمین‌های گروه است."
+TOO_FAST = "کمی آهسته‌تر 🙂"
+ERROR_GENERIC = "مشکلی پیش آمد. دوباره امتحان کن."
+GAME_OVER = "این بازی تمام شده است."
 GROUP_WELCOME = (
     "سلام به همه! 🎮\n"
-    "من ربات بازی‌های گروهی‌ام. با /game مسابقه بسازید.\n\n"
-    "⚠️ برای اینکه جواب‌ها رو ببینم، باید ادمین باشم یا Privacy Mode ربات خاموش باشه.\n"
-    "هر کس بار اول باید توی پیوی من /start بزنه."
+    "من ربات بازی‌های گروهی هستم.\n\n"
+    "▫️ با /game مسابقه بسازید.\n"
+    "▫️ با /rules قوانین هر بازی را ببینید.\n"
+    "▫️ هر نفر بار اول باید در پیوی من /start بزند.\n\n"
+    "⚠️ برای دیدن جواب‌ها باید ادمین گروه باشم یا Privacy Mode ربات خاموش باشد."
 )
 
 # ------------------------------------------------------------------ پروفایل و اقتصاد
 PROFILE = (
-    "{frame}👤 <b>{name}</b>{title}{frame}\n\n"
+    "{frame}👤 <b>{name}</b>{title}{frame}\n" + DIVIDER + "\n"
     + COIN
     + " سکه: <b>{coins}</b>\n"
-    "⭐ سطح {level}  ({xp} / {next_xp} XP)\n"
+    "⭐ سطح {level}  ({xp} از {next_xp} XP)\n"
     "🎮 بازی‌ها: {games}   🏆 برد: {wins}  ({win_rate}٪)\n"
     "💪 بهترین بازی: {best_game}\n"
-    "🔥 streak روزانه: {streak} روز\n"
+    "🔥 روزهای پیاپی: {streak}\n"
     "🏅 نشان‌ها: {badges}"
 )
 PROFILE_ARCADE = "\n👾 رکوردهای آرکید: {records}"
-NO_BADGES = "هنوز هیچی"
+NO_BADGES = "هنوز نشانی نگرفته‌ای"
 NO_BEST_GAME = "—"
-DAILY_OK = "🎁 جایزه‌ی روزانه: <b>{amount}</b> " + COIN + "\n🔥 streak: {streak} روز\n\nفردا بیشتر می‌گیری؛ یه روز هم جا ننداز!"
-DAILY_ALREADY = "امروز جایزه‌ت رو گرفتی ✅\n⏳ جایزه‌ی بعدی: {hours} ساعت و {minutes} دقیقه‌ی دیگه"
-RESCUE_OK = "\n\n🛟 موجودیت صفر بود؛ <b>{amount}</b> " + COIN + " سکه‌ی نجات گرفتی تا از بازی جا نمونی."
-INVITE = (
-    "🤝 <b>دعوت دوستان</b>\n\n"
-    "لینک اختصاصی تو:\n{link}\n\n"
-    "وقتی دوستت با این لینک وارد بشه و اولین بازیش رو انجام بده، "
-    "<b>{reward}</b> " + COIN + " می‌گیری.\n"
-    "(جایزه بعد از {hours} ساعت از عضویت دوستت فعال می‌شه.)\n\n"
-    "دعوت‌شده‌ها: {count} نفر — جایزه‌گرفته: {rewarded}"
+DAILY_OK = (
+    "🎁 <b>جایزه‌ی روزانه</b>\n" + DIVIDER + "\n"
+    "<b>+{amount}</b> " + COIN + "\n"
+    "🔥 روزهای پیاپی: <b>{streak}</b>\n\n"
+    "<i>هر روز پیاپی جایزه‌ی بیشتری دارد؛ فردا هم سر بزن.</i>"
 )
-REFERRAL_REWARDED = "🎉 {name} با دعوت تو اولین بازیش رو کرد!\n<b>{amount}</b> " + COIN + " گرفتی."
-HISTORY_HEADER = "🧾 <b>۲۰ تراکنش آخر</b>\n\n"
-HISTORY_LINE = "{sign} <b>{amount}</b> — {type}  <i>({date})</i>\n"
+DAILY_ALREADY = "جایزه‌ی امروز را گرفته‌ای ✅\n⏳ جایزه‌ی بعدی: {hours} ساعت و {minutes} دقیقه‌ی دیگر"
+RESCUE_OK = "\n\n🛟 موجودی‌ات صفر بود؛ <b>{amount}</b> " + COIN + " سکه‌ی کمکی گرفتی تا از بازی جا نمانی."
+INVITE = (
+    "🤝 <b>دعوت دوستان</b>\n" + DIVIDER + "\n"
+    "لینک اختصاصی تو:\n{link}\n\n"
+    "وقتی دوستت با این لینک وارد شود و اولین بازی‌اش را انجام دهد، "
+    "<b>{reward}</b> " + COIN + " می‌گیری.\n"
+    "<i>جایزه {hours} ساعت بعد از عضویت دوستت فعال می‌شود.</i>\n\n"
+    "👥 دعوت‌شده‌ها: {count} نفر  ·  جایزه‌گرفته: {rewarded}"
+)
+REFERRAL_REWARDED = "🎉 {name} با دعوت تو اولین بازی‌اش را انجام داد.\n<b>+{amount}</b> " + COIN + " گرفتی."
+HISTORY_HEADER = "🧾 <b>۲۰ تراکنش آخر</b>\n" + DIVIDER + "\n"
+HISTORY_LINE = "{sign} <b>{amount}</b>  {type}  <i>{date}</i>\n"
 HISTORY_EMPTY = "هنوز تراکنشی نداری."
 ACHIEVEMENT_UNLOCKED = "{emoji} <b>دستاورد جدید:</b> {title}  (+{reward} " + COIN + ")"
 LEVEL_UP = "⭐ {name} به سطح {level} رسید!"
 
 # ------------------------------------------------------------------ ساخت بازی و لابی
-GAME_MENU = "🎮 <b>چه بازی‌ای بسازیم؟</b>"
-GAME_MENU_ARCADE = "🕹 <b>بازی‌های آرکید — {category}</b>\nبازی داخل تلگرام باز می‌شه و بهترین امتیازت حساب می‌شه."
+GAME_MENU = "🎮 <b>چه بازی‌ای بسازیم؟</b>\n<i>یک بازی را انتخاب کن.</i>"
+GAME_MENU_ARCADE = (
+    "🕹 <b>بازی‌های آرکید — {category}</b>\n<i>بازی داخل تلگرام باز می‌شود و بهترین امتیازت حساب می‌شود.</i>"
+)
 ARCADE_BTN = "🕹 آرکید: {category}"
-BACK_BTN = "« برگشت"
+BACK_BTN = "‹ برگشت"
 CLOSE_BTN = "✖️ بستن"
-CHOOSE_VARIANT = "{emoji} <b>{title}</b>\n{description}\n\n{variant_title}:"
-CHOOSE_FEE = "{emoji} <b>{title}</b>\n{description}\n\n" + COIN + " ورودی هر نفر چقدر باشه؟"
-CHOOSE_SPLIT = "{emoji} <b>{title}</b>\n\n🏆 جایزه چطور تقسیم بشه؟"
-CHOOSE_WINDOW = "{emoji} <b>{title}</b>\n\n⏱ مدت مسابقه چقدر باشه؟ (پیشنهاد: {suggested} دقیقه)"
-CHOOSE_JOIN_TIME = "{emoji} <b>{title}</b>\n\n⏳ زمان عضوگیری؟"
+CHOOSE_VARIANT = "{emoji} <b>{title}</b>\n<blockquote>{description}</blockquote>\n{variant_title} را انتخاب کن:"
+CHOOSE_FEE = "{emoji} <b>{title}</b>\n<blockquote>{description}</blockquote>\n" + COIN + " ورودی هر نفر چقدر باشد؟"
+CHOOSE_SPLIT = "{emoji} <b>{title}</b>\n\n🏆 جایزه چطور تقسیم شود؟"
+CHOOSE_WINDOW = "{emoji} <b>{title}</b>\n\n⏱ مدت مسابقه چقدر باشد؟\n<i>پیشنهاد: {suggested} دقیقه</i>"
+CHOOSE_JOIN_TIME = "{emoji} <b>{title}</b>\n\n⏳ زمان عضوگیری چقدر باشد؟"
 FEE_FREE = "رایگان"
 FEE_BTN = "{amount} " + COIN
 SPLIT_LABELS = {
@@ -109,92 +146,105 @@ SPLIT_LABELS = {
 }
 SECONDS_BTN = "{n} ثانیه"
 MINUTES_BTN = "{n} دقیقه"
-NOT_YOUR_MENU = "این منو رو یکی دیگه باز کرده. خودت /game بزن 🙂"
-MENU_EXPIRED = "این منو منقضی شده. دوباره /game بزن."
-ACTIVE_MATCH_EXISTS = "یه مسابقه توی این گروه در جریانه. صبر کن تموم بشه."
-USERS_CANNOT_CREATE = "توی این گروه فقط ادمین‌ها می‌تونن مسابقه بسازن."
-NO_GAMES_ENABLED = "هیچ بازی‌ای توی این گروه فعال نیست."
-CREATOR_NEEDS_START = "برای ساخت مسابقه اول توی پیوی ربات /start بزن."
+NOT_YOUR_MENU = "این منو را شخص دیگری باز کرده است. خودت /game را بفرست 🙂"
+MENU_EXPIRED = "این منو منقضی شده است. دوباره /game را بفرست."
+ACTIVE_MATCH_EXISTS = "یک مسابقه در این گروه در جریان است. صبر کن تا تمام شود."
+USERS_CANNOT_CREATE = "در این گروه فقط ادمین‌ها می‌توانند مسابقه بسازند."
+NO_GAMES_ENABLED = "هیچ بازی‌ای در این گروه فعال نیست."
+GAME_DISABLED = "این بازی فعلاً غیرفعال است. بازی دیگری انتخاب کن."
+CREATOR_NEEDS_START = "برای ساخت مسابقه اول در پیوی ربات /start بزن."
 
 LOBBY = (
     "{emoji} <b>{title}</b>{variant}\n"
-    "{description}\n\n"
+    "<blockquote>{description}</blockquote>\n"
     + COIN
-    + " ورودی: <b>{fee}</b>   🏆 جایزه‌ی کل: <b>{pot}</b>\n"
-    "🎯 تقسیم: {split}\n"
-    "👥 بازیکن‌ها ({count}/{max}):\n{players}\n\n"
-    "⏳ {remaining} ثانیه تا شروع  (حداقل {min} نفر)"
+    + " ورودی:  <b>{fee}</b>\n"
+    "🏆 جایزه‌ی کل:  <b>{pot}</b> " + COIN + "\n"
+    "🎯 تقسیم جایزه:  {split}\n"
+    + DIVIDER
+    + "\n👥 <b>بازیکن‌ها</b>  {count} از {max}\n{players}\n"
+    + DIVIDER
+    + "\n⏳ {bar}  <b>{remaining}</b> ثانیه تا شروع\n"
+    "<i>برای شروع حداقل {min} نفر لازم است.</i>"
 )
-LOBBY_NO_PLAYERS = "— هنوز کسی نیومده —"
+LOBBY_NO_PLAYERS = "<i>هنوز کسی نیامده؛ اولین نفر باش!</i>"
 LOBBY_CREATED_BY = "سازنده: {name}"
 JOIN_BTN = "✅ شرکت"
 CANCEL_BTN = "❌ لغو"
-START_BOT_BTN = "🤖 بار اولته؟ اول اینجا استارت بزن"
+START_BOT_BTN = "🤖 بار اول است؟ اول این‌جا استارت بزن"
 JOINED_OK = "وارد شدی! موفق باشی 🍀"
-ALREADY_JOINED = "قبلاً وارد شدی ✅"
-LOBBY_CLOSED = "عضوگیری تموم شده."
-LOBBY_FULL = "ظرفیت پره!"
-NEED_START = "اول باید توی پیوی ربات /start بزنی (دکمه‌ی پایین لابی)، بعد دوباره «شرکت» رو بزن."
-NOT_ENOUGH_COINS = "سکه‌ت کمه! 😅\nموجودی: {balance} — لازم: {needed}\nتوی پیوی ربات /daily بزن و سکه‌ی رایگان بگیر."
-FEE_NOT_ALLOWED = "این مبلغ ورودی توی این گروه مجاز نیست."
-CANCEL_NOT_ALLOWED = "فقط سازنده‌ی مسابقه یا ادمین گروه می‌تونه لغو کنه."
-NOTHING_TO_CANCEL = "مسابقه‌ی فعالی نیست."
-MATCH_CANCELLED = "❌ <b>مسابقه لغو شد.</b>\n{reason}"
-REFUND_NOTE = "ورودی همه‌ی بازیکن‌ها برگشت. ↩️"
+ALREADY_JOINED = "قبلاً وارد شده‌ای ✅"
+LOBBY_CLOSED = "عضوگیری تمام شده است."
+LOBBY_FULL = "ظرفیت پر است!"
+NEED_START = "اول باید در پیوی ربات /start بزنی (دکمه‌ی پایین لابی)، بعد دوباره «شرکت» را بزن."
+NOT_ENOUGH_COINS = (
+    "سکه‌ات کم است! 😅\nموجودی: {balance}  ·  لازم: {needed}\nدر پیوی ربات /daily بزن و سکه‌ی رایگان بگیر."
+)
+FEE_NOT_ALLOWED = "این مبلغ ورودی در این گروه مجاز نیست."
+CANCEL_NOT_ALLOWED = "فقط سازنده‌ی مسابقه یا ادمین گروه می‌تواند لغو کند."
+NOTHING_TO_CANCEL = "مسابقه‌ی فعالی وجود ندارد."
+MATCH_CANCELLED = "❌ <b>مسابقه لغو شد</b>\n" + DIVIDER + "\n{reason}"
+REFUND_NOTE = "↩️ ورودی همه‌ی بازیکن‌ها برگشت."
 CANCEL_REASONS = {
-    "not_enough_players": "بازیکن کافی نیومد.",
-    "manual": "توسط سازنده/ادمین لغو شد.",
+    "not_enough_players": "بازیکن کافی نیامد.",
+    "manual": "سازنده یا ادمین مسابقه را لغو کرد.",
     "restart": "ربات ری‌استارت شد.",
-    "error": "یه خطای فنی پیش اومد.",
+    "error": "یک خطای فنی پیش آمد.",
     "admin": "توسط مدیریت لغو شد.",
     "no_content": "محتوای کافی برای این بازی موجود نیست.",
 }
-MATCH_STARTING = "🚀 <b>{title}</b> شروع شد!\n👥 {players}\n🏆 جایزه‌ی کل: <b>{pot}</b> " + COIN
+MATCH_STARTING = (
+    "🚀 <b>{title}</b> شروع شد!\n" + DIVIDER + "\n"
+    "👥 {players}\n"
+    "🏆 جایزه‌ی کل:  <b>{pot}</b> " + COIN + "\n\n"
+    "<i>موفق باشید!</i> 🍀"
+)
 
 # ------------------------------------------------------------------ نتیجه
-RESULT_HEADER = "🏁 <b>پایان {title}</b>\n\n"
-RESULT_LINE = "{medal} {name} — {score} امتیاز{prize}  <i>+{xp} XP</i>\n"
-RESULT_PRIZE = "  →  <b>+{prize}</b> " + COIN
-RESULT_FOOTER = "\n🏆 جایزه‌ی کل: {pot} " + COIN
-RESULT_FREE = "\n🎈 مسابقه‌ی دوستانه بود (بدون ورودی)."
+RESULT_HEADER = "🏁 <b>پایان {title}</b>\n" + DIVIDER + "\n"
+RESULT_LINE = "{medal} <b>{name}</b> — {score} امتیاز{prize}  <i>✨{xp} XP</i>\n"
+RESULT_PRIZE = "  ·  <b>+{prize}</b> " + COIN
+RESULT_FOOTER = DIVIDER + "\n🏆 جایزه‌ی کل: <b>{pot}</b> " + COIN
+RESULT_FREE = DIVIDER + "\n🎈 <i>مسابقه‌ی دوستانه بود (بدون ورودی).</i>"
 MEDALS = {1: "🥇", 2: "🥈", 3: "🥉"}
 MEDAL_OTHER = "▫️"
 
 # ------------------------------------------------------------------ متن مشترک بازی‌ها
-ROUND_HEADER = "🔸 راند {n} از {total}"
-ROUND_WON = "✅ {name} درست گفت: <b>{answer}</b>  (+{points})"
-ROUND_TIMEOUT = "⏰ وقت تموم شد! جواب: <b>{answer}</b>"
-MATH_QUESTION = "{header}\n\n🧮 <b>{problem} = ؟</b>"
+ROUND_HEADER = "🎯 <b>راند {n} از {total}</b>   {dots}"
+ROUND_WON = "✅ {name} درست گفت: <b>{answer}</b>   <b>+{points}</b>"
+ROUND_TIMEOUT = "⏰ <b>وقت تمام شد!</b>\nجواب: <b>{answer}</b>"
+MATH_QUESTION = "{header}\n<blockquote>🧮  <b>{problem} = ؟</b></blockquote>\n<i>اولین جواب درست امتیاز می‌گیرد.</i>"
 
 # ------------------------------------------------------------------ رتبه‌بندی
-TOP_HEADER = "🏆 <b>برترین‌های {scope}</b> — {period}\n\n"
-TOP_LINE = "{rank}. {badge}{name} — <b>{coins}</b> " + COIN + "  ({wins} برد)\n"
-TOP_EMPTY = "هنوز بازی‌ای ثبت نشده. با /game شروع کنید!"
+TOP_HEADER = "🏆 <b>برترین‌های {scope}</b>  ·  <i>{period}</i>\n" + DIVIDER + "\n"
+TOP_LINE = "{rank} {badge}<b>{name}</b>\n      {coins} " + COIN + "  ·  {wins} برد\n"
+TOP_EMPTY = "هنوز مسابقه‌ای ثبت نشده است. با /game شروع کنید!"
 TOP_SCOPE_GROUP = "گروه"
 TOP_SCOPE_GLOBAL = "کل ربات"
 TOP_PERIODS = {"day": "امروز", "week": "این هفته", "all": "کل"}
 WEEKLY_CHAMPION = (
-    "👑 <b>قهرمان هفته‌ی گروه</b>\n\n"
-    "{name} با <b>{coins}</b> " + COIN + " و {wins} برد!\n"
-    "جدول هفته از نو شروع شد. کی قهرمان بعدیه؟ /game"
+    "👑 <b>قهرمان هفته‌ی گروه</b>\n" + DIVIDER + "\n"
+    "{name} با <b>{coins}</b> " + COIN + " و {wins} برد!\n\n"
+    "<i>جدول هفته از نو شروع شد. قهرمان بعدی کیست؟</i> /game"
 )
 
 # ------------------------------------------------------------------ تنظیمات گروه
 SETTINGS_HEADER = (
-    "⚙️ <b>تنظیمات گروه</b>\n\n"
+    "⚙️ <b>تنظیمات گروه</b>\n" + DIVIDER + "\n"
     + COIN
     + " ورودی مجاز: {min} تا {max}\n"
     "⏳ زمان عضوگیری پیش‌فرض: {join} ثانیه\n"
-    "👥 ساخت بازی توسط همه: {users}\n"
-    "🎮 بازی‌های فعال: {enabled} از {total}"
+    "👥 ساخت مسابقه توسط همه: {users}\n"
+    "🎮 بازی‌های فعال: {enabled} از {total}\n\n"
+    "<i>روی هر دکمه بزن تا مقدارش عوض شود.</i>"
 )
 SETTINGS_GAMES_BTN = "🎮 بازی‌های فعال"
 SETTINGS_MIN_BTN = "حداقل ورودی: {v}"
 SETTINGS_MAX_BTN = "حداکثر ورودی: {v}"
 SETTINGS_JOIN_BTN = "زمان عضوگیری: {v} ثانیه"
-SETTINGS_USERS_BTN = "ساخت بازی توسط همه: {v}"
-SETTINGS_GAMES_HEADER = "🎮 <b>بازی‌های فعال گروه</b>\nروی هر بازی بزن تا روشن/خاموش بشه."
-SETTINGS_LAST_GAME = "حداقل یک بازی باید فعال بمونه."
+SETTINGS_USERS_BTN = "ساخت مسابقه توسط همه: {v}"
+SETTINGS_GAMES_HEADER = "🎮 <b>بازی‌های فعال گروه</b>\n<i>روی هر بازی بزن تا روشن یا خاموش شود.</i>"
+SETTINGS_LAST_GAME = "حداقل یک بازی باید فعال بماند."
 YES = "✅ بله"
 NO = "❌ نه"
 ON = "✅"
@@ -202,26 +252,28 @@ OFF = "▫️"
 
 # ------------------------------------------------------------------ فروشگاه
 SHOP_HEADER = (
-    "🛍 <b>فروشگاه</b>\nموجودی: <b>{coins}</b> " + COIN + "\n\n"
-    "آیتم‌ها فقط ظاهری‌ان و خریدشون قابل برگشت به سکه نیست."
+    "🛍 <b>فروشگاه</b>\n" + DIVIDER + "\n"
+    + COIN
+    + " موجودی: <b>{coins}</b>\n\n"
+    "<i>آیتم‌ها فقط ظاهری‌اند و خریدشان قابل برگشت نیست.</i>"
 )
 SHOP_KIND_BTN = {"title": "🏷 عنوان‌ها", "emoji": "😎 ایموجی‌ها", "frame": "🖼 قاب‌ها"}
 SHOP_ITEM_BTN = "{value} — {price} " + COIN
 SHOP_ITEM_OWNED_BTN = "{mark} {value}"
-SHOP_EMPTY = "فعلاً آیتمی توی این بخش نیست."
+SHOP_EMPTY = "فعلاً آیتمی در این بخش نیست."
 SHOP_CONFIRM = "خرید «{name}» ({value}) به قیمت <b>{price}</b> " + COIN + "؟\n⚠️ خرید قابل برگشت نیست."
 SHOP_CONFIRM_BTN = "✅ می‌خرم"
 SHOP_BOUGHT = "🎉 خریدی و فعال شد!"
 SHOP_EQUIPPED = "فعال شد ✅"
 SHOP_UNEQUIPPED = "غیرفعال شد."
-SHOP_NO_COINS = "سکه‌ت برای این آیتم کافی نیست."
+SHOP_NO_COINS = "سکه‌ات برای این آیتم کافی نیست."
 
 # ------------------------------------------------------------------ سوپرادمین
 GRANT_USAGE = "استفاده: /grant <آیدی عددی یا @username> <مقدار>"
 GRANT_OK = "✅ {amount} " + COIN + " به {name} داده شد. موجودی جدید: {balance}"
 GRANT_RECEIVED = "🎁 از طرف مدیریت <b>{amount}</b> " + COIN + " گرفتی!"
 GRANT_FAILED = "موجودی کاربر برای این کسر کافی نیست."
-USER_NOT_FOUND = "کاربر پیدا نشد (باید قبلاً ربات رو استارت کرده باشه)."
+USER_NOT_FOUND = "کاربر پیدا نشد (باید قبلاً ربات را استارت کرده باشد)."
 BAN_USAGE = "استفاده: /ban <آیدی عددی یا @username>"
 BAN_OK = "⛔️ {name} مسدود شد."
 UNBAN_OK = "✅ {name} آزاد شد."
@@ -229,7 +281,7 @@ BROADCAST_USAGE = "استفاده: /broadcast <متن>  (یا روی یک پیا
 BROADCAST_STARTED = "📣 ارسال به {count} کاربر شروع شد…"
 BROADCAST_DONE = "📣 ارسال تمام شد. موفق: {ok} — ناموفق: {failed}"
 STATS = (
-    "📊 <b>آمار ربات</b>\n\n"
+    "📊 <b>آمار ربات</b>\n" + DIVIDER + "\n"
     "👤 کاربران: {users}  (فعال امروز: {dau})\n"
     "👥 گروه‌های فعال: {groups}\n"
     "🎮 مسابقات امروز: {matches_today}  (کل: {matches})\n"
@@ -240,62 +292,68 @@ STATS = (
 
 # ------------------------------------------------------------------ آرکید (Mini App)
 ARCADE_RUNNING = (
-    "{emoji} <b>{title}</b>{variant} — مسابقه در جریانه!\n"
-    "🏆 جایزه‌ی کل: <b>{pot}</b> " + COIN + "   🎯 هر نفر {attempts} تلاش (بهترین امتیاز حسابه)\n\n"
-    "{board}\n\n"
-    "⏳ زمان باقی‌مانده: {minutes}:{seconds}{flash}"
+    "{emoji} <b>{title}</b>{variant}\n"
+    "<i>مسابقه در جریان است — بهترین امتیاز هر نفر حساب می‌شود.</i>\n"
+    + DIVIDER
+    + "\n{board}\n"
+    + DIVIDER
+    + "\n🏆 جایزه‌ی کل: <b>{pot}</b> " + COIN + "  ·  🎯 {attempts} تلاش\n"
+    "⏳ {bar}  <b>{minutes}:{seconds}</b>{flash}"
 )
-ARCADE_ROW = "{medal} {name} — <b>{score}</b>  <i>({used}/{total})</i>"
+ARCADE_ROW = "{medal} <b>{name}</b>  {score}   <i>({used} از {total})</i>"
 ARCADE_PLAY_BTN = "🎮 بازی کن"
 ARCADE_RECORD = "🔥 {name} رکورد زد: {score}!"
-ARCADE_PRACTICE = "🕹 <b>تمرین آزاد</b>\nبدون سکه، فقط برای رکورد شخصی. یه بازی انتخاب کن:"
-ARCADE_NOT_CONFIGURED = "بازی‌های آرکید هنوز روی این ربات راه‌اندازی نشده."
+ARCADE_PRACTICE = "🕹 <b>تمرین آزاد</b>\n<i>بدون سکه، فقط برای رکورد شخصی.</i>\n\nیک بازی انتخاب کن:"
+ARCADE_NOT_CONFIGURED = "بازی‌های آرکید هنوز روی این ربات راه‌اندازی نشده است."
 
 # ------------------------------------------------------------------ بازی‌های متنی
 NOT_A_PLAYER = "تو عضو این مسابقه نیستی."
 NOT_YOUR_TURN = "نوبت تو نیست!"
-HINT_FIRST_LETTER = "💡 راهنما: با «{letter}» شروع می‌شه"
+HINT_FIRST_LETTER = "💡 راهنما: با «{letter}» شروع می‌شود"
 
-ANAGRAM_QUESTION = "{header}\n\n🔀 این حروف رو مرتب کن:\n\n<b>{letters}</b>{hint}"
+ANAGRAM_QUESTION = "{header}\n\n🔀 این حروف را مرتب کن:\n<blockquote><b>{letters}</b></blockquote>{hint}"
 
-EMOJI_QUESTION = "{header}\n\n🤔 این ایموجی‌ها یعنی چی؟\n\n{emojis}{hint}"
-EMOJI_HINT = "\n\n💡 راهنما: {count} حرف، با «{letter}» شروع می‌شه"
+EMOJI_QUESTION = "{header}\n\n🤔 این ایموجی‌ها چه چیزی را نشان می‌دهند؟\n<blockquote>{emojis}</blockquote>{hint}"
+EMOJI_HINT = "\n💡 راهنما: {count} حرف، با «{letter}» شروع می‌شود"
 
 CHAIN_START = (
-    "🔗 <b>زنجیره‌ی کلمات</b>\n"
-    "هر کس باید کلمه‌ای بگه که با حرف آخر کلمه‌ی قبلی شروع بشه. کلمه‌ی تکراری قبول نیست.\n\n"
-    "ترتیب: {order}"
+    "🔗 <b>زنجیره‌ی کلمات</b>\n" + DIVIDER + "\n"
+    "هر نفر باید کلمه‌ای بگوید که با حرف آخر کلمه‌ی قبلی شروع شود. کلمه‌ی تکراری قبول نیست.\n\n"
+    "🔁 ترتیب: {order}"
 )
-CHAIN_TURN = "{prev}👉 نوبت {name}\nیه کلمه با «<b>{letter}</b>» بگو  ⏱ {seconds} ثانیه"
+CHAIN_TURN = "{prev}👉 نوبت <b>{name}</b>\nیک کلمه با «<b>{letter}</b>» بگو   ⏱ {seconds} ثانیه"
 CHAIN_FIRST_WORD = "کلمه‌ی شروع: <b>{word}</b>\n"
 CHAIN_ACCEPTED = "✅ {name}: <b>{word}</b>\n"
-CHAIN_NEW_LETTER = "(با «{old}» کلمه‌ای نمونده؛ حرف جدید انتخاب شد)\n"
-CHAIN_ELIMINATED = "⏰ {name} جا موند و حذف شد!\n"
-CHAIN_WRONG_LETTER = "{name}، کلمه باید با «{letter}» شروع بشه."
-CHAIN_USED = "{name}، «{word}» قبلاً گفته شده."
-CHAIN_INVALID = "{name}، «{word}» توی لیست کلمات نیست."
-CHAIN_WINNER = "🏆 {name} آخرین نفر باقی‌مونده‌ست!"
-CHAIN_LIMIT = "🤝 سقف نوبت‌ها پر شد؛ بازمانده‌ها مساوی شدن."
+CHAIN_NEW_LETTER = "<i>با «{old}» کلمه‌ای نمانده بود؛ حرف جدید انتخاب شد.</i>\n"
+CHAIN_ELIMINATED = "⏰ {name} جا ماند و حذف شد!\n"
+CHAIN_WRONG_LETTER = "{name}، کلمه باید با «{letter}» شروع شود."
+CHAIN_USED = "{name}، «{word}» قبلاً گفته شده است."
+CHAIN_INVALID = "{name}، «{word}» در فهرست کلمات نیست."
+CHAIN_WINNER = "🏆 {name} آخرین نفر باقی‌مانده است!"
+CHAIN_LIMIT = "🤝 سقف نوبت‌ها پر شد؛ بازمانده‌ها مساوی شدند."
 
 HANGMAN_BOARD = (
-    "{header}\n\n🪢 <b>{pattern}</b>\n\n"
-    "❤️ جان گروه: {lives}\n"
-    "❌ حرف‌های غلط: {wrong}\n\n"
-    "یه حرف بفرست (امتیاز کم) یا کل کلمه رو حدس بزن (امتیاز زیاد)!{note}"
+    "{header}\n<blockquote><b>{pattern}</b></blockquote>\n"
+    "❤️ جان گروه:   {lives}\n"
+    "❌ حرف‌های غلط:   {wrong}\n\n"
+    "<i>یک حرف بفرست (+۲) یا کل کلمه را حدس بزن (+۱۰).</i>{note}"
 )
-HANGMAN_LETTER_OK = "\n\n✅ {name} حرف «{letter}» رو پیدا کرد (+{points})"
+HANGMAN_LETTER_OK = "\n\n✅ {name} حرف «{letter}» را پیدا کرد (+{points})"
 HANGMAN_LETTER_BAD = "\n\n❌ {name}: «{guess}» نبود!"
-HANGMAN_SOLVED = "🎉 {name} کلمه رو گفت: <b>{word}</b>  (+{points})"
+HANGMAN_SOLVED = "🎉 {name} کلمه را گفت: <b>{word}</b>  (+{points})"
 HANGMAN_COMPLETED = "✅ کلمه کامل شد: <b>{word}</b>"
-HANGMAN_DEAD = "💀 جان گروه تموم شد! کلمه: <b>{word}</b>"
+HANGMAN_DEAD = "💀 جان گروه تمام شد! کلمه: <b>{word}</b>"
 
-QUIZ_QUESTION = "{header}\n\n❓ <b>{question}</b>\n\n⏱ {seconds} ثانیه — جواب سریع‌تر، امتیاز بیشتر"
-QUIZ_REVEAL = "{header}\n\n❓ <b>{question}</b>\n\n✅ جواب: <b>{answer}</b>\n{winners}"
-QUIZ_WINNERS = "🎯 درست گفتن: {names}"
+QUIZ_QUESTION = (
+    "{header}\n<blockquote>❓ <b>{question}</b></blockquote>\n"
+    "⏱ {seconds} ثانیه  ·  <i>جواب سریع‌تر، امتیاز بیشتر</i>"
+)
+QUIZ_REVEAL = "{header}\n<blockquote>❓ <b>{question}</b></blockquote>\n✅ جواب: <b>{answer}</b>\n{winners}"
+QUIZ_WINNERS = "🎯 درست گفتند: {names}"
 QUIZ_NO_WINNER = "😶 هیچ‌کس درست نگفت."
 QUIZ_SAVED = "جوابت ثبت شد ✅"
-QUIZ_ALREADY = "فقط یک بار می‌تونی جواب بدی."
-QUIZ_CLOSED = "این سوال تموم شده."
+QUIZ_ALREADY = "فقط یک بار می‌توانی جواب بدهی."
+QUIZ_CLOSED = "این سؤال تمام شده است."
 QUIZ_CATEGORIES = {
     "general": "🌍 عمومی",
     "freefire": "🔫 فری فایر",
@@ -305,22 +363,26 @@ QUIZ_CATEGORIES = {
     "mixed": "🎲 ترکیبی",
 }
 
-NUMBER_BOARD = "{header}\n\n🔢 یه عدد بین <b>{low}</b> و <b>{high}</b> انتخاب کردم. حدس بزن!{last}"
-NUMBER_HIGHER = "\n\n{name}: {guess} ⬆️ بزرگ‌تره"
-NUMBER_LOWER = "\n\n{name}: {guess} ⬇️ کوچیک‌تره"
+NUMBER_BOARD = (
+    "{header}\n<blockquote>🔢 عدد بین <b>{low}</b> و <b>{high}</b> است</blockquote>\n"
+    "<i>حدست را بفرست؛ ربات می‌گوید عدد بزرگ‌تر است یا کوچک‌تر.</i>{last}"
+)
+NUMBER_HIGHER = "\n\n{name}: {guess} ⬆️ عدد بزرگ‌تر است"
+NUMBER_LOWER = "\n\n{name}: {guess} ⬇️ عدد کوچک‌تر است"
 
-TYPING_CAPTION = "{header}\n⌨️ جمله‌ی داخل تصویر رو دقیق و سریع تایپ کن!  ⏱ {seconds} ثانیه"
-TYPING_RESULT = "⌨️ <b>نتیجه‌ی راند</b>\nجمله: {sentence}\n\n{lines}"
-TYPING_LINE = "{name}: دقت {accuracy}٪ — {seconds} ثانیه  (+{points})"
+TYPING_CAPTION = "{header}\n⌨️ جمله‌ی داخل تصویر را <b>دقیق و سریع</b> تایپ کن!   ⏱ {seconds} ثانیه"
+TYPING_RESULT = "⌨️ <b>نتیجه‌ی راند</b>\n<blockquote>{sentence}</blockquote>\n{lines}"
+TYPING_LINE = "▫️ <b>{name}</b> — دقت {accuracy}٪ · {seconds} ثانیه   <b>+{points}</b>"
 TYPING_NOBODY = "هیچ‌کس تایپ نکرد!"
 
 DICE_TURN = (
-    "{emoji} <b>{title}</b>\n\n{board}\n\n"
-    "👉 نوبت {name} — پرتاب {n} از {total}\n⏱ {seconds} ثانیه (بعدش خودم پرتاب می‌کنم)"
+    "{emoji} <b>{title}</b>\n" + DIVIDER + "\n{board}\n" + DIVIDER + "\n"
+    "👉 نوبت <b>{name}</b>  ·  پرتاب {n} از {total}\n"
+    "<i>⏱ {seconds} ثانیه وقت داری؛ بعد از آن ربات خودش به نام تو پرتاب می‌کند.</i>"
 )
-DICE_BOARD_LINE = "{name}: <b>{score}</b>"
+DICE_BOARD_LINE = "▫️ {name}   <b>{score}</b>"
 DICE_THROW_BTN = "{emoji} پرتاب"
-DICE_DONE = "{emoji} <b>{title}</b> تموم شد!\n\n{board}"
+DICE_DONE = "{emoji} <b>{title}</b> تمام شد!\n" + DIVIDER + "\n{board}"
 DICE_VARIANTS = {
     "dice": "🎲 تاس",
     "darts": "🎯 دارت",
@@ -329,9 +391,51 @@ DICE_VARIANTS = {
     "bowling": "🎳 بولینگ",
 }
 
-XO_BOARD = "⭕️❌ <b>دوز</b>\n\n❌ {x}\n⭕️ {o}\n\n{status}"
-XO_TURN = "👉 نوبت {name} ({mark})  ⏱ {seconds} ثانیه"
+XO_BOARD = "❌⭕️ <b>دوز</b>\n" + DIVIDER + "\n❌ {x}\n⭕️ {o}\n" + DIVIDER + "\n{status}"
+XO_TURN = "👉 نوبت <b>{name}</b> ({mark})   ⏱ {seconds} ثانیه"
 XO_WIN = "🏆 {name} برد!"
 XO_DRAW = "🤝 مساوی شد!"
-XO_TIMEOUT = "⏰ وقت {loser} تموم شد؛ {winner} برد!"
-XO_TAKEN = "این خونه پره!"
+XO_TIMEOUT = "⏰ وقت {loser} تمام شد؛ {winner} برد!"
+XO_TAKEN = "این خانه پر است!"
+
+# ------------------------------------------------------------------ شطرنج
+CHESS_CAPTION = "♟ <b>شطرنج</b>\n⚪️ {white}   ·   ⚫️ {black}\n" + DIVIDER + "\n{status}{last}"
+CHESS_TURN = "👉 نوبت <b>{name}</b> ({color})  ⏱ {seconds} ثانیه"
+CHESS_CHECK = "  ⚠️ <b>کیش!</b>"
+CHESS_LAST = "\n↩️ آخرین حرکت: <code>{move}</code>"
+CHESS_HINT = "\n<i>اول مهره، بعد خانه‌ی مقصد را از کیبورد پایین بزن.</i>"
+CHESS_DRAW_OFFER = "\n🤝 {name} پیشنهاد مساوی داده است؛ حریف می‌تواند قبول کند."
+CHESS_WHITE = "سفید"
+CHESS_BLACK = "سیاه"
+CHESS_RESIGN_BTN = "🏳 تسلیم"
+CHESS_DRAW_BTN = "🤝 مساوی"
+CHESS_PICK_OWN = "یکی از مهره‌های خودت را انتخاب کن."
+CHESS_NO_MOVES = "این مهره حرکت مجازی ندارد."
+CHESS_DRAW_SENT = "پیشنهاد مساوی ثبت شد ✅"
+CHESS_END_MATE = "🏆 <b>کیش و مات!</b> {name} برد."
+CHESS_END_RESIGN = "🏳 {loser} تسلیم شد؛ {winner} برد."
+CHESS_END_TIMEOUT = "⏰ وقت {loser} تمام شد؛ {winner} برد."
+CHESS_END_DRAW = "🤝 <b>مساوی</b> — {reason}"
+CHESS_DRAW_REASONS = {
+    "stalemate": "پات (حرکت مجاز نمانده)",
+    "insufficient": "مهره‌ی کافی برای مات نمانده",
+    "fifty": "قانون ۵۰ حرکت",
+    "repetition": "تکرار سه‌باره‌ی وضعیت",
+    "agreed": "با توافق دو بازیکن",
+    "limit": "سقف تعداد حرکت‌ها",
+}
+LOBBY_PLAYER = "{n}. {name}"
+MORE_PLAYERS = "<i>… و {n} نفر دیگر</i>"
+
+
+def progress_bar(fraction: float, width: int = 10) -> str:
+    """نوار پیشرفت متنی: ▰▰▰▱▱"""
+    fraction = max(0.0, min(1.0, fraction))
+    filled = round(fraction * width)
+    return "▰" * filled + "▱" * (width - filled)
+
+
+def round_dots(current: int, total: int) -> str:
+    if total > 12:
+        return ""
+    return "●" * current + "○" * max(0, total - current)

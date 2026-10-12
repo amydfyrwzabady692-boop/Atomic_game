@@ -8,10 +8,13 @@ import pytest
 from asgiref.sync import sync_to_async
 from django.conf import settings
 
+from bot import render
 from bot.handlers import admin as admin_handlers
 from bot.handlers import flow, group, group_settings, private
 from bot.handlers import shop as shop_handlers
 from bot.runner import MatchManager
+from bot.ui import style_of
+from core import texts
 from core.models import TelegramGroup, TelegramUser
 from core.redis import reset_clients
 from games.models import Match, MatchStatus
@@ -95,10 +98,14 @@ def make_update(app, tg_id, chat_id=None, chat_type="private", text="", name="ع
 
 def make_callback(app, tg_id, data, message_id, chat_id=GROUP_ID, chat_type="supergroup"):
     """یک کلیک دکمه‌ی اینلاین. جواب‌ها در ``update.answers`` و ویرایش‌ها در ``update.edits``."""
-    answers, edits, deleted = [], [], []
+    answers, edits, deleted, replies = [], [], [], []
 
     async def answer(text=None, show_alert=False, **kwargs):
         answers.append((text, show_alert))
+
+    async def reply_text(text, **kwargs):
+        replies.append({"text": text, **kwargs})
+        return SimpleNamespace(message_id=message_id + 9000)
 
     async def edit_message_text(text, **kwargs):
         edits.append({"text": text, **kwargs})
@@ -112,7 +119,7 @@ def make_callback(app, tg_id, data, message_id, chat_id=GROUP_ID, chat_type="sup
     query = SimpleNamespace(
         id=f"q{next(_ids)}",
         data=data,
-        message=SimpleNamespace(message_id=message_id, delete=delete),
+        message=SimpleNamespace(message_id=message_id, delete=delete, reply_text=reply_text),
         answer=answer,
         edit_message_text=edit_message_text,
         edit_message_reply_markup=edit_message_reply_markup,
@@ -124,7 +131,7 @@ def make_callback(app, tg_id, data, message_id, chat_id=GROUP_ID, chat_type="sup
         effective_message=query.message,
         callback_query=query,
     )
-    update.answers, update.edits, update.deleted = answers, edits, deleted
+    update.answers, update.edits, update.deleted, update.replies = answers, edits, deleted, replies
     context = SimpleNamespace(args=[], bot=app.bot, application=app, bot_data=app.bot_data)
     return update, context
 
@@ -176,7 +183,7 @@ async def test_daily_only_in_private_and_once_a_day(app):
 
     again, context = make_update(app, 31, text="/daily")
     await private.daily(again, context)
-    assert "امروز جایزه‌ت رو گرفتی" in again.replies[0]["text"]
+    assert "جایزه‌ی امروز را گرفته‌ای" in again.replies[0]["text"]
 
     in_group, context = make_update(app, 31, chat_id=GROUP_ID, chat_type="supergroup", text="/daily")
     await private.daily(in_group, context)
@@ -223,7 +230,7 @@ async def test_game_menu_flow_creates_lobby_and_only_creator_can_use_it(app):
     assert any("آرکید" in label for label in labels)
 
     stranger = await click(app, 62, "n:g:quick_math", menu_id)
-    assert stranger.answers[0][1] is True and "یکی دیگه" in stranger.answers[0][0]
+    assert stranger.answers[0][1] is True and "شخص دیگری" in stranger.answers[0][0]
 
     step = await click(app, 61, "n:g:quick_math", menu_id)
     assert "ورودی" in step.edits[-1]["text"]
@@ -258,7 +265,7 @@ async def test_game_menu_flow_creates_lobby_and_only_creator_can_use_it(app):
 
     # تا وقتی مسابقه فعال است منوی جدید باز نمی‌شود
     blocked, _ = await open_game_menu(app, 62)
-    assert "در جریانه" in blocked.replies[0]["text"]
+    assert "در جریان است" in blocked.replies[0]["text"]
     assert await sync_to_async(find_mismatches)() == []
 
 
@@ -446,5 +453,94 @@ async def test_commands_and_callbacks_are_rate_limited(app):
     too_fast = 0
     for _ in range(10):
         update = await click(app, 151, "top:a:week", 1, group.top_callback)
-        too_fast += any(text and "یواش" in text for text, _ in update.answers)
-    assert too_fast >= 5
+        too_fast += any(text == texts.TOO_FAST for text, _ in update.answers)
+    # حد ۴ کلیک در ثانیه است؛ تعداد دقیق ردشده‌ها به سرعت اجرای تست بستگی دارد
+    assert too_fast >= 1
+
+
+# ====================================================================== دکمه‌های رنگی، منوی پیوی و قوانین
+async def test_start_shows_a_coloured_menu_and_its_buttons_work(app):
+    first = await start_user(app, 201)
+    menu = buttons_of(first.replies[0]["reply_markup"])
+    by_data = {b.callback_data: b for b in menu if b.callback_data}
+    assert {"pm:daily", "pm:me", "pm:arcade", "pm:shop", "pm:invite", "pm:rules", "pm:help"} <= set(by_data)
+    assert style_of(by_data["pm:daily"]) == "success"
+    add_button = next(b for b in menu if b.url)
+    assert "startgroup" in add_button.url and style_of(add_button) == "primary"
+
+    async def press(data):
+        update, context = make_callback(app, 201, data, 1, chat_id=201, chat_type="private")
+        await private.menu_callback(update, context)
+        return update
+
+    assert "جایزه‌ی روزانه" in (await press("pm:daily")).replies[0]["text"]
+    assert "علی" in (await press("pm:me")).replies[0]["text"]
+    assert "راهنما" in (await press("pm:help")).replies[0]["text"]
+    assert "فروشگاه" in (await press("pm:shop")).replies[0]["text"]
+    assert "قوانین کلی" in (await press("pm:rules")).replies[0]["text"]
+    assert (await press("pm:nonsense")).replies == []
+    # همان دکمه‌ها در گروه کاری نمی‌کنند
+    update, context = make_callback(app, 201, "pm:daily", 1)
+    await private.menu_callback(update, context)
+    assert update.replies == []
+
+
+async def test_rules_command_lists_games_and_shows_each_games_rules(app):
+    await start_user(app, 211)
+    update, context = make_update(app, 211, chat_id=GROUP_ID, chat_type="supergroup", text="/rules")
+    await group.rules(update, context)
+    home = update.replies[0]
+    assert "قوانین کلی" in home["text"] and texts.COINS_NOTE in home["text"]
+    assert [b.callback_data for b in buttons_of(home["reply_markup"])] == ["rules:t", "rules:a"]
+
+    listing = await click(app, 211, "rules:t", 1, group.rules_callback)
+    labels = [b.text for b in buttons_of(listing.edits[-1]["reply_markup"])]
+    assert any("شطرنج" in label for label in labels) and not any("سیخ‌زن" in label for label in labels)
+    arcade = await click(app, 211, "rules:a", 1, group.rules_callback)
+    assert any("سیخ‌زن" in b.text for b in buttons_of(arcade.edits[-1]["reply_markup"]))
+
+    chess = await click(app, 211, "rules:g:chess", 1, group.rules_callback)
+    text = chess.edits[-1]["text"]
+    assert "قوانین شطرنج" in text and "۹۰ ثانیه" in text and "۲ بازیکن" in text
+    assert buttons_of(chess.edits[-1]["reply_markup"])[0].callback_data == "rules:t"
+    pins = await click(app, 211, "rules:g:arcade_pins", 1, group.rules_callback)
+    assert "قوانین سیخ‌زن" in pins.edits[-1]["text"] and "بهترین امتیازت" in pins.edits[-1]["text"]
+    unknown = await click(app, 211, "rules:g:nope", 1, group.rules_callback)
+    assert unknown.edits == []
+
+
+async def test_lobby_has_coloured_buttons_and_a_private_rules_popup(app):
+    await start_user(app, 221)
+    menu, _ = await open_game_menu(app, 221)
+    styles = {b.text: style_of(b) for b in buttons_of(menu.replies[0]["reply_markup"])}
+    assert styles[texts.CLOSE_BTN] == "danger" and "primary" in styles.values() and "success" in styles.values()
+
+    keyboard = render.lobby_keyboard(7, "test_bot", "chess")
+    cells = {b.callback_data or "url": b for b in buttons_of(keyboard)}
+    assert style_of(cells["j:7"]) == "success" and style_of(cells["x:7"]) == "danger"
+    assert style_of(cells["url"]) == "primary" and "rl:chess" in cells
+
+    popup = await click(app, 221, "rl:chess", 1, group.rules_alert_callback)
+    text, alert = popup.answers[0]
+    assert alert is True and len(text) <= 200 and "مهره" in text
+    silent = await click(app, 221, "rl:nope", 1, group.rules_alert_callback)
+    assert silent.answers == [(None, False)]
+
+
+async def test_buttons_of_a_finished_game_say_the_game_is_over(app):
+    await start_user(app, 231)
+    update, context = make_callback(app, 231, "g:999:m:0", 1)
+    await group.game_callback(update, context)
+    assert update.answers == [(texts.GAME_OVER, False)]
+
+
+async def test_shop_confirmation_escapes_item_names(app):
+    await start_user(app, 241)
+    item = await sync_to_async(ShopItem.objects.create)(
+        kind="title", name="<b>تند</b>", value="A&B", price=10, is_active=True
+    )
+    update = await click(app, 241, f"shop:i:{item.pk}", 1, shop_handlers.shop_callback)
+    text = update.edits[-1]["text"]
+    assert "&lt;b&gt;تند&lt;/b&gt;" in text and "A&amp;B" in text
+    confirm = buttons_of(update.edits[-1]["reply_markup"])[0]
+    assert style_of(confirm) == "success"

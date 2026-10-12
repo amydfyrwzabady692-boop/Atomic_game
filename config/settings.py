@@ -91,6 +91,10 @@ WEBHOOK_LISTEN = env("WEBHOOK_LISTEN", default="0.0.0.0")
 WEBHOOK_PORT = env.int("WEBHOOK_PORT", default=8443)
 WEBHOOK_SECRET = env("WEBHOOK_SECRET", default="")
 REDIS_URL = env("REDIS_URL", default="")  # خالی = fakeredis درون‌حافظه‌ای (فقط توسعه/تست)
+# دکمه‌های رنگی اینلاین (Bot API 9.4)؛ اگر به هر دلیلی مشکل‌ساز شد خاموشش کنید
+BUTTON_STYLES = env.bool("BUTTON_STYLES", default=True)
+# چند به‌روزرسانی هم‌زمان پردازش شود (ترتیب پیام‌های هر چت همیشه حفظ می‌شود)
+BOT_CONCURRENT_UPDATES = env.int("BOT_CONCURRENT_UPDATES", default=32)
 
 # ---------------------------------------------------------------- Mini App
 MINIAPP_SHORT_NAME = env("MINIAPP_SHORT_NAME", default="arcade")

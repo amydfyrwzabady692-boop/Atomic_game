@@ -46,6 +46,8 @@ class ArcadeSimulator:
     emoji: ClassVar[str] = "🕹"
     description_fa: ClassVar[str] = ""
     howto_fa: ClassVar[str] = ""
+    # قوانین کوتاه بازی (کنترل، امتیاز، پایان)؛ در صفحه‌ی شروع مینی‌اپ و دستور /rules نشان داده می‌شود
+    rules_fa: ClassVar[list[str]] = []
     category: ClassVar[str] = "skill"  # speed | skill | stage
     suggested_minutes: ClassVar[int] = 5
     variant_title_fa: ClassVar[str] = ""

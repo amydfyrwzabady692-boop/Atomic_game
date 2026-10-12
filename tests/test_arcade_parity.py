@@ -37,6 +37,30 @@ def test_every_game_has_core_js_renderer_and_fixtures(key):
 
 
 @pytest.mark.parametrize("key", KEYS)
+def test_renderer_follows_the_fast_drawing_rules(key):
+    """رندر هر بازی پس‌زمینه‌ی خودش را از اسپرایت کش‌شده می‌کشد و سایه‌ی زنده‌ی بوم (که روی گوشی
+    فریم می‌اندازد) در هیچ فریمی استفاده نمی‌شود."""
+    source = (STATIC / key / "render.js").read_text(encoding="utf-8")
+    assert f'registerRenderer("{key}"' in source
+    assert "ownBackground: true" in source
+    assert "env.scene(" in source or "env.sprite(" in source
+    assert "env.glow(" not in source and "shadowBlur" not in source
+
+
+def test_app_page_loads_the_art_kit_before_the_shell():
+    template = (ROOT / "arcade" / "templates" / "arcade" / "app.html").read_text(encoding="utf-8")
+    assert (STATIC / "common" / "art.js").is_file()
+    assert template.index("common/art.js") < template.index("common/icons.js") < template.index("common/shell.js")
+
+
+@pytest.mark.parametrize("key", KEYS)
+def test_every_game_has_a_drawn_menu_icon(key):
+    """منو و صفحه‌ی شروع برای هر بازی یک نماد تصویری دارند (نه فقط ایموجی)."""
+    icons = (STATIC / "common" / "icons.js").read_text(encoding="utf-8")
+    assert f"      {key}: function (c) {{" in icons
+
+
+@pytest.mark.parametrize("key", KEYS)
 def test_python_simulator_matches_fixtures(key):
     sim = all_simulators()[key]
     for i, case in enumerate(load_cases(key)):

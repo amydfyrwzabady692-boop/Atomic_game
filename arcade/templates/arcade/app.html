@@ -8,7 +8,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E🎮%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
-<link rel="stylesheet" href="{% static 'arcade/common/app.css' %}">
+<link rel="stylesheet" href="{% static 'arcade/common/app.css' %}?v={{ version }}">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -27,7 +27,7 @@
 
 <section id="screen-menu" class="screen hidden">
   <h1>🕹 تمرین آزاد</h1>
-  <p class="muted">بدون سکه؛ فقط برای رکورد شخصی</p>
+  <p class="muted">بدون سکه؛ فقط برای رکورد شخصی. یک بازی را انتخاب کن.</p>
   <div id="menu-list" class="menu-list"></div>
 </section>
 
@@ -35,21 +35,23 @@
   <div class="card">
     <div class="game-emoji" id="start-emoji"></div>
     <h1 id="start-title"></h1>
-    <div class="howto"><span class="tap-hint" aria-hidden="true">👆</span><p id="start-howto"></p></div>
+    <ul class="rules" id="start-rules" aria-label="قوانین بازی"></ul>
     <div class="stats" id="start-stats"></div>
-    <button id="start-btn" class="btn primary" type="button">شروع</button>
+    <button id="start-btn" class="btn go" type="button"><span class="btn-icon" aria-hidden="true">▶</span>شروع بازی</button>
     <p class="muted small" id="start-note"></p>
   </div>
 </section>
 
 <section id="screen-over" class="screen hidden">
   <div class="card">
+    <div id="confetti" aria-hidden="true"></div>
+    <div class="badge hidden" id="over-badge">🏆 رکورد جدید!</div>
     <p class="muted" id="over-label">امتیاز تو</p>
     <div class="big-score" id="over-score">۰</div>
     <div class="stats" id="over-stats"></div>
     <p class="muted small" id="over-note"></p>
-    <button id="again-btn" class="btn primary" type="button">دوباره</button>
-    <button id="close-btn" class="btn" type="button">برگشت به گروه</button>
+    <button id="again-btn" class="btn primary" type="button"><span class="btn-icon" aria-hidden="true">↻</span>دوباره بازی کن</button>
+    <button id="close-btn" class="btn violet" type="button">برگشت به گروه</button>
   </div>
 </section>
 
@@ -57,7 +59,7 @@
   <div class="card">
     <div class="game-emoji">😕</div>
     <p id="error-text"></p>
-    <button id="error-close-btn" class="btn" type="button">بستن</button>
+    <button id="error-close-btn" class="btn danger" type="button">بستن</button>
   </div>
 </section>
 
@@ -70,11 +72,14 @@ window.ARCADE_BOOT = {
   apiBase: "{% url 'arcade:app' %}api/",
   playBase: "{% url 'arcade:app' %}play/",
   devAuth: {{ dev_auth|yesno:"true,false" }},
+  version: "{{ version }}",
   games: JSON.parse(document.getElementById("games-data").textContent)
 };
 </script>
-<script src="{% static 'arcade/common/registry.js' %}"></script>
-<script src="{% static 'arcade/common/rng.js' %}"></script>
-<script src="{% static 'arcade/common/shell.js' %}"></script>
+<script src="{% static 'arcade/common/registry.js' %}?v={{ version }}"></script>
+<script src="{% static 'arcade/common/rng.js' %}?v={{ version }}"></script>
+<script src="{% static 'arcade/common/art.js' %}?v={{ version }}"></script>
+<script src="{% static 'arcade/common/icons.js' %}?v={{ version }}"></script>
+<script src="{% static 'arcade/common/shell.js' %}?v={{ version }}"></script>
 </body>
 </html>

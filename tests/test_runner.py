@@ -107,7 +107,7 @@ async def test_lobby_without_enough_players_is_cancelled_and_refunded():
     await app.job_queue.fire("lobby_close")
     assert await match_status(active.match_id) == MatchStatus.CANCELLED
     assert await coins_of(users) == [1000, 1000, 1000]
-    assert "بازیکن کافی نیومد" in app.bot.all_text(CHAT_ID)
+    assert "بازیکن کافی نیامد" in app.bot.all_text(CHAT_ID)
     assert CHAT_ID not in manager.active
     assert await sync_to_async(find_mismatches)() == []
 
@@ -253,3 +253,39 @@ async def test_watchdog_stops_lobby_cancelled_from_admin_panel():
     assert "توسط مدیریت لغو شد" in text and "برگشت" in text
     # دوباره چیزی برنمی‌گردد
     assert await sync_to_async(CoinTransaction.objects.filter(type=TxType.REFUND).count)() == 2
+
+
+async def test_very_long_names_never_break_the_start_message():
+    group, users = await setup_world(n_users=3, coins=0)
+    for user in users:
+        user.first_name = "ن" * 120
+        await sync_to_async(user.save)()
+    app = FakeApplication()
+    manager = MatchManager(app)
+    active = await open_lobby(manager, group, users[0], fee=0, split=(100,))
+    for user in users:
+        await manager.join(active, user)
+    await app.job_queue.fire("lobby_close")
+    assert active.phase == "running"
+    assert all(len(player.name) <= 24 for player in active.players_by_tg.values())
+    started = next(e["text"] for e in app.bot.edits if e["text"] and "شروع شد" in e["text"])
+    assert len(started) < 400 and "…" in started
+
+
+async def test_game_buttons_carry_their_colour_and_match_prefix():
+    from games.engine.base import DANGER, Button
+
+    group, users = await setup_world(n_users=2, coins=0)
+    app = FakeApplication()
+    manager = MatchManager(app)
+    active = await open_lobby(manager, group, users[0], fee=0, split=(100,))
+    for user in users:
+        await manager.join(active, user)
+    await app.job_queue.fire("lobby_close")
+    markup = active.ctx._markup([[Button("قرمز", "m:1", DANGER), ("ساده", "m:2")]])
+    red, plain = markup.to_dict()["inline_keyboard"][0]
+    assert red == {"text": "قرمز", "callback_data": f"g:{active.match_id}:m:1", "style": "danger"}
+    assert plain == {"text": "ساده", "callback_data": f"g:{active.match_id}:m:2"}
+    lobby = app.bot.sent[0]["reply_markup"].to_dict()["inline_keyboard"]
+    assert lobby[0][0]["style"] == "success" and lobby[0][1]["style"] == "danger"
+    assert lobby[1][0]["callback_data"] == "rl:quick_math"

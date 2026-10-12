@@ -6,17 +6,19 @@
 import json
 
 from django.conf import settings
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from core import texts
 from core.models import TelegramGroup, TelegramUser
 from core.redis import get_redis
 from core.texts import fa_num
+from games import config as game_config
 from games.catalog import ARCADE_CATEGORIES, GameInfo, catalog
 from games.engine.services import MatchError
 
-from .. import render
+from .. import render, ui
+from ..db import db
 from ..tg import tg_call
 from ..users import ensure_group, is_group_admin
 from .common import answer, callback, command, manager_of, reply
@@ -26,6 +28,7 @@ STEPS = ["variant", "fee", "split", "window", "join"]
 
 ERROR_TEXTS = {
     "active_match_exists": texts.ACTIVE_MATCH_EXISTS,
+    "game_disabled": texts.GAME_DISABLED,
     "fee_not_allowed": texts.FEE_NOT_ALLOWED,
     "lobby_closed": texts.LOBBY_CLOSED,
     "lobby_full": texts.LOBBY_FULL,
@@ -56,8 +59,8 @@ async def _save_draft(chat_id: int, message_id: int, draft: dict) -> None:
     await get_redis().set(_draft_key(chat_id, message_id), json.dumps(draft), ex=DRAFT_TTL)
 
 
-def _btn(text: str, data: str) -> InlineKeyboardButton:
-    return InlineKeyboardButton(text, callback_data=data)
+def _btn(text: str, data: str, style: str = ""):
+    return ui.button(text, data, style=style)
 
 
 def _rows(buttons: list, per_row: int) -> list[list]:
@@ -71,18 +74,20 @@ def enabled_games(group: TelegramGroup) -> dict[str, GameInfo]:
 # ------------------------------------------------------------------ صفحه‌ها
 def main_menu(group: TelegramGroup):
     games = enabled_games(group)
-    text_games = [_btn(f"{g.emoji} {g.title_fa}", f"n:g:{g.key}") for g in games.values() if not g.is_arcade]
+    text_games = [
+        _btn(f"{g.emoji} {g.title_fa}", f"n:g:{g.key}", ui.PRIMARY) for g in games.values() if not g.is_arcade
+    ]
     rows = _rows(text_games, 2)
     for category, label in ARCADE_CATEGORIES.items():
         if any(g.is_arcade and g.category == category for g in games.values()):
-            rows.append([_btn(texts.ARCADE_BTN.format(category=label), f"n:c:{category}")])
-    rows.append([_btn(texts.CLOSE_BTN, "n:x")])
+            rows.append([_btn(texts.ARCADE_BTN.format(category=label), f"n:c:{category}", ui.SUCCESS)])
+    rows.append([_btn(texts.CLOSE_BTN, "n:x", ui.DANGER)])
     return texts.GAME_MENU, InlineKeyboardMarkup(rows)
 
 
 def arcade_menu(group: TelegramGroup, category: str):
     games = [g for g in enabled_games(group).values() if g.is_arcade and g.category == category]
-    rows = _rows([_btn(f"{g.emoji} {g.title_fa}", f"n:g:{g.key}") for g in games], 2)
+    rows = _rows([_btn(f"{g.emoji} {g.title_fa}", f"n:g:{g.key}", ui.SUCCESS) for g in games], 2)
     rows.append([_btn(texts.BACK_BTN, "n:m")])
     label = ARCADE_CATEGORIES.get(category, "")
     return texts.GAME_MENU_ARCADE.format(category=label), InlineKeyboardMarkup(rows)
@@ -112,18 +117,26 @@ def step_screen(step: str, draft: dict, info: GameInfo, group: TelegramGroup):
     common = {"emoji": info.emoji, "title": info.title_fa, "description": info.description_fa}
     if step == "variant":
         text = texts.CHOOSE_VARIANT.format(variant_title=info.variant_title_fa, **common)
-        buttons = _rows([_btn(label, f"n:v:{value}") for value, label in info.variants.items()], 2)
+        buttons = _rows([_btn(label, f"n:v:{value}", ui.PRIMARY) for value, label in info.variants.items()], 2)
     elif step == "fee":
         text = texts.CHOOSE_FEE.format(**common)
         fees = [f for f in settings.ENTRY_FEE_CHOICES if group.fee_allowed(f)] or [group.min_entry]
-        buttons = _rows([_btn(render.fee_label(f), f"n:f:{f}") for f in fees], 3)
+        # رایگان سبز، ورودی‌های سکه‌ای آبی
+        buttons = _rows([_btn(render.fee_label(f), f"n:f:{f}", ui.PRIMARY if f else ui.SUCCESS) for f in fees], 3)
     elif step == "split":
         text = texts.CHOOSE_SPLIT.format(**common)
-        buttons = _rows([_btn(texts.SPLIT_LABELS[key], f"n:s:{key}") for key in settings.PRIZE_SPLITS], 2)
+        buttons = _rows([_btn(texts.SPLIT_LABELS[key], f"n:s:{key}", ui.PRIMARY) for key in settings.PRIZE_SPLITS], 2)
     elif step == "window":
         text = texts.CHOOSE_WINDOW.format(suggested=fa_num(info.suggested_minutes), **common)
         buttons = [
-            [_btn(texts.MINUTES_BTN.format(n=fa_num(m)), f"n:w:{m}") for m in settings.PLAY_WINDOW_CHOICES]
+            [
+                _btn(
+                    ("⭐ " if m == info.suggested_minutes else "") + texts.MINUTES_BTN.format(n=fa_num(m)),
+                    f"n:w:{m}",
+                    ui.SUCCESS if m == info.suggested_minutes else ui.PRIMARY,
+                )
+                for m in settings.PLAY_WINDOW_CHOICES
+            ]
         ]
     else:
         text = texts.CHOOSE_JOIN_TIME.format(**common)
@@ -132,6 +145,7 @@ def step_screen(step: str, draft: dict, info: GameInfo, group: TelegramGroup):
                 _btn(
                     ("⭐ " if s == group.default_join_seconds else "") + texts.SECONDS_BTN.format(n=fa_num(s)),
                     f"n:t:{s}",
+                    ui.SUCCESS if s == group.default_join_seconds else ui.PRIMARY,
                 )
                 for s in settings.JOIN_SECONDS_CHOICES
             ]
@@ -152,6 +166,7 @@ async def game(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Telegra
     if not group.allow_user_created_games and not await is_group_admin(context.bot, chat.id, user.tg_id):
         await reply(update, texts.USERS_CANNOT_CREATE)
         return
+    await db(game_config.reload)()
     if not enabled_games(group):
         await reply(update, texts.NO_GAMES_ENABLED)
         return

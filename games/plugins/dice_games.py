@@ -2,7 +2,7 @@ from html import escape
 
 from core import texts
 from core.textutils import fa_num
-from games.engine.base import BaseGame, IncomingCallback
+from games.engine.base import SUCCESS, BaseGame, Button, IncomingCallback
 from games.engine.registry import register_game
 
 # variant → (ایموجی تلگرام، تابع تبدیل مقدار دایس به امتیاز)
@@ -13,6 +13,8 @@ DICE_KINDS = {
     "basket": ("🏀", lambda v: 1 if v >= 4 else 0),  # ۴ و ۵ یعنی توپ داخل سبد
     "football": ("⚽", lambda v: 1 if v >= 3 else 0),  # ۳ تا ۵ یعنی گل
 }
+# بیشترین مقدار دایس هر ایموجی در تلگرام
+DICE_MAX = {"🎲": 6, "🎯": 6, "🎳": 6, "🏀": 5, "⚽": 5}
 
 
 @register_game
@@ -26,7 +28,13 @@ class DiceGame(BaseGame):
     description_fa = "نوبتی دکمه‌ی «پرتاب» را بزن تا ربات به نام تو پرتاب کند. جمع امتیاز چند پرتاب ملاک است."
     min_players = 2
     max_players = 8
+    players_ceiling = 12
     rounds = 3  # تعداد پرتاب هر بازیکن
+    rules_fa = [
+        "به‌نوبت دکمه‌ی «پرتاب» را بزن؛ ربات به نام تو پرتاب می‌کند.",
+        "هر نفر {rounds} پرتاب دارد و جمع امتیازها حساب می‌شود.",
+        "اگر تا {turn_seconds} ثانیه نزنی، ربات خودش پرتاب می‌کند.",
+    ]
     turn_seconds = 20
     settle_seconds = 4  # صبر برای تمام شدن انیمیشن دایس
     variant_title_fa = "نوع بازی"
@@ -79,7 +87,7 @@ class DiceGame(BaseGame):
             total=fa_num(self.total_rounds),
             seconds=fa_num(self.turn_seconds),
         )
-        buttons = [[(texts.DICE_THROW_BTN.format(emoji=self.dice_emoji), f"t:{self.turn}")]]
+        buttons = [[Button(texts.DICE_THROW_BTN.format(emoji=self.dice_emoji), f"t:{self.turn}", SUCCESS)]]
         if self.message_id:
             await self.ctx.edit(self.message_id, text, buttons, urgent=True)
         else:
@@ -103,6 +111,9 @@ class DiceGame(BaseGame):
         self.waiting = False
         self.ctx.cancel_timer("turn")
         value = await self.ctx.send_dice(self.dice_emoji)
+        if not value:
+            # تلگرام دایس را نفرستاد (مثلاً محدودیت نرخ): بازیکن نباید صفر بگیرد، پس ربات خودش قرعه می‌کشد
+            value = self.ctx.rng.randint(1, DICE_MAX.get(self.dice_emoji, 6))
         self.add_score(self.current.user_id, self.to_points(value))
         self.turn += 1
         self.ctx.set_timer("settle", self.settle_seconds, self.next_round)

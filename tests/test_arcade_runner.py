@@ -104,7 +104,7 @@ async def test_arcade_match_window_live_board_and_payout():
     remaining = (match.play_deadline - timezone.now()).total_seconds()
     assert 170 < remaining <= 180
     board = app.bot.sent[-1]
-    assert "مسابقه در جریانه" in board["text"]
+    assert "مسابقه در جریان است" in board["text"]
     url = board["reply_markup"].inline_keyboard[0][0].url
     # در گروه دکمه‌ی web_app کار نمی‌کند؛ لینک مستقیم مینی‌اپ با توکن مسابقه
     assert url == f"https://t.me/test_bot/arcade?startapp={match.token}"

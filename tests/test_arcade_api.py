@@ -56,6 +56,22 @@ def backdate(session_id, ms):
 
 
 # ====================================================================== initData
+def test_site_root_redirects_to_the_arcade_menu(client):
+    response = client.get("/")
+    assert response.status_code == 302 and response["Location"] == "/arcade/"
+    assert client.get("/arcade/").status_code == 200
+
+
+def test_app_page_gives_every_game_its_rules(client):
+    games = client.get("/arcade/").context["games"]
+    assert len(games) == 14
+    for game in games:
+        assert len(game["rules"]) == 3 and all(isinstance(line, str) and line for line in game["rules"])
+        assert game["howto"]
+    page = client.get("/arcade/play/flappy/").content.decode()
+    assert 'id="start-rules"' in page and "شروع بازی" in page
+
+
 def test_valid_init_data_accepted(make_user):
     user = make_user()
     data = validate_init_data(init_data_for(user, start_param="abc"))

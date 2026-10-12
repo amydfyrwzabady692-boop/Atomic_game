@@ -25,9 +25,14 @@ def spawn(state: dict) -> None:
 class StackSimulator(ArcadeSimulator):
     key = "stack"
     title_fa = "برج‌ساز"
-    emoji = "🧱"
+    emoji = "🗼"
     description_fa = "بلوک‌ها را دقیق روی هم بینداز؛ هر چه بیرون بزند بریده می‌شود."
     howto_fa = "وقتی بلوک دقیقاً بالای برج است تپ کن."
+    rules_fa = [
+        "وقتی طبقه دقیقاً بالای برج است تپ کن.",
+        "هر طبقه امتیاز دارد؛ چیدن دقیقِ پشت‌سرهم امتیاز بیشتری می‌دهد.",
+        "اگر طبقه کاملاً بیرون بیفتد بازی تمام می‌شود.",
+    ]
     category = "skill"
     suggested_minutes = 3
     TICK_MS = 16

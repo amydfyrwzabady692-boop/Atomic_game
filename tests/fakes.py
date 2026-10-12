@@ -66,10 +66,13 @@ class FakeContext:
     async def edit(self, message_id, text, buttons=None, urgent=False):
         self.edits.append({"id": message_id, "text": text, "buttons": buttons})
 
-    async def send_photo(self, image, caption=""):
+    async def send_photo(self, image, caption="", buttons=None):
         self._msg_id += 1
-        self.sent.append({"id": self._msg_id, "photo": image, "text": caption, "buttons": None})
+        self.sent.append({"id": self._msg_id, "photo": image, "text": caption, "buttons": buttons})
         return self._msg_id
+
+    async def edit_photo(self, message_id, image, caption="", buttons=None):
+        self.edits.append({"id": message_id, "photo": image, "text": caption, "buttons": buttons})
 
     async def send_dice(self, emoji):
         value = self.dice_values.pop(0) if self.dice_values else 3

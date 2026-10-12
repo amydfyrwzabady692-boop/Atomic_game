@@ -4,23 +4,41 @@ from html import escape
 
 from django.conf import settings
 from django.utils import timezone
-from telegram import Update
+from telegram import InlineKeyboardMarkup, Update
 from telegram.constants import ChatType
 from telegram.ext import ContextTypes
 
 from core import texts
 from core.models import TelegramUser
 from core.texts import fa_num
+from core.textutils import fa_date
 from games.catalog import catalog
 from leaderboard.progress import check_progress_achievements, xp_for_level
 from leaderboard.queries import profile_stats
 from wallet import economy
 from wallet.models import CoinTransaction, TxType
 
-from .. import render
+from .. import render, ui
 from ..db import db
 from ..tg import tg_call
-from .common import command, reply
+from .common import callback, command, reply
+
+
+def main_menu(context) -> InlineKeyboardMarkup:
+    """منوی اصلی پیوی: هر دکمه همان کار دستور هم‌نامش را می‌کند."""
+    add_link = f"https://t.me/{render.bot_username(context)}?startgroup=true"
+    return InlineKeyboardMarkup(
+        [
+            [ui.button(texts.MENU_ADD_BTN, url=add_link, style=ui.PRIMARY)],
+            [
+                ui.button(texts.MENU_DAILY_BTN, "pm:daily", style=ui.SUCCESS),
+                ui.button(texts.MENU_PROFILE_BTN, "pm:me"),
+            ],
+            [ui.button(texts.MENU_ARCADE_BTN, "pm:arcade"), ui.button(texts.MENU_SHOP_BTN, "pm:shop")],
+            [ui.button(texts.MENU_INVITE_BTN, "pm:invite"), ui.button(texts.MENU_RULES_BTN, "pm:rules")],
+            [ui.button(texts.MENU_HELP_BTN, "pm:help")],
+        ]
+    )
 
 
 @db
@@ -57,7 +75,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Telegr
         text = texts.START_BACK.format(name=name, coins=fa_num(user.coins))
     if payload == "join":
         text += "\n\n" + texts.START_JOIN_HINT
-    await reply(update, text)
+    await reply(update, text, main_menu(context))
 
 
 @command()
@@ -65,8 +83,31 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Tel
     await reply(update, texts.HELP_PRIVATE)
 
 
+@callback
+async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser, query):
+    """دکمه‌های منوی پیوی؛ هر کدام همان handler دستور متناظر را (بدون بررسی دوباره‌ی نرخ) اجرا می‌کند."""
+    from . import arcade as arcade_handlers
+    from . import group as group_handlers
+    from . import shop as shop_handlers
+
+    if update.effective_chat.type != ChatType.PRIVATE:
+        return
+    actions = {
+        "daily": daily,
+        "me": me,
+        "invite": invite,
+        "help": help_cmd,
+        "shop": shop_handlers.shop,
+        "arcade": arcade_handlers.arcade,
+        "rules": group_handlers.rules,
+    }
+    handler = actions.get(query.data.split(":", 1)[1])
+    if handler is not None:
+        await handler.__wrapped__(update, context, user)
+
+
 def profile_text(user: TelegramUser, stats: dict) -> str:
-    games = catalog()
+    games = catalog(include_disabled=True)
     best = games.get(stats["best_game"]) if stats["best_game"] else None
     decor = stats["decor"]
     win_rate = round(user.wins * 100 / user.games_played) if user.games_played else 0
@@ -170,11 +211,10 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Tele
     labels = dict(TxType.choices)
     text = texts.HISTORY_HEADER
     for tx in rows:
-        local = timezone.localtime(tx.created_at)
         text += texts.HISTORY_LINE.format(
             sign="🟢 +" if tx.amount >= 0 else "🔴 −",
             amount=fa_num(abs(tx.amount)),
             type=labels.get(tx.type, tx.type),
-            date=texts.fa_digits(local.strftime("%m/%d %H:%M")),
+            date=fa_date(timezone.localtime(tx.created_at)),
         )
     await reply(update, text)
