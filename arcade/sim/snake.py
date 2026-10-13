@@ -25,7 +25,7 @@ def place_food(state: dict) -> bool:
 
 
 def step_every(foods: int) -> int:
-    return max(4, 9 - foods // 4)
+    return max(3, 7 - foods // 3)
 
 
 @register_simulator

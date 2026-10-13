@@ -9,9 +9,9 @@ LIVES = 3
 
 
 def new_zone(state: dict) -> None:
-    w = max(700, 2600 - state["level"] * 80)
+    w = max(550, 2000 - state["level"] * 90)
     state["zone"] = {"s": state["rng"].range(300, BAR - 300 - w), "w": w}
-    state["speed"] = min(330, 90 + state["level"] * 7)
+    state["speed"] = min(380, 120 + state["level"] * 9)
 
 
 @register_simulator

@@ -9,15 +9,15 @@ GRAVITY, JUMP, MAX_VY = 7, -105, 200
 
 
 def spacing_for(score: int) -> int:
-    return max(1700, 2300 - score * 12)
+    return max(1500, 2100 - score * 15)
 
 
 def gap_for(score: int) -> int:
-    return max(1350, 1900 - score * 15)
+    return max(1250, 1650 - score * 18)
 
 
 def speed_for(score: int) -> int:
-    return 26 + min(score, 60) // 5
+    return 30 + min(score, 60) // 4
 
 
 @register_simulator

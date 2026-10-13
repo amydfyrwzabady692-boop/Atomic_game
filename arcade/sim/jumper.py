@@ -17,12 +17,12 @@ def generate(state: dict) -> None:
     k = state["made"]
     state["made"] += 1
     rng = state["rng"]
-    gap = 500 + min(k, 120) * 4 + rng.int(180)
+    gap = 550 + min(k, 120) * 5 + rng.int(150)
     x = (state["lastX"] + rng.int(2 * MAX_SHIFT + 1) - MAX_SHIFT) % WIDTH
     state["lastX"] = x
     r = rng.int(100)
     lvl = min(k // 25, 6)
-    kind = 1 if r < 12 + lvl * 4 else 2 if r < 22 + lvl * 8 else 0
+    kind = 1 if r < 16 + lvl * 5 else 2 if r < 28 + lvl * 9 else 0
     s = rng.int(100)
     phase = rng.int(240)
     state["topY"] += gap
@@ -32,7 +32,7 @@ def generate(state: dict) -> None:
             "x": x,
             "w": PLAT_W,
             "type": kind,
-            "spring": kind == 0 and s < 8,
+            "spring": kind == 0 and s < 5,
             "phase": phase,
             "alive": True,
         }

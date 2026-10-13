@@ -10,7 +10,7 @@ from .rng import MASK, Mulberry32
 WIDTH, HEIGHT = 3600, 6400
 COLS, ROWS = 8, 8
 BRICK_W, BRICK_H, STEP_X, STEP_Y, LEFT, TOP = 420, 200, 444, 224, 36, 900
-PADDLE_Y, PADDLE_W, PADDLE_WIDE = 5700, 760, 1100
+PADDLE_Y, PADDLE_W, PADDLE_WIDE = 5700, 660, 1000
 BALL_R = 70
 MAX_VX = 44
 ATTACH_TICKS, PAUSE_TICKS, WIDE_TICKS = 45, 40, 600
@@ -30,7 +30,7 @@ def paddle_width(state: dict) -> int:
 
 
 def ball_speed(state: dict) -> int:
-    return 58 + min(state["level"], 8) * 3
+    return 66 + min(state["level"], 8) * 4
 
 
 def clamp_paddle(state: dict) -> None:

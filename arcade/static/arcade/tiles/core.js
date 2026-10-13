@@ -17,7 +17,7 @@
   function ensureRows(state) {
     while (state.cols.length < state.hits + 8) state.cols.push(state.rng.int(4));
   }
-  function speedFor(hits) { return Math.min(130, 40 + idiv(hits * 2, 5)); }
+  function speedFor(hits) { return Math.min(150, 52 + idiv(hits * 3, 5)); }
   /* فاصله‌ی لبه‌ی پایین ردیف k از پایین صفحه */
   function rowBottom(state, k) { return START + k * ROW_H - state.offset; }
 

@@ -23,9 +23,9 @@ def spec_of(state: dict, k: int) -> dict:
     spec = {
         "type": 0 if k < 2 else 0 if t < 50 else 2 if (t < 80 or stage < 1) else 1,
         "dir": 1 if rng.int(2) == 1 else -1,
-        "speed": 700 + stage * 110 + rng.int(300),
+        "speed": 900 + stage * 130 + rng.int(300),
         "phase": rng.int(360) * 1000,
-        "barSpeed": 14 + stage * 2 + rng.int(8),
+        "barSpeed": 18 + stage * 2 + rng.int(8),
         "next": rng.int(3),
         "y": FIRST_Y + k * SPACING,
     }

@@ -22,7 +22,7 @@
     }
     return false;
   }
-  function stepEvery(foods) { return Math.max(4, 9 - idiv(foods, 4)); }
+  function stepEvery(foods) { return Math.max(3, 7 - idiv(foods, 3)); }
 
   var core = {
     key: "snake",

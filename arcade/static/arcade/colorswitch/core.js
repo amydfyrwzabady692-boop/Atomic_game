@@ -27,9 +27,9 @@
     spec = {
       type: k < 2 ? 0 : t < 50 ? 0 : t < 80 || stage < 1 ? 2 : 1,
       dir: rng.int(2) === 1 ? 1 : -1,
-      speed: 700 + stage * 110 + rng.int(300),
+      speed: 900 + stage * 130 + rng.int(300),
       phase: rng.int(360) * 1000,
-      barSpeed: 14 + stage * 2 + rng.int(8),
+      barSpeed: 18 + stage * 2 + rng.int(8),
       next: rng.int(3),
       y: FIRST_Y + k * SPACING,
     };

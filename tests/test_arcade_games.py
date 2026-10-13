@@ -287,7 +287,7 @@ def test_stack_perfect_keeps_width_and_miss_ends():
 
 
 def test_flappy_gaps_stay_inside_field_and_get_tighter():
-    assert flappy.gap_for(0) > flappy.gap_for(100) >= 1350
+    assert flappy.gap_for(0) > flappy.gap_for(100) >= 1250
     assert flappy.speed_for(0) < flappy.speed_for(100)
     sim = get_simulator("flappy")
     inputs, duration = autoplay(sim, 5, sim.demo_policy(random.Random(2), 100), 40_000)

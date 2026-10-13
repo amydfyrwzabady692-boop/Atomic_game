@@ -18,9 +18,9 @@ def build_level(state: dict) -> None:
     floors = []
     for k in range(1, count + 1):
         rng = Mulberry32((state["seed"] + state["level"] * 1009 + k * 31) & MASK)
-        floor = {"gapStart": rng.int(360) * 1000, "gapSize": max(42000, 78000 - level * 4000), "reds": []}
+        floor = {"gapStart": rng.int(360) * 1000, "gapSize": max(36000, 66000 - level * 4000), "reds": []}
         if k > 1:
-            reds = min(3, 1 + (level + rng.int(2)) // 2)
+            reds = min(3, 1 + (level + 1 + rng.int(2)) // 2)
             for _ in range(reds):
                 start = rng.int(360) * 1000
                 floor["reds"].append([start, 30000 + rng.int(21) * 1000])

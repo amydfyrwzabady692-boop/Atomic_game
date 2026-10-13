@@ -5,8 +5,8 @@ from .rng import MASK, Mulberry32
 
 VISIBLE = 9
 MAX_TIME = 10000
-START_TIME = 6000
-GAIN = 420
+START_TIME = 5000
+GAIN = 360
 CLOCK_GAIN = 1500
 FAST_TICKS = 14
 
@@ -38,7 +38,7 @@ def generate(state: dict) -> dict:
 
 
 def drain_for(level: int) -> int:
-    return min(50, 14 + level * 3)
+    return min(60, 20 + level * 4)
 
 
 @register_simulator

@@ -10,8 +10,8 @@
   var TICK_MS = 16;
   var VISIBLE = 9;
   var MAX_TIME = 10000;
-  var START_TIME = 6000;
-  var GAIN = 420;
+  var START_TIME = 5000;
+  var GAIN = 360;
   var CLOCK_GAIN = 1500;
   var FAST_TICKS = 14;
 
@@ -42,7 +42,7 @@
     return { b: b, c: c };
   }
 
-  function drainFor(level) { return Math.min(50, 14 + level * 3); }
+  function drainFor(level) { return Math.min(60, 20 + level * 4); }
 
   var core = {
     key: "timber",

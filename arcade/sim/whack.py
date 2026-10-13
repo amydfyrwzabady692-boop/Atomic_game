@@ -71,10 +71,10 @@ class WhackSimulator(ArcadeSimulator):
                 index = free[state["rng"].int(len(free))]
                 r = state["rng"].int(100)
                 hole = holes[index]
-                hole["type"] = 2 if r < 12 + progress // 8 else 3 if r >= 95 else 1
+                hole["type"] = 2 if r < 16 + progress // 6 else 3 if r >= 95 else 1
                 hole["born"] = tick
-                hole["until"] = tick + 70 - (progress * 32) // 100
-            state["nextSpawn"] = tick + 55 - (progress * 33) // 100
+                hole["until"] = tick + 55 - (progress * 28) // 100
+            state["nextSpawn"] = tick + 42 - (progress * 26) // 100
         state["tick"] += 1
         if state["tick"] >= LIMIT_TICKS:
             state["over"] = True

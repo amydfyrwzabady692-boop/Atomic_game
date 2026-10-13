@@ -17,7 +17,7 @@ def spawn(state: dict) -> None:
         "w": w,
         "x": -(w // 2) if even else FIELD - w // 2,
         "dir": 1 if even else -1,
-        "speed": 28 + min(count, 52),
+        "speed": 36 + min(count, 60),
     }
 
 
