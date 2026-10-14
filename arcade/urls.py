@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.urls import path
 
-from . import views
+from . import board_views, views
 
 app_name = "arcade"
 
@@ -12,6 +12,12 @@ urlpatterns = [
     path("api/session/start", views.session_start, name="session_start"),
     path("api/session/submit", views.session_submit, name="session_submit"),
     path("api/match/<str:token>/leaderboard", views.leaderboard, name="leaderboard"),
+    # صفحه‌ی گرافیکی بازی‌های دونفره (شطرنج)
+    path("board/<str:token>/", board_views.page, name="board"),
+    path("api/board/state", board_views.state, name="board_state"),
+    path("api/board/move", board_views.move, name="board_move"),
+    path("api/board/action", board_views.action, name="board_action"),
+    path("piece/<slug:code>.png", board_views.piece, name="piece"),
 ]
 
 if settings.DEBUG:

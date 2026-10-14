@@ -12,9 +12,9 @@
   var BIRD_X = 1000, RADIUS = 130, PIPE_W = 560;
   var GRAVITY = 7, JUMP = -105, MAX_VY = 200;
 
-  function spacingFor(score) { return Math.max(1700, 2300 - score * 12); }
-  function gapFor(score) { return Math.max(1350, 1900 - score * 15); }
-  function speedFor(score) { return 26 + idiv(Math.min(score, 60), 5); }
+  function spacingFor(score) { return Math.max(1500, 2100 - score * 15); }
+  function gapFor(score) { return Math.max(1250, 1650 - score * 18); }
+  function speedFor(score) { return 30 + idiv(Math.min(score, 60), 4); }
 
   var core = {
     key: "flappy",

@@ -12,9 +12,9 @@
   var LIVES = 3;
 
   function newZone(state) {
-    var w = Math.max(700, 2600 - state.level * 80);
+    var w = Math.max(550, 2000 - state.level * 90);
     state.zone = { s: state.rng.range(300, BAR - 300 - w), w: w };
-    state.speed = Math.min(330, 90 + state.level * 7);
+    state.speed = Math.min(380, 120 + state.level * 9);
   }
 
   var core = {

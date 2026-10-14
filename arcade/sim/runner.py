@@ -29,7 +29,7 @@ def generate(state: dict) -> None:
 
 
 def speed_for(passed: int) -> int:
-    return 36 + min(passed, 136) // 4
+    return 42 + min(passed, 120) // 3
 
 
 def row_z(state: dict, k: int) -> int:

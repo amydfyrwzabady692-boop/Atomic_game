@@ -60,13 +60,13 @@
         if (free.length) {
           var index = free[state.rng.int(free.length)];
           var r = state.rng.int(100);
-          var type = r < 12 + idiv(progress, 8) ? 2 : r >= 95 ? 3 : 1;
+          var type = r < 16 + idiv(progress, 6) ? 2 : r >= 95 ? 3 : 1;
           var hole = state.holes[index];
           hole.type = type;
           hole.born = tick;
-          hole.until = tick + 70 - idiv(progress * 32, 100);
+          hole.until = tick + 55 - idiv(progress * 28, 100);
         }
-        state.nextSpawn = tick + 55 - idiv(progress * 33, 100);
+        state.nextSpawn = tick + 42 - idiv(progress * 26, 100);
       }
       state.tick++;
       if (state.tick >= LIMIT_TICKS) {

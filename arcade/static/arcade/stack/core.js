@@ -20,7 +20,7 @@
       w: w,
       x: count % 2 === 0 ? -idiv(w, 2) : FIELD - idiv(w, 2),
       dir: count % 2 === 0 ? 1 : -1,
-      speed: 28 + Math.min(count, 52),
+      speed: 36 + Math.min(count, 60),
     };
   }
 

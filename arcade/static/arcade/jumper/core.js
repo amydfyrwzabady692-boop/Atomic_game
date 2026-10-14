@@ -21,16 +21,16 @@
   function generate(state) {
     var k = state.made++;
     var rng = state.rng;
-    var gap = 500 + Math.min(k, 120) * 4 + rng.int(180);
+    var gap = 550 + Math.min(k, 120) * 5 + rng.int(150);
     var x = mod(state.lastX + rng.int(2 * MAX_SHIFT + 1) - MAX_SHIFT, WIDTH);
     state.lastX = x;
     var r = rng.int(100);
     var lvl = Math.min(idiv(k, 25), 6);
-    var type = r < 12 + lvl * 4 ? 1 : r < 22 + lvl * 8 ? 2 : 0;
+    var type = r < 16 + lvl * 5 ? 1 : r < 28 + lvl * 9 ? 2 : 0;
     var s = rng.int(100);
     var phase = rng.int(240);
     state.topY += gap;
-    state.plats.push({ y: state.topY, x: x, w: PLAT_W, type: type, spring: type === 0 && s < 8, phase: phase, alive: true });
+    state.plats.push({ y: state.topY, x: x, w: PLAT_W, type: type, spring: type === 0 && s < 5, phase: phase, alive: true });
   }
 
   function platformX(p, tick) {

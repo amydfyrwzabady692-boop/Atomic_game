@@ -34,7 +34,7 @@
     state.prevSafe = safe;
     state.rows.push(row);
   }
-  function speedFor(passed) { return 36 + idiv(Math.min(passed, 136), 4); }
+  function speedFor(passed) { return 42 + idiv(Math.min(passed, 120), 3); }
   function rowZ(state, k) { return FIRST + k * ROW_GAP - state.dist; }
 
   var core = {

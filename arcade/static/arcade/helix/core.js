@@ -23,9 +23,9 @@
     var floors = [];
     for (var k = 1; k <= count; k++) {
       var rng = new Rng((state.seed + state.level * 1009 + k * 31) >>> 0);
-      var floor = { gapStart: rng.int(360) * 1000, gapSize: Math.max(42000, 78000 - level * 4000), reds: [] };
+      var floor = { gapStart: rng.int(360) * 1000, gapSize: Math.max(36000, 66000 - level * 4000), reds: [] };
       if (k > 1) {
-        var reds = Math.min(3, 1 + idiv(level + rng.int(2), 2));
+        var reds = Math.min(3, 1 + idiv(level + 1 + rng.int(2), 2));
         for (var j = 0; j < reds; j++) {
           var start = rng.int(360) * 1000;
           floor.reds.push([start, 30000 + rng.int(21) * 1000]);

@@ -16,7 +16,7 @@ def ensure_rows(state: dict) -> None:
 
 
 def speed_for(hits: int) -> int:
-    return min(130, 40 + (hits * 2) // 5)
+    return min(150, 52 + (hits * 3) // 5)
 
 
 def row_bottom(state: dict, k: int) -> int:

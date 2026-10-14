@@ -12,7 +12,7 @@
   var WIDTH = 3600, HEIGHT = 6400;
   var COLS = 8, ROWS = 8;
   var BRICK_W = 420, BRICK_H = 200, STEP_X = 444, STEP_Y = 224, LEFT = 36, TOP = 900;
-  var PADDLE_Y = 5700, PADDLE_W = 760, PADDLE_WIDE = 1100;
+  var PADDLE_Y = 5700, PADDLE_W = 660, PADDLE_WIDE = 1000;
   var BALL_R = 70;
   var MAX_VX = 44;
   var ATTACH_TICKS = 45, PAUSE_TICKS = 40, WIDE_TICKS = 600;
@@ -20,7 +20,7 @@
   var START_LIVES = 3, MAX_LIVES = 5;
 
   function paddleWidth(state) { return state.wide > 0 ? PADDLE_WIDE : PADDLE_W; }
-  function ballSpeed(state) { return 58 + Math.min(state.level, 8) * 3; }
+  function ballSpeed(state) { return 66 + Math.min(state.level, 8) * 4; }
   function clampPaddle(state) {
     var max = WIDTH - paddleWidth(state);
     if (state.px < 0) state.px = 0;

@@ -84,6 +84,21 @@ class Position:
         fullmove = int(parts[5]) if len(parts) > 5 else 1
         return cls(board, parts[1] if len(parts) > 1 else "w", castling, ep, halfmove, fullmove)
 
+    def fen(self) -> str:
+        """وضعیت به قالب FEN (برعکس ``from_fen``)."""
+        rows = []
+        for rank in range(7, -1, -1):
+            text, empty = "", 0
+            for piece in self.board[rank * 8 : rank * 8 + 8]:
+                if piece == ".":
+                    empty += 1
+                    continue
+                text += (str(empty) if empty else "") + piece
+                empty = 0
+            rows.append(text + (str(empty) if empty else ""))
+        ep = square_name(self.ep) if self.ep is not None else "-"
+        return f"{'/'.join(rows)} {self.turn} {self.castling or '-'} {ep} {self.halfmove} {self.fullmove}"
+
     def key(self) -> tuple:
         """کلید تکرار وضعیت (برای قانون تکرار سه‌باره)."""
         return ("".join(self.board), self.turn, self.castling, self.ep)
