@@ -107,6 +107,11 @@ async def post_init(application: Application) -> None:
     application.job_queue.run_repeating(
         game_settings_job, interval=GAME_SETTINGS_REFRESH_SECONDS, name="game_settings"
     )
+    if settings.BACKUP_INTERVAL_MINUTES > 0:
+        from .backup import backup_job
+
+        minutes = settings.BACKUP_INTERVAL_MINUTES * 60
+        application.job_queue.run_repeating(backup_job, interval=minutes, first=minutes, name="backup")
     await manager.recover()
     # شنبه ساعت ۰۰:۰۵ تهران (در PTB روز ۶ = شنبه)، و یک بار هم موقع بالا آمدن برای جبران خاموشی
     application.job_queue.run_daily(
@@ -148,6 +153,7 @@ def register_handlers(application: Application) -> None:
     add(CommandHandler("unban", admin.unban))
     add(CommandHandler("broadcast", admin.broadcast))
     add(CommandHandler("stats", admin.stats))
+    add(CommandHandler("backup", admin.backup_cmd))
 
     add(CallbackQueryHandler(group.game_callback, pattern=r"^g:\d+:"))
     add(CallbackQueryHandler(group.join_callback, pattern=r"^j:\d+$"))
