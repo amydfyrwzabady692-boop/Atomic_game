@@ -70,6 +70,8 @@ window.ARCADE_BOOT = {
   staticBase: "{% static 'arcade/' %}",
   apiBase: "{% url 'arcade:app' %}api/",
   playBase: "{% url 'arcade:app' %}play/",
+  chessPractice: "{% url 'arcade:chess_practice' %}",
+  pieceBase: "{% url 'arcade:app' %}piece/",
   devAuth: {{ dev_auth|yesno:"true,false" }},
   version: "{{ version }}",
   games: JSON.parse(document.getElementById("games-data").textContent)

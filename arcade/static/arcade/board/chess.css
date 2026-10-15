@@ -226,6 +226,10 @@ html, body {
 .btn.offer { animation: pulse 1s ease-in-out infinite; border-color: var(--gold); color: #fff3c4; }
 .btn:disabled { opacity: .4; filter: grayscale(.7); box-shadow: none; transform: none; animation: none; }
 
+/* حالت تمرین با کامپیوتر: ساعت و پیشنهاد مساوی ندارد */
+body.practice .clock, body.practice #draw-btn { display: none; }
+.ghost-link { margin-top: 14px; border: 0; background: none; box-shadow: none; color: var(--muted); text-decoration: none; font-size: 14px; }
+
 /* ---------------------------------------------------------------- لایه‌ها */
 .overlay {
   position: fixed;

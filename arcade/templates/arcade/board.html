@@ -41,6 +41,18 @@
   <p id="loading-text">در حال آماده‌سازی صفحه‌ی شطرنج…</p>
 </section>
 
+<section id="levels" class="overlay hidden">
+  <div class="card">
+    <div class="result-icon">♟</div>
+    <h1>شطرنج با کامپیوتر</h1>
+    <p class="muted">سطح حریف را انتخاب کن. رنگ مهره‌ها تصادفی است.</p>
+    <button class="btn go" type="button" data-level="easy">آسان</button>
+    <button class="btn violet" type="button" data-level="medium">متوسط</button>
+    <button class="btn danger" type="button" data-level="hard">سخت</button>
+    <a class="btn ghost-link" id="menu-link" href="{{ menu_url }}">‹ بازی‌های دیگر</a>
+  </div>
+</section>
+
 <section id="result" class="overlay hidden">
   <div class="card">
     <div class="result-icon" id="result-icon">🏆</div>
@@ -57,6 +69,7 @@
 <script>
 window.BOARD_BOOT = {
   token: "{{ token|escapejs }}",
+  practice: {{ practice|yesno:"true,false" }},
   apiBase: "{% url 'arcade:app' %}api/",
   pieceBase: "{{ piece_base|escapejs }}",
   devAuth: {{ dev_auth|yesno:"true,false" }},
