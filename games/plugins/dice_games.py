@@ -30,6 +30,7 @@ class DiceGame(BaseGame):
     max_players = 8
     players_ceiling = 12
     rounds = 3  # تعداد پرتاب هر بازیکن
+    style_fa = "نوبتی: هر نفر {rounds} پرتاب، هر نوبت {turn_seconds} ثانیه."
     rules_fa = [
         "به‌نوبت دکمه‌ی «پرتاب» را بزن؛ ربات به نام تو پرتاب می‌کند.",
         "هر نفر {rounds} پرتاب دارد و جمع امتیازها حساب می‌شود.",

@@ -162,7 +162,11 @@ def finish_match(match_id: int, standings: list[Standing]) -> MatchResult | None
         given = {s.user_id: s for s in standings if s.user_id in entries}
         full = [given.get(uid) or Standing(uid, 0, None) for uid in entries]
         groups = rank_standings(full)
-        payouts = compute_payouts(match.pot, match.prize_split, [[s.user_id for s in g] for g in groups])
+        # جایزه فقط به کسانی می‌رسد که امتیاز گرفته‌اند؛ امتیاز صفر یعنی باخت و سهمی ندارد.
+        # اگر هیچ‌کس امتیاز نگرفت (یا بازی دونفره مساوی شد)، pot مساوی بین همه تقسیم می‌شود.
+        paid_groups = [g for g in groups if g[0].score > 0] or groups
+        shares = compute_payouts(match.pot, match.prize_split, [[s.user_id for s in g] for g in paid_groups])
+        payouts = {uid: shares.get(uid, 0) for uid in entries}
 
         results: list[PlayerResult] = []
         rank = 1

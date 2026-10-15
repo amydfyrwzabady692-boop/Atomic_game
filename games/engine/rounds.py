@@ -7,6 +7,8 @@ class RoundGame(BaseGame):
     """پایه‌ی بازی‌های راندی: هر راند یک تایمر دارد و بعد از مکثی کوتاه راند بعد شروع می‌شود."""
 
     round_seconds: ClassVar[int] = 25
+    play_style: ClassVar[str] = "rounds"
+    style_fa: ClassVar[str] = "راندی: {rounds} راند، هر راند حداکثر {round_seconds} ثانیه."
     gap_seconds: ClassVar[int] = 3
 
     def __init__(self, ctx):

@@ -54,6 +54,7 @@ def rules_text(info: GameInfo) -> str:
         title=info.title_fa,
         lines="\n".join(escape(line) for line in rules_lines(info)),
         players=players_label(info),
+        style=info.style,
     )
     return text + (texts.RULES_ARCADE_NOTE if info.is_arcade else "")
 
@@ -116,6 +117,7 @@ def lobby_text(match, info: GameInfo, names: list[str], remaining: int, prize_no
         title=info.title_fa,
         variant=variant_suffix(info, match.options),
         description=info.description_fa,
+        style=info.style,
         fee=fee_label(match.entry_fee),
         pot=fa_num(match.pot),
         split=split_label(match.prize_split),

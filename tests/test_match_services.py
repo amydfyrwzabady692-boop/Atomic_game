@@ -229,3 +229,55 @@ def test_cancel_running_match_refunds(group, make_user):
     b.refresh_from_db()
     assert (a.coins, b.coins) == (500, 500)
     assert find_mismatches() == []
+
+
+# ------------------------------------------------------------------ قانون جایزه: امتیاز صفر یعنی باخت
+def _finished(group, make_user, scores, split=(60, 30, 10), fee=100):
+    users = [make_user(coins=1000) for _ in scores]
+    match = services.create_match(
+        group, users[0], "quick_math", entry_fee=fee, prize_split=list(split), join_seconds=60, min_players=2, max_players=10
+    )
+    for user in users:
+        services.join_match(match.pk, user)
+    services.start_match(match.pk)
+    standings = [Standing(u.pk, s, 100.0 + i if s else None) for i, (u, s) in enumerate(zip(users, scores, strict=True))]
+    result = services.finish_match(match.pk, standings)
+    return users, {r.user.pk: r for r in result.players}
+
+
+def test_zero_score_players_get_no_prize(group, make_user):
+    users, by_id = _finished(group, make_user, [7, 3, 0, 0])
+    prizes = [by_id[u.pk].prize for u in users]
+    # ۴۰۰ سکه فقط بین دو امتیازگیر به نسبت ۶۰:۳۰ (۲۶۶ + ۱ باقی‌مانده و ۱۳۳)
+    assert prizes == [267, 133, 0, 0] and sum(prizes) == 400
+    assert [by_id[u.pk].rank for u in users] == [1, 2, 3, 3]
+    assert by_id[users[0].pk].won and not by_id[users[2].pk].won
+    assert find_mismatches() == []
+
+
+def test_single_scorer_takes_the_whole_pot(group, make_user):
+    users, by_id = _finished(group, make_user, [0, 5, 0])
+    assert [by_id[u.pk].prize for u in users] == [0, 300, 0]
+
+
+def test_nobody_scoring_or_a_draw_splits_the_pot_equally(group, make_user):
+    users, by_id = _finished(group, make_user, [0, 0, 0])
+    assert [by_id[u.pk].prize for u in users] == [100, 100, 100]
+    assert not any(r.won for r in by_id.values())
+
+
+def test_tied_scorers_share_their_places(group, make_user):
+    users = [make_user(coins=1000) for _ in range(3)]
+    match = services.create_match(
+        group, users[0], "quick_math", entry_fee=100, prize_split=[60, 30, 10], join_seconds=60, min_players=2, max_players=10
+    )
+    for user in users:
+        services.join_match(match.pk, user)
+    services.start_match(match.pk)
+    # دو نفر اول هم امتیاز و هم زمان برابر دارند؛ جایگاه ۱ و ۲ (۹۰٪) را نصف می‌کنند
+    result = services.finish_match(
+        match.pk, [Standing(users[0].pk, 5, 10.0), Standing(users[1].pk, 5, 10.0), Standing(users[2].pk, 2, 5.0)]
+    )
+    prizes = {r.user.pk: r.prize for r in result.players}
+    assert prizes[users[0].pk] + prizes[users[1].pk] == 270 and abs(prizes[users[0].pk] - prizes[users[1].pk]) <= 1
+    assert prizes[users[2].pk] == 30

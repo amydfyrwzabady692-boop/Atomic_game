@@ -123,9 +123,9 @@ async def test_arcade_match_window_live_board_and_payout():
     assert (await match_row(active.match_id)).status == MatchStatus.FINISHED
     result = app.bot.sent[-1]["text"]
     assert "پایان سیخ‌زن" in result and "گیمر0" in result
-    # ۳۰۰ سکه: ۱۸۰ / ۹۰ / ۳۰ (نفر سوم بازی نکرد و امتیازش صفر است)
+    # ۳۰۰ سکه بین دو نفری که امتیاز گرفتند به نسبت ۶۰:۳۰ = ۲۰۰ / ۱۰۰؛ نفر سوم بازی نکرد و سهمی ندارد
     # نفر اول دستاوردهای «اولین بازی»، «اولین برد» و «آرکیدباز» را هم می‌گیرد
-    assert await coins_of(users) == [900 + 180 + 50 + 100 + 150, 900 + 90 + 50, 900 + 30 + 50]
+    assert await coins_of(users) == [900 + 200 + 50 + 100 + 150, 900 + 100 + 50, 900 + 50]
     assert await sync_to_async(
         UserAchievement.objects.filter(user=users[0], achievement__code="arcade_first").exists
     )()

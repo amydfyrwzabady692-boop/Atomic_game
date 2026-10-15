@@ -73,6 +73,15 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+
+def _static_headers(headers, path, url):
+    """فایل‌های مینی‌اپ همیشه با پارامتر نسخه (?v=) خوانده می‌شوند، پس می‌توانند یک سال کش شوند."""
+    if url.startswith("/static/arcade/"):
+        headers["Cache-Control"] = "public, max-age=31536000, immutable"
+
+
+WHITENOISE_ADD_HEADERS_FUNCTION = _static_headers
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},

@@ -36,6 +36,8 @@ class HangmanGame(RoundGame):
             lives="❤️" * self.lives + "🖤" * (self.lives_per_round - self.lives),
             wrong="، ".join(self.wrong) or "—",
             note=note,
+            letter_points=texts.fa_num(self.letter_points),
+            word_points=texts.fa_num(self.word_points),
         )
 
     async def begin_round(self) -> None:

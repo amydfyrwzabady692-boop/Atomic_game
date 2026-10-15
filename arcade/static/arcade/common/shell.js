@@ -87,10 +87,21 @@
     return new Promise(function (resolve, reject) {
       var el = document.createElement("script");
       el.src = url;
+      el.async = false; // چند فایل هم‌زمان دانلود می‌شوند ولی به همان ترتیب اجرا می‌شوند
       el.onload = resolve;
       el.onerror = function () { reject(new Error("load " + url)); };
       document.head.appendChild(el);
     });
+  }
+  var gameScripts = {};
+  /* core.js و render.js یک بازی را موازی دانلود می‌کند (نه یکی پس از دیگری) */
+  function loadGameScripts(key) {
+    if (!gameScripts[key]) {
+      var base = BOOT.staticBase + key + "/";
+      var ver = "?v=" + (BOOT.version || "1");
+      gameScripts[key] = Promise.all([loadScript(base + "core.js" + ver), loadScript(base + "render.js" + ver)]);
+    }
+    return gameScripts[key];
   }
 
   // ------------------------------------------------------------------ صدا (پیش‌فرض قطع)
@@ -935,13 +946,15 @@
     if (!BOOT.gameKey && !startParam) { showMenu(); return; }
     if (!initData) { fail(errorText("auth_missing")); return; }
     game = { key: BOOT.gameKey, matchToken: BOOT.gameKey ? "" : startParam, assets: {} };
+    // در تمرین، کلید بازی از آدرس معلوم است؛ فایل‌هایش هم‌زمان با درخواست اطلاعات دانلود می‌شوند
+    if (BOOT.gameKey) loadGameScripts(BOOT.gameKey).catch(function () { /* بعداً دوباره تلاش می‌شود */ });
     refreshInfo().then(function (res) {
       if (!res.ok) { fail(errorText(res.error)); return null; }
       game.meta = res.game;
       game.key = res.game.key;
       var base = BOOT.staticBase + game.key + "/";
       var ver = "?v=" + (BOOT.version || "1");
-      return loadScript(base + "core.js" + ver).then(function () { return loadScript(base + "render.js" + ver); }).then(function () {
+      return loadGameScripts(game.key).then(function () {
         game.core = window.Arcade.cores[game.key];
         var names = game.core.assets || [];
         return Promise.all(names.map(function (name) {

@@ -188,13 +188,43 @@ async def top_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user:
 def rules_home():
     keyboard = InlineKeyboardMarkup(
         [
+            [ui.button(texts.RULES_JOIN_BTN, "rules:join"), ui.button(texts.RULES_SCORE_BTN, "rules:score")],
+            [ui.button(texts.RULES_TYPES_BTN, "rules:types")],
             [
                 ui.button(texts.RULES_TEXT_GAMES_BTN, "rules:t", style=ui.PRIMARY),
                 ui.button(texts.RULES_ARCADE_BTN, "rules:a", style=ui.SUCCESS),
-            ]
+            ],
         ]
     )
     return texts.RULES, keyboard
+
+
+def rules_topic(topic: str):
+    """بخش‌های راهنمای کلی؛ عددها از همان تنظیماتی می‌آیند که ربات واقعاً با آن کار می‌کند."""
+    from django.conf import settings
+
+    if topic == "join":
+        joins = "، ".join(fa_num(s) for s in settings.JOIN_SECONDS_CHOICES)
+        text = texts.RULES_JOIN.format(join=joins)
+    elif topic == "score":
+        xp = settings.XP_BY_RANK
+        text = texts.RULES_SCORE.format(
+            xp=fa_num(settings.XP_PARTICIPATION), xp1=fa_num(xp.get(1, 0)), xp2=fa_num(xp.get(2, 0)), xp3=fa_num(xp.get(3, 0))
+        )
+    else:
+        games = list(catalog().values())
+
+        def names(style):
+            return "، ".join(g.title_fa for g in games if g.play_style == style) or "—"
+
+        text = texts.RULES_TYPES.format(
+            rounds=names("rounds"),
+            turns=names("turns"),
+            arcade=fa_num(sum(1 for g in games if g.play_style == "arcade")) + " بازی",
+            windows="، ".join(fa_num(m) for m in settings.PLAY_WINDOW_CHOICES),
+            attempts=fa_num(settings.ARCADE_DEFAULT_ATTEMPTS),
+        )
+    return text, InlineKeyboardMarkup([[ui.button(texts.BACK_BTN, "rules:home")]])
 
 
 def rules_list(arcade: bool):
@@ -222,6 +252,8 @@ async def rules_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, use
     action = parts[1] if len(parts) > 1 else ""
     if action == "home":
         screen = rules_home()
+    elif action in ("join", "score", "types"):
+        screen = rules_topic(action)
     elif action in ("t", "a"):
         screen = rules_list(arcade=action == "a")
     elif action == "g" and len(parts) > 2 and catalog().get(parts[2]):
