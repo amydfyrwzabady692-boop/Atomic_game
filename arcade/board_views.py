@@ -29,8 +29,8 @@ PIECE_PX = 192
 PIECE_CODES = {f"{color}{kind}" for color in "wb" for kind in "kqrbnp"}
 
 
-def render_page(request, token: str):
-    match = board.live_match(token)
+def render_page(request, token: str, practice: bool = False):
+    match = None if practice else board.live_match(token)
     template = "arcade/board.html" if match is None or match.game_type == "chess" else "arcade/grid.html"
     return render(
         request,
@@ -40,6 +40,8 @@ def render_page(request, token: str):
             "version": asset_version(),
             "dev_auth": settings.DEBUG and getattr(settings, "ARCADE_DEV_AUTH", False),
             "piece_base": reverse("arcade:piece", args=["wk"])[: -len("wk.png")],
+            "practice": practice,
+            "menu_url": reverse("arcade:app"),
         },
     )
 
@@ -157,3 +159,116 @@ def action(request, user, payload):
         raise ArcadeError("bad_action", 400)
     match, current, _ = _guard(lambda: board.update(match.pk, change))
     return _response(match, current, user)
+
+
+# ---------------------------------------------------------------------- شطرنج با کامپیوتر
+COMPUTER_ID = 0  # هیچ کاربری شناسه‌ی صفر ندارد
+PRACTICE_MOVE_SECONDS = 10**8  # تمرین ساعت ندارد
+LEVEL_NAMES = {"easy": "آسان", "medium": "متوسط", "hard": "سخت"}
+
+
+@require_GET
+def practice_page(request):
+    return render_page(request, "", practice=True)
+
+
+def _practice_response(game, user) -> JsonResponse:
+    data = live.view(game.state, user.pk, time.time())
+    you = data["you"]
+    computer = "کامپیوتر (" + LEVEL_NAMES.get(game.level, "") + ")"
+    data["players"] = {you: user.display_name, ("b" if you == "w" else "w"): computer}
+    data["cancelled"] = False
+    data["practice"] = True
+    data["game_id"] = game.pk
+    data["level"] = game.level
+    return JsonResponse({"ok": True, "changed": True, "state": data})
+
+
+def _computer_moves(game) -> None:
+    from games.chess import ai
+
+    state = game.state
+    if state["over"] or live.side_of(state, COMPUTER_ID) != live.position_of(state).turn:
+        return
+    move = ai.choose_move(live.position_of(state), game.level)
+    if move is not None:
+        live.apply_move(state, COMPUTER_ID, move.src, move.dst, move.promo, time.time())
+
+
+def _practice_game(user, payload):
+    from .models import ChessPractice
+
+    game_id = payload.get("game_id")
+    if isinstance(game_id, bool) or not isinstance(game_id, int):
+        raise ArcadeError("match_not_found", 404)
+    game = ChessPractice.objects.filter(pk=game_id, user=user).first()
+    if game is None:
+        raise ArcadeError("match_not_found", 404)
+    return game
+
+
+def _save(game) -> None:
+    game.finished = bool(game.state["over"])
+    game.save(update_fields=["state", "finished", "updated_at"])
+
+
+@csrf_exempt
+@require_POST
+@rate_limited("practice_chess", 30, 10)
+@authenticated
+def practice_new(request, user, payload):
+    """بازی تازه با کامپیوتر؛ رنگ بازیکن تصادفی است و اگر سیاه باشد کامپیوتر اول حرکت می‌کند."""
+    import secrets
+
+    from .models import ChessPractice
+
+    level = payload.get("level") if payload.get("level") in LEVEL_NAMES else "medium"
+    ChessPractice.objects.filter(user=user, finished=False).update(finished=True)
+    white_is_user = secrets.randbelow(2) == 0
+    sides = (user.pk, COMPUTER_ID) if white_is_user else (COMPUTER_ID, user.pk)
+    game = ChessPractice(user=user, level=level, state=live.new_state(*sides, time.time(), PRACTICE_MOVE_SECONDS))
+    _computer_moves(game)
+    game.save()
+    return _practice_response(game, user)
+
+
+@csrf_exempt
+@require_POST
+@rate_limited("practice_chess", 30, 10)
+@authenticated
+def practice_state(request, user, payload):
+    from .models import ChessPractice
+
+    if payload.get("game_id") is None:  # ادامه‌ی آخرین بازی نیمه‌کاره
+        game = ChessPractice.objects.filter(user=user, finished=False).order_by("-pk").first()
+        if game is None:
+            return JsonResponse({"ok": True, "changed": False, "none": True})
+        return _practice_response(game, user)
+    return _practice_response(_practice_game(user, payload), user)
+
+
+@csrf_exempt
+@require_POST
+@rate_limited("practice_chess", 30, 10)
+@authenticated
+def practice_move(request, user, payload):
+    game = _practice_game(user, payload)
+    src, dst = _int(payload.get("src")), _int(payload.get("dst"))
+    promo = str(payload.get("promo") or "")[:1]
+    _guard(lambda: live.apply_move(game.state, user.pk, src, dst, promo, time.time()))
+    _computer_moves(game)
+    _save(game)
+    return _practice_response(game, user)
+
+
+@csrf_exempt
+@require_POST
+@rate_limited("practice_chess", 30, 10)
+@authenticated
+def practice_action(request, user, payload):
+    game = _practice_game(user, payload)
+    if payload.get("action") != "resign":
+        raise ArcadeError("bad_action", 400)
+    _guard(lambda: live.resign(game.state, user.pk))
+    _save(game)
+    return _practice_response(game, user)

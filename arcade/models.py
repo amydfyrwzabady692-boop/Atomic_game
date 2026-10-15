@@ -51,3 +51,22 @@ class ArcadeRecord(models.Model):
         verbose_name = "رکورد آرکید"
         verbose_name_plural = "رکوردهای آرکید"
         constraints = [models.UniqueConstraint(fields=["user", "game_key"], name="unique_arcade_record")]
+
+
+class ChessPractice(models.Model):
+    """بازی شطرنج تمرینی یک کاربر با کامپیوتر در مینی‌اپ (بدون سکه)."""
+
+    user = models.ForeignKey("core.TelegramUser", on_delete=models.CASCADE, related_name="chess_practice", verbose_name="کاربر")
+    level = models.CharField(verbose_name="سطح", max_length=8, default="medium")
+    state = models.JSONField(verbose_name="وضعیت", default=dict)
+    finished = models.BooleanField(verbose_name="تمام‌شده", default=False)
+    created_at = models.DateTimeField(verbose_name="شروع", auto_now_add=True)
+    updated_at = models.DateTimeField(verbose_name="آخرین حرکت", auto_now=True)
+
+    class Meta:
+        verbose_name = "شطرنج با کامپیوتر"
+        verbose_name_plural = "شطرنج‌های با کامپیوتر"
+        indexes = [models.Index(fields=["user", "finished"])]
+
+    def __str__(self) -> str:
+        return f"{self.user} ({self.level})"

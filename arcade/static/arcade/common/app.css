@@ -314,6 +314,13 @@ p { margin: 6px 0; line-height: 1.8; }
 }
 .menu-item .game-emoji { font-size: 38px; display: block; margin-bottom: 8px; animation: none; filter: drop-shadow(0 6px 12px rgba(0, 0, 0, .4)); }
 .game-icon { display: block; margin: 0 auto; border-radius: 23%; }
+.chess-tile {
+  width: 76px; height: 76px; margin: 0 auto 8px; border-radius: 23%;
+  display: grid !important; place-items: center;
+  background: conic-gradient(#a8703f 0 25%, #ecd3a6 0 50%, #a8703f 0 75%, #ecd3a6 0) 0 0 / 50% 50%;
+  box-shadow: inset 0 0 0 3px rgba(74, 44, 23, .9), 0 10px 22px rgba(0, 0, 0, .4);
+}
+.chess-tile img { width: 64px; height: 64px; filter: drop-shadow(0 4px 4px rgba(0, 0, 0, .45)); }
 .card .game-emoji .game-icon { box-shadow: 0 10px 28px rgba(0, 0, 0, .45); }
 
 /* ---------------------------------------------------------------- رکورد جدید */

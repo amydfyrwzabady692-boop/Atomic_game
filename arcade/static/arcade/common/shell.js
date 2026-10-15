@@ -916,6 +916,21 @@
   function showMenu() {
     var list = $("menu-list");
     list.innerHTML = "";
+    if (BOOT.chessPractice) {
+      // شطرنج با کامپیوتر: صفحه‌ی جدا با تخته‌ی واقعی
+      var chess = document.createElement("a");
+      chess.className = "menu-item chess-item";
+      chess.href = BOOT.chessPractice + location.search;
+      var tile = document.createElement("span");
+      tile.className = "game-emoji chess-tile";
+      var knight = document.createElement("img");
+      knight.src = BOOT.pieceBase + "wn.png";
+      knight.alt = "";
+      tile.appendChild(knight);
+      chess.appendChild(tile);
+      chess.appendChild(document.createTextNode("شطرنج با کامپیوتر"));
+      list.appendChild(chess);
+    }
     BOOT.games.forEach(function (meta) {
       var a = document.createElement("a");
       a.className = "menu-item";
