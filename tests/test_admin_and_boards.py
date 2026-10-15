@@ -276,3 +276,20 @@ def test_no_real_money_or_transfer_paths_exist():
     assert set(TxType.values) == {
         "DAILY", "REFERRAL", "ENTRY_FEE", "PRIZE", "REFUND", "ADMIN_GRANT", "SHOP", "ACHIEVEMENT", "SIGNUP_BONUS", "RESCUE",
     }
+
+
+def test_admin_can_grant_virtual_credit_from_the_user_list(staff_client, make_user):
+    users = [make_user(coins=10), make_user()]
+    url = "/admin/core/telegramuser/"
+    ids = [str(u.pk) for u in users]
+    page = staff_client.post(url, {"action": "grant_credit", "_selected_action": ids})
+    assert page.status_code == 200 and "شارژ اعتبار مجازی" in page.content.decode()
+    bad = staff_client.post(url, {"action": "grant_credit", "_selected_action": ids, "apply": "1", "amount": "abc"})
+    assert bad.status_code in (200, 302)
+    done = staff_client.post(url, {"action": "grant_credit", "_selected_action": ids, "apply": "1", "amount": "250"})
+    assert done.status_code == 302
+    for user in users:
+        user.refresh_from_db()
+    assert [u.coins for u in users] == [260, 250]
+    assert CoinTransaction.objects.filter(type=TxType.ADMIN_GRANT, amount=250).count() == 2
+    assert find_mismatches() == []

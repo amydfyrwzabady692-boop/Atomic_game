@@ -53,6 +53,13 @@ class TelegramGroup(models.Model):
     max_entry = models.PositiveIntegerField(verbose_name="حداکثر ورودی", default=1000)
     default_join_seconds = models.PositiveIntegerField(verbose_name="زمان عضوگیری پیش‌فرض", default=60)
     allow_user_created_games = models.BooleanField(verbose_name="ساخت بازی توسط همه", default=True)
+    prize_note = models.CharField(
+        verbose_name="جایزه‌ی ویژه",
+        max_length=120,
+        blank=True,
+        default="",
+        help_text="جایزه‌ای که برگزارکننده بیرون از ربات به نفر اول می‌دهد؛ در لابی و نتیجه نشان داده می‌شود.",
+    )
     created_at = models.DateTimeField(verbose_name="تاریخ ایجاد", auto_now_add=True)
 
     class Meta:

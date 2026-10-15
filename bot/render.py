@@ -97,7 +97,7 @@ def miniapp_link(username: str, token: str) -> str:
     return f"https://t.me/{username}/{settings.MINIAPP_SHORT_NAME}?startapp={token}"
 
 
-def lobby_text(match, info: GameInfo, names: list[str], remaining: int) -> str:
+def lobby_text(match, info: GameInfo, names: list[str], remaining: int, prize_note: str = "") -> str:
     if names:
         players = "\n".join(
             texts.LOBBY_PLAYER.format(n=fa_num(i), name=escape(short_name(n)))
@@ -110,7 +110,8 @@ def lobby_text(match, info: GameInfo, names: list[str], remaining: int) -> str:
     total = 60
     if match.created_at and match.join_deadline:
         total = max(1, int((match.join_deadline - match.created_at).total_seconds()))
-    return texts.LOBBY.format(
+    prize = texts.LOBBY_PRIZE_NOTE.format(note=escape(prize_note)) if prize_note else ""
+    text = texts.LOBBY.format(
         emoji=info.emoji,
         title=info.title_fa,
         variant=variant_suffix(info, match.options),
@@ -125,6 +126,10 @@ def lobby_text(match, info: GameInfo, names: list[str], remaining: int) -> str:
         min=fa_num(match.min_players),
         bar=texts.progress_bar(max(remaining, 0) / total),
     )
+    if prize:
+        marker = texts.DIVIDER
+        text = text.replace(marker, prize.lstrip("\n") + "\n" + marker, 1)
+    return text
 
 
 def lobby_keyboard(match_id: int, username: str, game_key: str = "") -> InlineKeyboardMarkup:
@@ -147,7 +152,7 @@ def cancelled_text(reason: str, refunded: bool) -> str:
     return text
 
 
-def result_text(result, info: GameInfo) -> str:
+def result_text(result, info: GameInfo, prize_note: str = "") -> str:
     lines = [texts.RESULT_HEADER.format(title=info.title_fa)]
     ranked = sorted(result.players, key=lambda p: p.rank)
     for r in ranked[:RESULT_ROWS_SHOWN]:
@@ -175,6 +180,8 @@ def result_text(result, info: GameInfo) -> str:
                 f"{escape(r.user.display_name)} — "
                 + texts.ACHIEVEMENT_UNLOCKED.format(emoji=a.emoji, title=a.title, reward=fa_num(a.reward_coins))
             )
+    if prize_note:
+        lines.append(texts.RESULT_PRIZE_NOTE.format(note=escape(prize_note)))
     if extras:
         lines.append("\n\n" + "\n".join(extras[:RESULT_EXTRAS_SHOWN]))
     return "".join(lines)

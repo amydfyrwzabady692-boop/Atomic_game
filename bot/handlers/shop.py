@@ -2,7 +2,7 @@
 
 from html import escape
 
-from telegram import InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardMarkup, LabeledPrice, Update
 from telegram.ext import ContextTypes
 
 from core import texts
@@ -72,6 +72,9 @@ async def shop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user
     if action == "k" and value in texts.SHOP_KIND_BTN:
         await show(kind_screen(user, value, await db(services.catalog_for)(user, value)))
         return
+    if action == "s" and value.isdigit():
+        await _send_invoice(update, context, user, int(value), query)
+        return
     if action not in ("i", "b") or not value.isdigit():
         return
     item, owned = await _item_state(user, int(value))
@@ -82,18 +85,20 @@ async def shop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user
             result = await db(services.toggle_equipped)(user, item.pk)
             await answer(query, texts.SHOP_EQUIPPED if result.equipped else texts.SHOP_UNEQUIPPED)
         elif action == "i":
-            keyboard = InlineKeyboardMarkup(
+            rows = [
                 [
-                    [
-                        _btn(texts.SHOP_CONFIRM_BTN, f"shop:b:{item.pk}", ui.SUCCESS),
-                        _btn(texts.BACK_BTN, f"shop:k:{item.kind}"),
-                    ]
+                    _btn(texts.SHOP_CONFIRM_BTN, f"shop:b:{item.pk}", ui.SUCCESS),
+                    _btn(texts.BACK_BTN, f"shop:k:{item.kind}"),
                 ]
-            )
+            ]
             # نام و مقدار آیتم از پنل ادمین می‌آید و ممکن است نویسه‌ی HTML داشته باشد
             text = texts.SHOP_CONFIRM.format(
                 name=escape(item.name), value=escape(item.value), price=fa_num(item.price)
             )
+            if item.stars_price:
+                rows.insert(1, [_btn(texts.SHOP_STARS_BTN.format(stars=fa_num(item.stars_price)), f"shop:s:{item.pk}", ui.PRIMARY)])
+                text += texts.SHOP_STARS_NOTE.format(stars=fa_num(item.stars_price))
+            keyboard = InlineKeyboardMarkup(rows)
             await show((text, keyboard))
             return
         else:
@@ -103,3 +108,63 @@ async def shop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user
         await answer(query, texts.SHOP_NO_COINS if exc.code == "no_coins" else texts.ERROR_GENERIC, alert=True)
     await db(user.refresh_from_db)()
     await show(kind_screen(user, item.kind, await db(services.catalog_for)(user, item.kind)))
+
+
+# ------------------------------------------------------------------ پرداخت با استار تلگرام (XTR)
+STARS_PAYLOAD = "stars:{item}:{user}"
+
+
+async def _send_invoice(update, context, user: TelegramUser, item_id: int, query) -> None:
+    item = await db(services.stars_item)(user, item_id)
+    if item is None:
+        await answer(query, texts.SHOP_STARS_INVALID, alert=True)
+        return
+    await tg_call(
+        context.bot.send_invoice,
+        update.effective_chat.id,
+        title=texts.SHOP_STARS_TITLE.format(name=item.name)[:32],
+        description=texts.SHOP_STARS_DESCRIPTION.format(name=item.name, value=item.value)[:255],
+        payload=STARS_PAYLOAD.format(item=item.pk, user=user.pk),
+        provider_token="",
+        currency="XTR",
+        prices=[LabeledPrice(item.name[:32], item.stars_price)],
+    )
+
+
+def _parse_payload(payload: str) -> tuple[int, int] | None:
+    parts = (payload or "").split(":")
+    if len(parts) != 3 or parts[0] != "stars" or not parts[1].isdigit() or not parts[2].isdigit():
+        return None
+    return int(parts[1]), int(parts[2])
+
+
+async def precheckout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """تلگرام قبل از گرفتن استار می‌پرسد؛ فقط وقتی تأیید می‌شود که آیتم هنوز قابل خرید باشد."""
+    query = update.pre_checkout_query
+    if query is None:
+        return
+    from ..users import ensure_user
+
+    parsed = _parse_payload(query.invoice_payload)
+    user = await ensure_user(query.from_user)
+    item = await db(services.stars_item)(user, parsed[0]) if parsed and parsed[1] == user.pk else None
+    ok = item is not None and query.currency == "XTR" and query.total_amount == item.stars_price
+    await tg_call(query.answer, ok=ok, error_message=None if ok else texts.SHOP_STARS_INVALID)
+
+
+async def successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    payment = message.successful_payment if message else None
+    if payment is None or payment.currency != "XTR":
+        return
+    parsed = _parse_payload(payment.invoice_payload)
+    if parsed is None:
+        return
+    from ..users import ensure_user
+
+    user = await ensure_user(update.effective_user)
+    owned = await db(services.grant_stars_purchase)(
+        user, parsed[0], payment.total_amount, payment.telegram_payment_charge_id
+    )
+    name = await db(lambda: owned.item.name)()
+    await reply(update, texts.SHOP_STARS_DONE.format(name=escape(name)))

@@ -16,6 +16,7 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     MessageHandler,
+    PreCheckoutQueryHandler,
     filters,
 )
 
@@ -32,7 +33,7 @@ from .tg import tg_call
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_UPDATES = ["message", "callback_query", "my_chat_member"]
+ALLOWED_UPDATES = ["message", "callback_query", "my_chat_member", "pre_checkout_query"]
 TEHRAN = ZoneInfo("Asia/Tehran")
 GAME_SETTINGS_REFRESH_SECONDS = 15
 
@@ -54,6 +55,7 @@ GROUP_COMMANDS = [
     ("rules", "قوانین"),
     ("cancel", "لغو مسابقه"),
     ("settings", "تنظیمات گروه (ادمین)"),
+    ("prize", "جایزه‌ی ویژه‌ی مسابقه‌ها (ادمین)"),
 ]
 
 
@@ -138,6 +140,9 @@ def register_handlers(application: Application) -> None:
     add(CommandHandler("rules", group.rules))
     add(CommandHandler("settings", group_settings.settings_cmd))
 
+    add(CommandHandler("prize", group_settings.prize_cmd))
+    add(PreCheckoutQueryHandler(shop.precheckout))
+    add(MessageHandler(filters.SUCCESSFUL_PAYMENT, shop.successful_payment))
     add(CommandHandler("grant", admin.grant))
     add(CommandHandler("ban", admin.ban))
     add(CommandHandler("unban", admin.unban))

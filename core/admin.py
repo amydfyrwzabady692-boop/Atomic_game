@@ -48,7 +48,40 @@ class TelegramUserAdmin(admin.ModelAdmin):
         "created_at",
     )
     inlines = [TransactionInline]
-    actions = ["ban_users", "unban_users"]
+    actions = ["grant_credit", "ban_users", "unban_users"]
+
+    @admin.action(description="شارژ اعتبار مجازی کاربران انتخاب‌شده")
+    def grant_credit(self, request, queryset):
+        """صفحه‌ی میانی: مقدار را می‌گیرد و از مسیر ledger به هر کاربر اعتبار مجازی می‌دهد."""
+        import uuid
+
+        from django.contrib import messages
+        from django.template.response import TemplateResponse
+
+        from wallet.models import TxType
+        from wallet.services import apply_transaction
+
+        if request.POST.get("apply") == "1":
+            raw = (request.POST.get("amount") or "").strip()
+            if not raw.isdigit() or not 0 < int(raw) <= 1_000_000:
+                self.message_user(request, "مقدار باید عددی بین ۱ تا ۱٬۰۰۰٬۰۰۰ باشد.", messages.ERROR)
+            else:
+                batch = uuid.uuid4().hex[:12]
+                for user in queryset:
+                    apply_transaction(user, int(raw), TxType.ADMIN_GRANT, f"admin-panel:{batch}:{user.pk}")
+                self.message_user(request, f"به {queryset.count()} کاربر {raw} اعتبار مجازی داده شد.")
+                return None
+        return TemplateResponse(
+            request,
+            "admin/core/grant_credit.html",
+            {
+                **self.admin_site.each_context(request),
+                "title": "شارژ اعتبار مجازی",
+                "users": queryset,
+                "action_checkbox_name": admin.helpers.ACTION_CHECKBOX_NAME,
+                "opts": self.model._meta,
+            },
+        )
 
     def has_add_permission(self, request):
         return False
@@ -67,7 +100,9 @@ class TelegramUserAdmin(admin.ModelAdmin):
 
 @admin.register(TelegramGroup)
 class TelegramGroupAdmin(admin.ModelAdmin):
-    list_display = ("title", "chat_id", "is_active", "min_entry", "max_entry", "allow_user_created_games", "created_at")
+    list_display = (
+        "title", "chat_id", "is_active", "min_entry", "max_entry", "allow_user_created_games", "prize_note", "created_at",
+    )  # fmt: skip
     list_filter = ("is_active", "allow_user_created_games")
     search_fields = ("title", "chat_id")
     readonly_fields = ("chat_id", "created_at")

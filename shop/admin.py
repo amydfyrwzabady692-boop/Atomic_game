@@ -2,7 +2,7 @@ from django.contrib import admin
 
 from core.admin_utils import ReadOnlyAdmin
 
-from .models import ShopItem, UserItem
+from .models import ShopItem, StarsPurchase, UserItem
 
 
 @admin.register(ShopItem)
@@ -19,3 +19,9 @@ class UserItemAdmin(ReadOnlyAdmin):
     list_display = ("user", "item", "equipped", "created_at")
     list_filter = ("item__kind", "equipped")
     search_fields = ("user__tg_id", "user__username")
+
+
+@admin.register(StarsPurchase)
+class StarsPurchaseAdmin(ReadOnlyAdmin):
+    list_display = ("user", "item", "stars", "charge_id", "created_at")
+    search_fields = ("charge_id", "user__tg_id", "user__username")

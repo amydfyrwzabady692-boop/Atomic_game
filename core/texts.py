@@ -175,6 +175,7 @@ LOBBY = (
     + "\n⏳ {bar}  <b>{remaining}</b> ثانیه تا شروع\n"
     "<i>برای شروع حداقل {min} نفر لازم است.</i>"
 )
+LOBBY_PRIZE_NOTE = "\n🎁 <b>جایزه‌ی ویژه:</b> {note}"
 LOBBY_NO_PLAYERS = "<i>هنوز کسی نیامده؛ اولین نفر باش!</i>"
 LOBBY_CREATED_BY = "سازنده: {name}"
 JOIN_BTN = "✅ شرکت"
@@ -213,6 +214,7 @@ RESULT_HEADER = "🏁 <b>پایان {title}</b>\n" + DIVIDER + "\n"
 RESULT_LINE = "{medal} <b>{name}</b> — {score} امتیاز{prize}  <i>✨{xp} XP</i>\n"
 RESULT_PRIZE = "  ·  <b>+{prize}</b> " + COIN
 RESULT_FOOTER = DIVIDER + "\n🏆 جایزه‌ی کل: <b>{pot}</b> " + COIN
+RESULT_PRIZE_NOTE = "\n🎁 جایزه‌ی ویژه‌ی این مسابقه: <b>{note}</b> — برگزارکننده آن را به نفر اول می‌دهد."
 RESULT_FREE = DIVIDER + "\n🎈 <i>مسابقه‌ی دوستانه بود (بدون ورودی).</i>"
 MEDALS = {1: "🥇", 2: "🥈", 3: "🥉"}
 MEDAL_OTHER = "▫️"
@@ -271,12 +273,21 @@ SHOP_ITEM_OWNED_BTN = "{mark} {value}"
 SHOP_EMPTY = "فعلاً آیتمی در این بخش نیست."
 SHOP_CONFIRM = "خرید «{name}» ({value}) به قیمت <b>{price}</b> " + COIN + "؟\n⚠️ خرید قابل برگشت نیست."
 SHOP_CONFIRM_BTN = "✅ می‌خرم"
+SHOP_STARS_BTN = "⭐ خرید با {stars} استار"
+SHOP_STARS_NOTE = "\n⭐ یا با <b>{stars}</b> استار تلگرام (پرداخت رسمی خود تلگرام)."
+SHOP_STARS_TITLE = "{name}"
+SHOP_STARS_DESCRIPTION = "آیتم ظاهری «{name}» ({value}) برای پروفایل تو در ربات بازی. ارزش پولی ندارد و به سکه تبدیل نمی‌شود."
+SHOP_STARS_DONE = "🎉 پرداخت انجام شد؛ «{name}» به آیتم‌هایت اضافه و فعال شد."
+SHOP_STARS_INVALID = "این آیتم دیگر قابل خرید نیست یا قبلاً آن را داری."
 SHOP_BOUGHT = "🎉 خریدی و فعال شد!"
 SHOP_EQUIPPED = "فعال شد ✅"
 SHOP_UNEQUIPPED = "غیرفعال شد."
 SHOP_NO_COINS = "سکه‌ات برای این آیتم کافی نیست."
 
 # ------------------------------------------------------------------ سوپرادمین
+PRIZE_USAGE = "استفاده: /prize <متن جایزه‌ی ویژه>  ·  برای پاک کردن: /prize -"
+PRIZE_SET = "🎁 جایزه‌ی ویژه‌ی مسابقه‌های این گروه: <b>{note}</b>\n<i>در لابی و نتیجه نشان داده می‌شود. پرداختش با خود برگزارکننده است.</i>"
+PRIZE_CLEARED = "جایزه‌ی ویژه پاک شد."
 GRANT_USAGE = "استفاده: /grant <آیدی عددی یا @username> <مقدار>"
 GRANT_OK = "✅ {amount} " + COIN + " به {name} داده شد. موجودی جدید: {balance}"
 GRANT_RECEIVED = "🎁 از طرف مدیریت <b>{amount}</b> " + COIN + " گرفتی!"
@@ -465,3 +476,30 @@ def round_dots(current: int, total: int) -> str:
     if total > 12:
         return ""
     return "●" * current + "○" * max(0, total - current)
+
+
+def _apply_currency_name() -> None:
+    """نام و نماد واحد امتیاز را از تنظیمات (``COIN_NAME`` و ``COIN_EMOJI``) روی همه‌ی متن‌ها اعمال می‌کند."""
+    try:
+        from django.conf import settings
+
+        name, emoji = settings.COIN_NAME, settings.COIN_EMOJI
+    except Exception:  # تنظیمات جنگو در دسترس نیست (مثلاً اسکریپت مستقل)
+        return
+    if name == "سکه" and emoji == "🪙":
+        return
+
+    def swap(text: str) -> str:
+        return text.replace("سکه", name).replace("🪙", emoji)
+
+    namespace = globals()
+    for key, value in list(namespace.items()):
+        if not key.isupper():
+            continue
+        if isinstance(value, str):
+            namespace[key] = swap(value)
+        elif isinstance(value, dict):
+            namespace[key] = {k: swap(v) if isinstance(v, str) else v for k, v in value.items()}
+
+
+_apply_currency_name()
