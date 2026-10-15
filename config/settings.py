@@ -95,6 +95,9 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 BOT_TOKEN = env("BOT_TOKEN", default="")
 BOT_USERNAME = env("BOT_USERNAME", default="")  # بدون @؛ اگر خالی باشد از getMe خوانده می‌شود
 SUPERADMIN_IDS = [int(x) for x in env.list("SUPERADMIN_IDS", default=[])]
+# پشتیبان خودکار دیتابیس در پیوی ربات: هر چند دقیقه (۰ = خاموش) و برای چه کسانی (خالی = سوپرادمین‌ها)
+BACKUP_INTERVAL_MINUTES = env.int("BACKUP_INTERVAL_MINUTES", default=30)
+BACKUP_CHAT_IDS = [int(x) for x in env.list("BACKUP_CHAT_IDS", default=[])]
 WEBHOOK_URL = env("WEBHOOK_URL", default="")  # خالی = polling
 WEBHOOK_LISTEN = env("WEBHOOK_LISTEN", default="0.0.0.0")
 WEBHOOK_PORT = env.int("WEBHOOK_PORT", default=8443)
