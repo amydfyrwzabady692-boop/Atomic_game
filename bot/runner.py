@@ -265,7 +265,7 @@ class MatchManager:
         finally:
             await redis.delete(lock_key)
 
-        text = render.lobby_text(match, info, [], join_seconds)
+        text = render.lobby_text(match, info, [], join_seconds, group.prize_note)
         keyboard = render.lobby_keyboard(match.pk, self.username, info.key)
         message_id = None
         if menu_message_id:
@@ -310,7 +310,7 @@ class MatchManager:
     @staticmethod
     @db
     def _lobby_snapshot(match_id: int):
-        match = Match.objects.get(pk=match_id)
+        match = Match.objects.select_related("group").get(pk=match_id)
         names = [e.user.display_name for e in match.players.select_related("user")]
         remaining = int((match.join_deadline - timezone.now()).total_seconds())
         return match, names, remaining
@@ -324,7 +324,7 @@ class MatchManager:
         self.edits.edit(
             active.chat_id,
             active.lobby_message_id,
-            render.lobby_text(match, active.info, names, remaining),
+            render.lobby_text(match, active.info, names, remaining, match.group.prize_note),
             render.lobby_keyboard(active.match_id, self.username, active.info.key),
             urgent=urgent,
         )
@@ -505,7 +505,10 @@ class MatchManager:
 
     async def _announce_result(self, active: ActiveMatch, result) -> None:
         """نتیجه را با کارت تصویری سکو می‌فرستد؛ اگر کارت ساخته یا فرستاده نشد، فقط متن."""
-        text = render.result_text(result, active.info)
+        note = await db(
+            lambda: Match.objects.filter(pk=active.match_id).values_list("group__prize_note", flat=True).first()
+        )()
+        text = render.result_text(result, active.info, note or "")
         card = await asyncio.to_thread(cards.result_card, result, active.info)
         if card and cards.visible_length(text) <= cards.CAPTION_LIMIT:
             if await tg_call(self.bot.send_photo, active.chat_id, card, caption=text, parse_mode="HTML"):

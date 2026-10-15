@@ -5,7 +5,7 @@ from django.db import transaction
 from wallet.models import TxType
 from wallet.services import InsufficientFunds, apply_transaction
 
-from .models import ShopItem, UserItem
+from .models import ShopItem, StarsPurchase, UserItem
 
 
 class ShopError(Exception):
@@ -96,3 +96,25 @@ def seed_default_items() -> int:
         )
         created += was_created
     return created
+
+
+def stars_item(user, item_id: int) -> ShopItem | None:
+    """آیتمی که این کاربر می‌تواند با استار بخرد (فعال، قیمت استار دارد و هنوز مال او نیست)."""
+    item = ShopItem.objects.filter(pk=item_id, is_active=True, stars_price__gt=0).first()
+    if item is None or UserItem.objects.filter(user=user, item=item).exists():
+        return None
+    return item
+
+
+def grant_stars_purchase(user, item_id: int, stars: int, charge_id: str) -> UserItem:
+    """بعد از پرداخت موفق استار: آیتم را می‌دهد و فعال می‌کند. با همان ``charge_id`` دو بار اجرا نمی‌شود."""
+    with transaction.atomic():
+        item = ShopItem.objects.get(pk=item_id)
+        purchase, created = StarsPurchase.objects.get_or_create(
+            charge_id=charge_id, defaults={"user": user, "item": item, "stars": stars}
+        )
+        owned, _ = UserItem.objects.get_or_create(user=user, item=item)
+    if created:
+        set_equipped(user, item.pk, True)
+        owned.refresh_from_db()
+    return owned

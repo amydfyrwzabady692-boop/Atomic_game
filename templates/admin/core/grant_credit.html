@@ -1,0 +1,18 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div class="module" style="padding:18px;border-radius:14px">
+  <h2 style="margin-top:0">شارژ اعتبار مجازی</h2>
+  <p>این مقدار به هر کدام از {{ users|length }} کاربر زیر اضافه و در تاریخچه‌ی تراکنش‌ها با عنوان «هدیه‌ی ادمین» ثبت می‌شود.
+  اعتبار فقط امتیاز داخل ربات است و ارزش پولی ندارد.</p>
+  <ul>{% for user in users|slice:":30" %}<li>{{ user }}</li>{% endfor %}{% if users|length > 30 %}<li>…</li>{% endif %}</ul>
+  <form method="post">{% csrf_token %}
+    {% for user in users %}<input type="hidden" name="{{ action_checkbox_name }}" value="{{ user.pk }}">{% endfor %}
+    <input type="hidden" name="action" value="grant_credit">
+    <input type="hidden" name="apply" value="1">
+    <label for="amount"><b>مقدار:</b></label>
+    <input id="amount" name="amount" type="number" min="1" max="1000000" required autofocus style="width:160px">
+    <input type="submit" class="default" value="شارژ کن">
+    <a href="" class="button cancel-link" style="margin-inline-start:8px">انصراف</a>
+  </form>
+</div>
+{% endblock %}

@@ -17,6 +17,7 @@ from bot.ui import style_of
 from core import texts
 from core.models import TelegramGroup, TelegramUser
 from core.redis import reset_clients
+from games.catalog import get_info
 from games.models import Match, MatchStatus
 from shop.models import ShopItem, UserItem
 from shop.services import seed_default_items
@@ -609,3 +610,92 @@ async def test_game_menu_warns_when_the_bot_cannot_read_group_messages(app):
     reset_clients()
     menu, _ = await open_game_menu(app, 291)
     assert texts.GAME_MENU_CANNOT_READ not in menu.replies[0]["text"]
+
+
+# ====================================================================== جایزه‌ی ویژه، استارز و نام واحد امتیاز
+async def test_prize_command_shows_in_lobby_and_result(app):
+    await start_user(app, 301)
+    update, context = make_update(app, 301, chat_id=GROUP_ID, chat_type="supergroup", text="/prize شارژ ۲۰ هزاری")
+    await group_settings.prize_cmd(update, context)
+    assert "فقط برای ادمین" in update.replies[0]["text"]
+    app.bot.admins.add((GROUP_ID, 301))
+    reset_clients()
+    update, context = make_update(app, 301, chat_id=GROUP_ID, chat_type="supergroup", text="/prize شارژ <b>۲۰</b> هزاری")
+    await group_settings.prize_cmd(update, context)
+    assert "&lt;b&gt;" in update.replies[0]["text"]
+    group = await sync_to_async(TelegramGroup.objects.get)(chat_id=GROUP_ID)
+    assert group.prize_note == "شارژ <b>۲۰</b> هزاری"
+    match = SimpleNamespace(
+        created_at=None, join_deadline=None, options={}, entry_fee=0, pot=0, prize_split=[100], max_players=5, min_players=2
+    )
+    lobby = render.lobby_text(match, get_info("quick_math"), [], 30, group.prize_note)
+    assert lobby.index("جایزه‌ی ویژه") < lobby.index("بازیکن‌ها") and "&lt;b&gt;" in lobby
+    update, context = make_update(app, 301, chat_id=GROUP_ID, chat_type="supergroup", text="/prize -")
+    await group_settings.prize_cmd(update, context)
+    group = await sync_to_async(TelegramGroup.objects.get)(chat_id=GROUP_ID)
+    assert group.prize_note == "" and update.replies[0]["text"] == texts.PRIZE_CLEARED
+
+
+async def test_cosmetic_item_can_be_bought_with_telegram_stars(app):
+    await start_user(app, 311)
+    item = await sync_to_async(ShopItem.objects.create)(kind="frame", name="قاب طلایی", value="✨", price=500, stars_price=25)
+    confirm = await click(app, 311, f"shop:i:{item.pk}", 1, shop_handlers.shop_callback)
+    data = [b.callback_data for b in buttons_of(confirm.edits[-1]["reply_markup"])]
+    assert f"shop:s:{item.pk}" in data and "استار" in confirm.edits[-1]["text"]
+
+    invoices = []
+
+    async def send_invoice(chat_id, **kwargs):
+        invoices.append(kwargs)
+        return SimpleNamespace(message_id=1)
+
+    app.bot.send_invoice = send_invoice
+    await click(app, 311, f"shop:s:{item.pk}", 1, shop_handlers.shop_callback)
+    invoice = invoices[0]
+    assert invoice["currency"] == "XTR" and invoice["provider_token"] == "" and invoice["prices"][0].amount == 25
+    user = await get_user(311)
+
+    async def precheck(payload, amount):
+        answers = []
+
+        async def answer(ok, error_message=None):
+            answers.append(ok)
+
+        query = SimpleNamespace(from_user=tg_user(311), invoice_payload=payload, currency="XTR", total_amount=amount, answer=answer)
+        await shop_handlers.precheckout(SimpleNamespace(pre_checkout_query=query), SimpleNamespace(bot_data=app.bot_data))
+        return answers[0]
+
+    assert await precheck(invoice["payload"], 25) is True
+    assert await precheck(invoice["payload"], 1) is False  # مبلغ دست‌کاری‌شده
+    assert await precheck(f"stars:{item.pk}:{user.pk + 1}", 25) is False  # فاکتور کاربر دیگر
+
+    for _ in range(2):  # پیام پرداخت تکراری دوباره آیتم نمی‌دهد
+        update, context = make_update(app, 311, text="")
+        update.effective_message.successful_payment = SimpleNamespace(
+            currency="XTR", total_amount=25, invoice_payload=invoice["payload"], telegram_payment_charge_id="ch-1"
+        )
+        await shop_handlers.successful_payment(update, context)
+    owned = await sync_to_async(UserItem.objects.get)(user=user, item=item)
+    assert owned.equipped and "قاب طلایی" in update.replies[0]["text"]
+    from shop.models import StarsPurchase
+
+    assert await sync_to_async(StarsPurchase.objects.count)() == 1
+    user = await get_user(311)
+    assert user.coins == settings.SIGNUP_BONUS  # استار هیچ‌وقت به سکه تبدیل نمی‌شود
+    assert await precheck(invoice["payload"], 25) is False  # حالا دیگر مال اوست
+
+
+def test_currency_name_can_be_changed(settings):
+    import importlib
+
+    from core import texts as module
+
+    settings.COIN_NAME, settings.COIN_EMOJI = "اعتبار", "💎"
+    try:
+        changed = importlib.reload(module)
+        assert "اعتبار" in changed.COINS_NOTE and "سکه" not in changed.RESULT_FOOTER + changed.COINS_NOTE
+        assert "💎" in changed.RESULT_FOOTER and "🪙" not in changed.FEE_BTN
+    finally:
+        settings.COIN_NAME, settings.COIN_EMOJI = "سکه", "🪙"
+        importlib.reload(module)
+    assert "سکه" in module.COINS_NOTE

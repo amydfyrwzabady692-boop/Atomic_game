@@ -1,5 +1,7 @@
 """/settings — تنظیمات گروه، فقط برای ادمین‌ها (بررسی با getChatMember در هر کلیک)."""
 
+from html import escape
+
 from telegram import InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
@@ -130,3 +132,28 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             return
     screen = games_screen(group) if action in ("games", "tg") else home_screen(group)
     await tg_call(query.edit_message_text, screen[0], parse_mode="HTML", reply_markup=screen[1])
+
+
+@db
+def _set_prize(group_id: int, note: str) -> None:
+    TelegramGroup.objects.filter(pk=group_id).update(prize_note=note)
+
+
+@command(group=True)
+async def prize_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser):
+    """جایزه‌ی ویژه‌ی مسابقه‌های گروه (مثلاً «شارژ ۲۰ هزاری برای نفر اول»). پرداختش بیرون از ربات است."""
+    chat = update.effective_chat
+    if not await is_group_admin(context.bot, chat.id, user.tg_id):
+        await reply(update, texts.ONLY_ADMIN)
+        return
+    group = await ensure_group(chat)
+    note = " ".join(context.args or []).strip()[:120]
+    if not note:
+        await reply(update, texts.PRIZE_USAGE)
+        return
+    if note == "-":
+        await _set_prize(group.pk, "")
+        await reply(update, texts.PRIZE_CLEARED)
+        return
+    await _set_prize(group.pk, note)
+    await reply(update, texts.PRIZE_SET.format(note=escape(note)))
