@@ -179,6 +179,7 @@ async def top_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user:
     _, scope, period = query.data.split(":")
     if period not in texts.TOP_PERIODS or scope not in ("g", "a"):
         return
+    await answer(query)  # چرخک دکمه همین حالا بسته شود، نه بعد از کوئری و ویرایش پیام
     rows = await _top_rows(update.effective_chat.id if scope == "g" else None, period)
     await tg_call(
         query.edit_message_text, top_text(rows, scope, period), parse_mode="HTML", reply_markup=_top_keyboard(scope, period)
@@ -260,6 +261,7 @@ async def rules_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, use
         screen = rules_game(catalog()[parts[2]])
     else:
         return
+    await answer(query)
     await tg_call(query.edit_message_text, screen[0], parse_mode="HTML", reply_markup=screen[1])
 
 

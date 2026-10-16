@@ -18,6 +18,10 @@ class InsufficientFunds(Exception):
         self.needed = needed
 
 
+class IdempotencyConflict(Exception):
+    """کلید یکتا قبلاً برای کاربر/مقدار/نوع دیگری ثبت شده است (باگ در ساخت کلید)."""
+
+
 def apply_transaction(user, amount: int, type: str, idempotency_key: str, match=None) -> CoinTransaction:
     """موجودی کاربر را به‌اندازه‌ی ``amount`` (مثبت یا منفی) تغییر می‌دهد و در ledger ثبت می‌کند.
 
@@ -25,6 +29,8 @@ def apply_transaction(user, amount: int, type: str, idempotency_key: str, match=
     - موجودی هرگز منفی نمی‌شود (``InsufficientFunds``)
     - اگر ``idempotency_key`` قبلاً ثبت شده باشد همان تراکنش برگردانده می‌شود و موجودی
       دوباره تغییر نمی‌کند؛ در این حالت ``tx.duplicate`` برابر ``True`` است.
+    - اگر همان کلید قبلاً برای کاربر، مقدار یا نوع دیگری ثبت شده باشد ``IdempotencyConflict``
+      می‌دهد؛ وگرنه یک تراکنش واقعی بی‌صدا نادیده گرفته می‌شد.
     """
     user_id = user.pk if isinstance(user, TelegramUser) else int(user)
     amount = int(amount)
@@ -32,6 +38,8 @@ def apply_transaction(user, amount: int, type: str, idempotency_key: str, match=
         locked = TelegramUser.objects.select_for_update().get(pk=user_id)
         existing = CoinTransaction.objects.filter(idempotency_key=idempotency_key).first()
         if existing is not None:
+            if (existing.user_id, existing.amount, existing.type) != (user_id, amount, type):
+                raise IdempotencyConflict(idempotency_key)
             existing.duplicate = True
             tx = existing
         else:

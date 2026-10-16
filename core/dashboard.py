@@ -4,7 +4,9 @@ from datetime import timedelta
 
 from django.contrib import admin
 from django.db.models import Count, Q, Sum
+from django.db.models.functions import TruncDate
 from django.shortcuts import render
+from django.utils import timezone
 
 from arcade.models import ArcadeSession
 from games.catalog import catalog
@@ -19,13 +21,28 @@ def collect_stats(now=None) -> dict:
     today = day_start(now)
     games = catalog(include_disabled=True)
 
+    # دو کوئری گروه‌بندی‌شده به‌جای ۲۸ کوئری جدا برای ۱۴ روز
+    first = today - timedelta(days=13)
+    tz = timezone.get_current_timezone()
+    users_by_day = dict(
+        MatchPlayer.objects.filter(joined_at__gte=first)
+        .annotate(d=TruncDate("joined_at", tzinfo=tz))
+        .values("d")
+        .annotate(n=Count("user_id", distinct=True))
+        .values_list("d", "n")
+    )
+    matches_by_day = dict(
+        Match.objects.filter(created_at__gte=first)
+        .annotate(d=TruncDate("created_at", tzinfo=tz))
+        .values("d")
+        .annotate(n=Count("id"))
+        .values_list("d", "n")
+    )
     daily = []
     for offset in range(13, -1, -1):
         start = today - timedelta(days=offset)
-        end = start + timedelta(days=1)
-        users = MatchPlayer.objects.filter(joined_at__gte=start, joined_at__lt=end).values("user_id").distinct().count()
-        matches = Match.objects.filter(created_at__gte=start, created_at__lt=end).count()
-        daily.append({"day": start, "users": users, "matches": matches})
+        key = start.date()
+        daily.append({"day": start, "users": users_by_day.get(key, 0), "matches": matches_by_day.get(key, 0)})
     peak = max((row["users"] for row in daily), default=0) or 1
     for row in daily:
         row["percent"] = round(row["users"] * 100 / peak)

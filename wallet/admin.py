@@ -14,3 +14,6 @@ class CoinTransactionAdmin(ReadOnlyAdmin):
     search_fields = ("user__tg_id", "user__username", "idempotency_key")
     list_select_related = ("user", "ref_match")
     date_hierarchy = "created_at"
+    list_per_page = 100
+    # ledger بزرگ می‌شود؛ شمارش کامل جدول در هر بار باز کردن لیست کند است
+    show_full_result_count = False

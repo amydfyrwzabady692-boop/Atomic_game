@@ -1,18 +1,45 @@
 {% extends "admin/base_site.html" %}
 {% block content %}
-<div class="module" style="padding:18px;border-radius:14px">
-  <h2 style="margin-top:0">شارژ اعتبار مجازی</h2>
-  <p>این مقدار به هر کدام از {{ users|length }} کاربر زیر اضافه و در تاریخچه‌ی تراکنش‌ها با عنوان «هدیه‌ی ادمین» ثبت می‌شود.
+<div class="module grant-box">
+  <h2>🪙 شارژ اعتبار مجازی</h2>
+  <p>این مقدار به هر کدام از <b>{{ count }}</b> کاربر زیر اضافه و در تاریخچه‌ی تراکنش‌ها با عنوان «هدیه‌ی ادمین» ثبت می‌شود.
   اعتبار فقط امتیاز داخل ربات است و ارزش پولی ندارد.</p>
-  <ul>{% for user in users|slice:":30" %}<li>{{ user }}</li>{% endfor %}{% if users|length > 30 %}<li>…</li>{% endif %}</ul>
-  <form method="post">{% csrf_token %}
-    {% for user in users %}<input type="hidden" name="{{ action_checkbox_name }}" value="{{ user.pk }}">{% endfor %}
+  <ul class="grant-users">
+    {% for user in users %}<li>{{ user }} <span class="muted-note">— موجودی فعلی: {{ user.coins }}</span></li>{% endfor %}
+    {% if more %}<li>…</li>{% endif %}
+  </ul>
+  <form method="post" id="grant-form">{% csrf_token %}
+    {% for pk in selected_ids %}<input type="hidden" name="{{ action_checkbox_name }}" value="{{ pk }}">{% endfor %}
     <input type="hidden" name="action" value="grant_credit">
     <input type="hidden" name="apply" value="1">
+    <input type="hidden" name="nonce" value="{{ nonce }}">
     <label for="amount"><b>مقدار:</b></label>
-    <input id="amount" name="amount" type="number" min="1" max="1000000" required autofocus style="width:160px">
-    <input type="submit" class="default" value="شارژ کن">
-    <a href="" class="button cancel-link" style="margin-inline-start:8px">انصراف</a>
+    <input id="amount" name="amount" type="number" min="1" max="{{ max_grant }}" required autofocus inputmode="numeric">
+    <span class="grant-presets">
+      <button type="button" class="button" data-amount="100">۱۰۰</button>
+      <button type="button" class="button" data-amount="500">۵۰۰</button>
+      <button type="button" class="button" data-amount="1000">۱٬۰۰۰</button>
+      <button type="button" class="button" data-amount="5000">۵٬۰۰۰</button>
+    </span>
+    <div class="submit-row">
+      <input type="submit" class="default" id="grant-submit" value="شارژ کن">
+      <a href="" class="button cancel-link">انصراف</a>
+    </div>
   </form>
 </div>
+<script>
+  (function () {
+    var form = document.getElementById("grant-form");
+    var input = document.getElementById("amount");
+    form.querySelectorAll("[data-amount]").forEach(function (b) {
+      b.addEventListener("click", function () { input.value = b.dataset.amount; input.focus(); });
+    });
+    form.addEventListener("submit", function (e) {
+      var amount = Number(input.value || 0).toLocaleString("fa-IR");
+      if (!confirm("به {{ count }} کاربر، هر کدام " + amount + " اعتبار داده شود؟")) { e.preventDefault(); return; }
+      // جلوی دوبار کلیک؛ سرور هم با nonce تکرار را رد می‌کند
+      document.getElementById("grant-submit").disabled = true;
+    });
+  })();
+</script>
 {% endblock %}

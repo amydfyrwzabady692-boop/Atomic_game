@@ -342,3 +342,17 @@ tr.gs-busy { opacity: .6; pointer-events: none; }
 }
 #gs-toast.show { transform: translate(-50%, 0); opacity: 1; }
 #gs-toast.bad { background: #e11d48; }
+
+/* جدول آخرین تراکنش‌ها در صفحه‌ی کاربر و صفحه‌ی شارژ اعتبار */
+.tx-table { border-collapse: collapse; width: 100%; max-width: 720px; font-size: 13px; }
+.tx-table th, .tx-table td { padding: 6px 10px; border-bottom: 1px solid var(--hairline-color); text-align: start; }
+.tx-table th { color: var(--body-quiet-color); font-weight: 700; }
+.tx-table .tx-in { color: #059669; font-weight: 700; }
+.tx-table .tx-out { color: #e11d48; font-weight: 700; }
+.grant-box { padding: 18px; border-radius: 14px; }
+.grant-box h2 { margin-top: 0; }
+.grant-box #amount { width: 160px; }
+.grant-users { max-height: 260px; overflow: auto; }
+.grant-presets { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-inline-start: 8px; vertical-align: middle; }
+.grant-presets .button { padding: 6px 12px; }
+.grant-box .submit-row { margin-top: 14px; }

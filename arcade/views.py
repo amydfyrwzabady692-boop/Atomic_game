@@ -18,7 +18,7 @@ from django.views.decorators.http import require_GET, require_POST
 from core.models import TelegramUser
 from core.redis import get_sync_redis
 from games.catalog import arcade_enabled
-from games.models import MatchPlayer, MatchStatus
+from games.models import Match, MatchPlayer, MatchStatus
 
 from . import services
 from .auth import InitDataError, validate_init_data
@@ -138,6 +138,15 @@ def game_meta(sim) -> dict:
     }
 
 
+def _token_game_key(token: str) -> str:
+    """بازیِ لینک مسابقه‌ی گروه، تا فایل‌هایش هم‌زمان با درخواست /info دانلود شوند (نه بعد از آن)."""
+    if not token:
+        return ""
+    game_type = Match.objects.filter(token=token[:32]).values_list("game_type", flat=True).first() or ""
+    key = game_type[len("arcade_") :] if game_type.startswith("arcade_") else ""
+    return key if get_simulator(key) is not None else ""
+
+
 # ---------------------------------------------------------------------- صفحه‌ها
 @require_GET
 def app(request, game_key: str | None = None):
@@ -157,6 +166,7 @@ def app(request, game_key: str | None = None):
         "arcade/app.html",
         {
             "game_key": game_key or "",
+            "preload_key": game_key or _token_game_key(start_param),
             "start_param": request.GET.get("tgWebAppStartParam", ""),
             "games": games,
             "version": asset_version(),

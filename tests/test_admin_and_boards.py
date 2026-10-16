@@ -1,5 +1,6 @@
 """پنل ادمین، رتبه‌بندی‌ها، قهرمان هفته و فروشگاه."""
 
+import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -67,7 +68,26 @@ def test_admin_pages_load(staff_client, group, make_user):
         assert response.status_code == 200, name
     dashboard = staff_client.get(reverse("admin_dashboard")).content.decode()
     assert "حساب سریع" in dashboard and "کاربران فعال روزانه" in dashboard
-    assert staff_client.get(reverse("admin:core_telegramuser_change", args=[users[0].pk])).status_code == 200
+    change = staff_client.get(reverse("admin:core_telegramuser_change", args=[users[0].pk]))
+    assert change.status_code == 200 and "tx-table" in change.content.decode()
+    # لینک «همه‌ی تراکنش‌ها» فقط تراکنش‌های همان کاربر را نشان می‌دهد
+    url = reverse("admin:wallet_cointransaction_changelist") + f"?user__id__exact={users[0].pk}"
+    listing = staff_client.get(url)
+    assert listing.status_code == 200
+    assert len(listing.context["cl"].result_list) == users[0].transactions.count()
+
+
+def test_dashboard_daily_counts_and_query_budget(group, make_user, django_assert_max_num_queries):
+    from core.dashboard import collect_stats
+
+    users = [make_user(1000) for _ in range(3)]
+    finished_match(group, users, [5, 3, 1])
+    finished_match(group, users[:2], [2, 1])
+    with django_assert_max_num_queries(15):
+        stats = collect_stats()
+    assert len(stats["daily"]) == 14
+    assert stats["daily"][-1]["users"] == 3 and stats["daily"][-1]["matches"] == 2
+    assert all(row["users"] == 0 for row in stats["daily"][:-1])
 
 
 def test_dashboard_requires_staff(client):
@@ -283,11 +303,19 @@ def test_admin_can_grant_virtual_credit_from_the_user_list(staff_client, make_us
     url = "/admin/core/telegramuser/"
     ids = [str(u.pk) for u in users]
     page = staff_client.post(url, {"action": "grant_credit", "_selected_action": ids})
-    assert page.status_code == 200 and "شارژ اعتبار مجازی" in page.content.decode()
-    bad = staff_client.post(url, {"action": "grant_credit", "_selected_action": ids, "apply": "1", "amount": "abc"})
+    html = page.content.decode()
+    assert page.status_code == 200 and "شارژ اعتبار مجازی" in html
+    nonce = re.search(r'name="nonce" value="([0-9a-f]{32})"', html).group(1)
+    form = {"action": "grant_credit", "_selected_action": ids, "apply": "1", "nonce": nonce}
+    bad = staff_client.post(url, {**form, "amount": "abc"})
     assert bad.status_code in (200, 302)
-    done = staff_client.post(url, {"action": "grant_credit", "_selected_action": ids, "apply": "1", "amount": "250"})
+    no_nonce = staff_client.post(url, {**form, "nonce": "", "amount": "250"})
+    assert no_nonce.status_code in (200, 302)
+    done = staff_client.post(url, {**form, "amount": "250"})
     assert done.status_code == 302
+    # ارسال دوباره‌ی همان فرم (دوبار کلیک/رفرش) دوباره شارژ نمی‌کند
+    again = staff_client.post(url, {**form, "amount": "250"})
+    assert again.status_code == 302
     for user in users:
         user.refresh_from_db()
     assert [u.coins for u in users] == [260, 250]

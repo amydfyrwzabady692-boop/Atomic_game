@@ -372,3 +372,13 @@ def test_font_is_served_from_our_server(client, monkeypatch, tmp_path):
     assert "immutable" in response["Cache-Control"]
     assert client.get("/arcade/font/bold.ttf").status_code == 404
     assert client.get("/arcade/font/other.ttf").status_code == 404
+
+
+def test_group_match_link_preloads_the_game_files(client, group, make_user):
+    """لینک مسابقه‌ی گروه: فایل‌های بازی همان اول (موازی با /info) دانلود می‌شوند."""
+    match = arcade_match(group, [make_user(500), make_user(500)])
+    page = client.get(f"/arcade/?tgWebAppStartParam={match.token}").content.decode()
+    assert 'rel="preload"' in page and "/pins/core.js?v=" in page and "/pins/render.js?v=" in page
+    assert 'preloadKey: "pins"' in page
+    unknown = client.get("/arcade/?tgWebAppStartParam=nope").content.decode()
+    assert "core.js?v=" not in unknown and 'preloadKey: ""' in unknown

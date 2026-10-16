@@ -7,7 +7,7 @@ from django.db import IntegrityError, connections, transaction
 from core.models import TelegramUser
 from wallet.management.commands.audit_wallets import find_mismatches
 from wallet.models import CoinTransaction, LedgerImmutableError, TxType
-from wallet.services import InsufficientFunds, apply_transaction
+from wallet.services import IdempotencyConflict, InsufficientFunds, apply_transaction
 
 from .conftest import requires_postgres
 
@@ -43,6 +43,18 @@ def test_idempotency_key_prevents_double_apply(make_user):
     assert first.pk == second.pk
     assert first.duplicate is False and second.duplicate is True
     assert CoinTransaction.objects.filter(idempotency_key="same-key").count() == 1
+
+
+def test_reused_key_for_other_user_or_amount_is_rejected(make_user):
+    a, b = make_user(coins=100), make_user(coins=100)
+    apply_transaction(a, -10, TxType.ENTRY_FEE, "shared-key")
+    with pytest.raises(IdempotencyConflict):
+        apply_transaction(b, -10, TxType.ENTRY_FEE, "shared-key")
+    with pytest.raises(IdempotencyConflict):
+        apply_transaction(a, -20, TxType.ENTRY_FEE, "shared-key")
+    a.refresh_from_db()
+    b.refresh_from_db()
+    assert (a.coins, b.coins) == (90, 100)
 
 
 def test_db_check_constraint_blocks_negative_coins(make_user):

@@ -315,12 +315,13 @@ class MatchManager:
         remaining = int((match.join_deadline - timezone.now()).total_seconds())
         return match, names, remaining
 
-    async def refresh_lobby(self, active: ActiveMatch, urgent: bool = False) -> None:
+    async def refresh_lobby(self, active: ActiveMatch, urgent: bool = False) -> int | None:
+        """متن لابی را به‌روز می‌کند و تعداد بازیکن‌ها را برمی‌گرداند (اگر لابی باز نباشد ``None``)."""
         if active.phase != "lobby" or not active.lobby_message_id:
-            return
+            return None
         match, names, remaining = await self._lobby_snapshot(active.match_id)
         if match.status != MatchStatus.LOBBY:
-            return
+            return None
         self.edits.edit(
             active.chat_id,
             active.lobby_message_id,
@@ -328,14 +329,17 @@ class MatchManager:
             render.lobby_keyboard(active.match_id, self.username, active.info.key),
             urgent=urgent,
         )
+        return len(names)
 
     async def join(self, active: ActiveMatch, user: TelegramUser) -> str:
         """کاربر را عضو می‌کند. متن کوتاهی برای ``answerCallbackQuery`` برمی‌گرداند یا ``MatchError`` می‌دهد."""
         if active.phase != "lobby":
             raise MatchError("lobby_closed")
         match = await db(services.join_match)(active.match_id, user)
-        await self.refresh_lobby(active)
-        count = await db(lambda: MatchPlayer.objects.filter(match_id=active.match_id).count())()
+        # همان کوئری به‌روزرسانی لابی تعداد بازیکن‌ها را هم می‌دهد؛ کوئری جداگانه‌ی count لازم نیست
+        count = await self.refresh_lobby(active)
+        if count is None:
+            count = await db(lambda: MatchPlayer.objects.filter(match_id=active.match_id).count())()
         if count >= match.max_players:
             # ظرفیت پر شد: منتظر پایان زمان نمی‌مانیم
             self._schedule(active, "lobby_close", 0.5, lambda: self.close_lobby(active))

@@ -961,8 +961,10 @@
     if (!BOOT.gameKey && !startParam) { showMenu(); return; }
     if (!initData) { fail(errorText("auth_missing")); return; }
     game = { key: BOOT.gameKey, matchToken: BOOT.gameKey ? "" : startParam, assets: {} };
-    // در تمرین، کلید بازی از آدرس معلوم است؛ فایل‌هایش هم‌زمان با درخواست اطلاعات دانلود می‌شوند
-    if (BOOT.gameKey) loadGameScripts(BOOT.gameKey).catch(function () { /* بعداً دوباره تلاش می‌شود */ });
+    // در تمرین کلید بازی از آدرس معلوم است و در مسابقه‌ی گروه سرور آن را از توکن پیدا کرده؛
+    // فایل‌های بازی هم‌زمان با درخواست اطلاعات دانلود می‌شوند، نه بعد از آن
+    var earlyKey = BOOT.gameKey || BOOT.preloadKey;
+    if (earlyKey) loadGameScripts(earlyKey).catch(function () { delete gameScripts[earlyKey]; });
     refreshInfo().then(function (res) {
       if (!res.ok) { fail(errorText(res.error)); return null; }
       game.meta = res.game;

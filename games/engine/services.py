@@ -159,7 +159,18 @@ def finish_match(match_id: int, standings: list[Standing]) -> MatchResult | None
         if match.status != MatchStatus.RUNNING:
             return None
         entries = {e.user_id: e for e in match.players.select_related("user")}
-        given = {s.user_id: s for s in standings if s.user_id in entries}
+        # همه‌ی کاربرانی که این تراکنش قفل می‌کند (بازیکن‌ها و دعوت‌کننده‌ی آن‌هایی که جایزه‌ی دعوتشان
+        # مانده) یک‌جا و به ترتیب شناسه قفل می‌شوند؛ دو مسابقه‌ی هم‌زمان با بازیکن مشترک به بن‌بست نمی‌خورند.
+        referrers = {
+            e.user.referred_by_id for e in entries.values() if e.user.referred_by_id and not e.user.referral_rewarded
+        }
+        list(
+            TelegramUser.objects.select_for_update()
+            .filter(pk__in=set(entries) | referrers)
+            .order_by("pk")
+            .values_list("pk", flat=True)
+        )
+        given ={s.user_id: s for s in standings if s.user_id in entries}
         full = [given.get(uid) or Standing(uid, 0, None) for uid in entries]
         groups = rank_standings(full)
         # جایزه فقط به کسانی می‌رسد که امتیاز گرفته‌اند؛ امتیاز صفر یعنی باخت و سهمی ندارد.

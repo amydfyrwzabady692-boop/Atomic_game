@@ -8,6 +8,11 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E🎮%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="{% static 'arcade/common/app.css' %}?v={{ version }}">
 <link rel="preload" href="/arcade/font/regular.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="preconnect" href="https://telegram.org">
+{% if preload_key %}{# فایل‌های بازی همان اول دانلود شوند، موازی با بقیه‌ی صفحه و درخواست /info #}
+<link rel="preload" href="{% static 'arcade/' %}{{ preload_key }}/core.js?v={{ version }}" as="script">
+<link rel="preload" href="{% static 'arcade/' %}{{ preload_key }}/render.js?v={{ version }}" as="script">
+{% endif %}
 </head>
 <body>
 <canvas id="stage" aria-label="بازی"></canvas>
@@ -66,6 +71,7 @@
 <script>
 window.ARCADE_BOOT = {
   gameKey: "{{ game_key|escapejs }}",
+  preloadKey: "{{ preload_key|escapejs }}",
   startParam: "{{ start_param|escapejs }}",
   staticBase: "{% static 'arcade/' %}",
   apiBase: "{% url 'arcade:app' %}api/",

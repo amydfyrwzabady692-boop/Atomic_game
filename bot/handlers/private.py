@@ -21,7 +21,7 @@ from wallet.models import CoinTransaction, TxType
 from .. import render, ui
 from ..db import db
 from ..tg import tg_call
-from .common import callback, command, reply
+from .common import answer, callback, command, reply
 
 
 def main_menu(context) -> InlineKeyboardMarkup:
@@ -103,6 +103,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user
     }
     handler = actions.get(query.data.split(":", 1)[1])
     if handler is not None:
+        await answer(query)  # این دکمه‌ها پیام تازه می‌فرستند؛ لازم نیست کاربر منتظر آن بماند
         await handler.__wrapped__(update, context, user)
 
 

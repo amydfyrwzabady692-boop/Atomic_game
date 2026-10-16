@@ -60,6 +60,9 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 
 DATABASES = {"default": env.db("DATABASE_URL", default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}")}
+# اتصال دیتابیس تا این چند ثانیه نگه داشته و دوباره استفاده می‌شود (۰ = اتصال تازه برای هر درخواست/کوئری ربات)
+DATABASES["default"]["CONN_MAX_AGE"] = env.int("DB_CONN_MAX_AGE", default=60)
+DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -110,6 +113,8 @@ COIN_EMOJI = env("COIN_EMOJI", default="🪙")
 BUTTON_STYLES = env.bool("BUTTON_STYLES", default=True)
 # چند به‌روزرسانی هم‌زمان پردازش شود (ترتیب پیام‌های هر چت همیشه حفظ می‌شود)
 BOT_CONCURRENT_UPDATES = env.int("BOT_CONCURRENT_UPDATES", default=32)
+# چند thread برای کوئری‌های دیتابیس ربات (هر thread یک اتصال). ۰ یا ۱ = همه‌ی کوئری‌ها پشت سر هم در یک thread
+BOT_DB_THREADS = env.int("BOT_DB_THREADS", default=8)
 
 # ---------------------------------------------------------------- Mini App
 MINIAPP_SHORT_NAME = env("MINIAPP_SHORT_NAME", default="arcade")

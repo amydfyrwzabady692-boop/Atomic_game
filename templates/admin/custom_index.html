@@ -4,7 +4,10 @@
   <a class="dash-link" href="{% url 'admin_dashboard' %}">📊 داشبورد آمار</a>
   <a class="dash-link alt" href="{% url 'admin:games_gamesetting_changelist' %}">🎮 تنظیمات بازی‌ها و تعداد شرکت‌کننده</a>
   <a class="dash-link ghost" href="{% url 'admin:games_match_changelist' %}">🏁 مسابقه‌ها</a>
-  <a class="dash-link ghost" href="{% url 'admin:core_telegramuser_changelist' %}">👤 کاربران</a>
+  <a class="dash-link ghost" href="{% url 'admin:core_telegramuser_changelist' %}">👤 کاربران و شارژ اعتبار</a>
+  <a class="dash-link ghost" href="{% url 'admin:core_telegramgroup_changelist' %}">👥 گروه‌ها</a>
+  <a class="dash-link ghost" href="{% url 'admin:wallet_cointransaction_changelist' %}">🪙 تراکنش‌های سکه</a>
+  <a class="dash-link ghost" href="{% url 'admin:arcade_arcadesession_changelist' %}?flagged__exact=1">🚩 جلسه‌های مشکوک آرکید</a>
 </p>
 {{ block.super }}
 {% endblock %}

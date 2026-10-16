@@ -50,3 +50,5 @@ STORAGES = {
 }
 LOGGING = {"version": 1, "disable_existing_loggers": False}
 MINIAPP_BASE_URL = "https://arcade.test"
+# SQLite درون‌حافظه‌ای با چند thread نویسنده قفل می‌شود؛ تست‌ها مثل قبل یک thread دارند
+BOT_DB_THREADS = 0
