@@ -31,6 +31,7 @@ def main_menu(context, daily: bool = False) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [ui.button(texts.MENU_ADD_BTN, url=add_link, style=ui.PRIMARY)],
+            [ui.button(texts.MENU_DUEL_BTN, "pm:duel", style=ui.SUCCESS)],
             first_row,
             [
                 ui.button(texts.MENU_ARCADE_BTN, "pm:arcade", style=ui.SUCCESS),
@@ -130,6 +131,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Tel
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser, query):
     """دکمه‌های منوی پیوی؛ هر کدام همان handler دستور متناظر را (بدون بررسی دوباره‌ی نرخ) اجرا می‌کند."""
     from . import arcade as arcade_handlers
+    from . import duel as duel_handlers
     from . import group as group_handlers
     from . import shop as shop_handlers
 
@@ -142,6 +144,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user
         "help": help_cmd,
         "shop": shop_handlers.shop,
         "arcade": arcade_handlers.arcade,
+        "duel": duel_handlers.duel,
         "rules": group_handlers.rules,
     }
     handler = actions.get(query.data.split(":", 1)[1])

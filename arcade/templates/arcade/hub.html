@@ -1,0 +1,138 @@
+{% load static %}<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#141a2e">
+<title>بازی‌ها</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E🎮%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="{% static 'arcade/hub/hub.css' %}?v={{ version }}">
+<link rel="preload" href="/arcade/font/regular.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="preconnect" href="https://telegram.org">
+</head>
+<body>
+<header id="top">
+  <div class="avatar" id="avatar">🙂</div>
+  <div class="who">
+    <b id="me-name">…</b>
+    <div class="level"><span id="me-level">سطح ۱</span><i><em id="me-xp-bar"></em></i></div>
+  </div>
+  <div class="coins" id="me-coins">🪙 —</div>
+</header>
+
+<main>
+  <!-- ------------------------------------------------------------ بازی‌ها -->
+  <section class="tab" id="tab-games">
+    <div class="card daily hidden" id="daily-card">
+      <div><b>🎁 جایزه‌ی روزانه</b><small id="daily-note">هر روز سر بزن</small></div>
+      <button class="btn go" id="daily-btn" type="button">بگیر</button>
+    </div>
+    <h2>⚔️ دونفره با حریف واقعی</h2>
+    <button class="banner" id="duel-banner" type="button">
+      <span>حریف تصادفی</span><small>شطرنج، دوز، دوز چهارتایی و پوکر — با یا بدون سکه</small>
+    </button>
+    <h2>🕹 تمرین آزاد <small>(بدون سکه)</small></h2>
+    <div class="grid" id="game-grid"></div>
+  </section>
+
+  <!-- ------------------------------------------------------------ حریف تصادفی -->
+  <section class="tab hidden" id="tab-duel">
+    <div id="duel-last" class="card result hidden"></div>
+
+    <div id="duel-idle" class="hidden">
+      <h2>۱. بازی</h2>
+      <div class="chips" id="duel-games"></div>
+      <h2>۲. سر چند سکه؟</h2>
+      <div class="chips" id="duel-stakes"></div>
+      <p class="muted small">با «فرقی نمی‌کند» بعد از پیدا شدن حریف روی مقدار توافق می‌کنید. بدون سکه = بدون امتیاز.</p>
+      <button class="btn go wide" id="duel-search" type="button">🔎 جستجوی حریف</button>
+    </div>
+
+    <div id="duel-searching" class="card center hidden">
+      <div class="radar"><i></i><i></i><i></i></div>
+      <h3>در جستجوی حریف…</h3>
+      <p class="muted" id="duel-search-info"></p>
+      <button class="btn danger" id="duel-cancel-search" type="button">لغو جستجو</button>
+    </div>
+
+    <div id="duel-negotiating" class="card hidden">
+      <h3>⚔️ حریف پیدا شد!</h3>
+      <div class="vs">
+        <div><b>تو</b><span class="offer" id="duel-mine"></span></div>
+        <div class="vs-mark">VS</div>
+        <div><b id="duel-opponent"></b><small id="duel-opponent-level"></small><span class="offer" id="duel-theirs"></span></div>
+      </div>
+      <p class="muted small">وقتی دو پیشنهاد یکی شد بازی شروع می‌شود · <span id="duel-timer"></span></p>
+      <button class="btn go wide hidden" id="duel-accept" type="button"></button>
+      <h2>پیشنهاد تو</h2>
+      <div class="chips" id="duel-offers"></div>
+      <button class="btn ghost" id="duel-leave" type="button">انصراف</button>
+    </div>
+
+    <div id="duel-playing" class="card center hidden">
+      <h3>🎮 بازی شروع شد!</h3>
+      <p id="duel-playing-info" class="muted"></p>
+      <button class="btn go wide" id="duel-open" type="button">ورود به صفحه‌ی بازی</button>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------ رتبه‌ها -->
+  <section class="tab hidden" id="tab-top">
+    <div class="seg" id="top-periods">
+      <button type="button" data-period="day">امروز</button>
+      <button type="button" data-period="week" class="on">این هفته</button>
+      <button type="button" data-period="all">همیشه</button>
+    </div>
+    <ol class="list" id="top-list"></ol>
+  </section>
+
+  <!-- ------------------------------------------------------------ فروشگاه -->
+  <section class="tab hidden" id="tab-shop">
+    <p class="muted small">آیتم‌ها فقط ظاهری‌اند و با سکه‌ی مجازی خریده می‌شوند؛ خرید قابل برگشت نیست.</p>
+    <div id="shop-kinds"></div>
+  </section>
+
+  <!-- ------------------------------------------------------------ من -->
+  <section class="tab hidden" id="tab-me">
+    <div class="stats" id="me-stats"></div>
+    <div class="card" id="me-badges"></div>
+    <div class="card" id="me-records"></div>
+    <div class="card" id="invite-card">
+      <b>🤝 دعوت دوستان</b>
+      <p class="small" id="invite-text"></p>
+      <div class="progress"><em id="invite-bar"></em></div>
+      <div class="row">
+        <button class="btn violet" id="invite-share" type="button">اشتراک لینک</button>
+        <button class="btn ghost" id="invite-copy" type="button">کپی</button>
+      </div>
+    </div>
+    <h2>🧾 تراکنش‌های اخیر</h2>
+    <ul class="list" id="history-list"></ul>
+  </section>
+</main>
+
+<nav id="tabs">
+  <button type="button" data-tab="games" class="on"><span>🎮</span>بازی‌ها</button>
+  <button type="button" data-tab="duel"><span>⚔️</span>حریف</button>
+  <button type="button" data-tab="top"><span>🏆</span>رتبه‌ها</button>
+  <button type="button" data-tab="shop"><span>🛍</span>فروشگاه</button>
+  <button type="button" data-tab="me"><span>👤</span>من</button>
+</nav>
+
+<div id="toast" class="hidden" role="alert"></div>
+
+{{ games|json_script:"games-data" }}
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>
+window.HUB_BOOT = {
+  apiBase: "{% url 'arcade:app' %}api/",
+  playBase: "{% url 'arcade:app' %}play/",
+  chessPractice: "{% url 'arcade:chess_practice' %}",
+  devAuth: {{ dev_auth|yesno:"true,false" }},
+  tab: "{{ tab|escapejs }}",
+  games: JSON.parse(document.getElementById("games-data").textContent)
+};
+</script>
+<script src="{% static 'arcade/hub/hub.js' %}?v={{ version }}"></script>
+</body>
+</html>

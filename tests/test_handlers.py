@@ -839,3 +839,87 @@ def test_miniapp_link_uses_short_name_or_main_app(settings):
     assert render.miniapp_link("b", "T") == "https://t.me/b/arcade?startapp=T"
     settings.MINIAPP_SHORT_NAME = ""
     assert render.miniapp_link("b", "T") == "https://t.me/b?startapp=T"
+
+
+# ====================================================================== حریف تصادفی در ربات
+async def test_duel_flow_in_private_chat(app, settings):
+    import time
+
+    from arcade import board
+    from bot.duels import DuelRunner
+    from bot.handlers import duel as duel_handlers
+    from games import gridlive
+    from games.models import Duel
+
+    settings.MINIAPP_BASE_URL = "https://arcade.test"
+    runner = DuelRunner(app)
+    app.bot_data["duels"] = runner
+    await start_user(app, 501, name="الف")
+    await start_user(app, 502, name="ب")
+
+    update, context = make_update(app, 501, text="/duel")
+    await duel_handlers.duel(update, context)
+    labels = [b.callback_data for b in buttons_of(update.replies[0]["reply_markup"])]
+    assert {"du:g:chess", "du:g:tictactoe", "du:g:connect4", "du:g:poker"} <= set(labels)
+
+    async def press(tg_id, data, message_id):
+        update, context = make_callback(app, tg_id, data, message_id, chat_id=tg_id, chat_type="private")
+        await duel_handlers.duel_callback(update, context)
+        return update
+
+    pick = await press(501, "du:g:tictactoe", 11)
+    assert "سر چند سکه" in pick.edits[-1]["text"]
+    searching = await press(501, "du:s:tictactoe:100", 11)
+    assert "در جستجوی حریف" in searching.edits[-1]["text"]
+
+    found = await press(502, "du:s:tictactoe:any", 22)
+    # حریف «فرقی نمی‌کند» گفته: باید روی ۱۰۰ توافق کنند
+    duel = await sync_to_async(Duel.objects.get)()
+    assert duel.status == Duel.Status.NEGOTIATING and (duel.offer_a, duel.offer_b) == (100, None)
+    text = found.edits[-1]["text"]
+    assert "حریف پیدا شد" in text and "سطح" in text
+    accept = [b for b in buttons_of(found.edits[-1]["reply_markup"]) if b.callback_data == f"du:a:{duel.pk}"]
+    assert accept, "دکمه‌ی قبول پیشنهاد حریف"
+
+    await press(502, f"du:a:{duel.pk}", 22)
+    duel = await sync_to_async(Duel.objects.select_related("match").get)()
+    assert duel.status == Duel.Status.PLAYING and duel.stake == 100
+    # هر دو طرف پیام شروع با دکمه‌ی web_app صفحه‌ی بازی را گرفته‌اند
+    started = [m for m in app.bot.sent if "بازی شروع شد" in m["text"]]
+    assert {m["chat_id"] for m in started} == {501, 502}
+    web_app = buttons_of(started[0]["reply_markup"])[0].web_app
+    assert web_app.url.endswith(f"tgWebAppStartParam={duel.match.token}")
+
+    state = (await sync_to_async(lambda: duel.match.__class__.objects.get(pk=duel.match_id))()).state["board"]
+    x, o = state["sides"]["X"], state["sides"]["O"]
+    for user, cell in [(x, 0), (o, 3), (x, 1), (o, 4), (x, 2)]:
+        await sync_to_async(board.update)(
+            duel.match_id, lambda s, user=user, cell=cell: gridlive.apply_move(s, user, cell, 0, "", time.time())
+        )
+    await runner.tick()
+    results = {m["chat_id"]: m["text"] for m in app.bot.sent if "بردی" in m["text"] or "باختی" in m["text"]}
+    winner = await sync_to_async(TelegramUser.objects.get)(pk=x)
+    loser_tg = 501 if winner.tg_id == 502 else 502
+    assert "بردی" in results[winner.tg_id] and "۲۰۰" in results[winner.tg_id]
+    assert "باختی" in results[loser_tg]
+
+
+async def test_duel_search_errors_are_shown(app, settings):
+    from bot.handlers import duel as duel_handlers
+
+    settings.MINIAPP_BASE_URL = "https://arcade.test"
+    await set_economy(signup_bonus=0)
+    await start_user(app, 511)
+    update, context = make_callback(app, 511, "du:s:chess:500", 5, chat_id=511, chat_type="private")
+    await duel_handlers.duel_callback(update, context)
+    assert update.answers[-1] == (texts.DUEL_ERRORS["not_enough_coins"], True)
+
+
+async def test_duel_needs_the_mini_app(app, settings):
+    from bot.handlers import duel as duel_handlers
+
+    settings.MINIAPP_BASE_URL = ""
+    await start_user(app, 521)
+    update, context = make_update(app, 521, text="/duel")
+    await duel_handlers.duel(update, context)
+    assert update.replies[0]["text"] == texts.DUEL_UNAVAILABLE

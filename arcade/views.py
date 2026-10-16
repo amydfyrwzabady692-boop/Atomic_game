@@ -161,6 +161,18 @@ def app(request, game_key: str | None = None):
         if board.live_match(start_param[:32]) is not None:
             return board_views.render_page(request, start_param[:32])
     games = [game_meta(sim) for key, sim in all_simulators().items() if arcade_enabled(key)]
+    if game_key is None and not start_param:
+        # صفحه‌ی اصلی مینی‌اپ: بازی‌ها، حریف تصادفی، رتبه‌ها، فروشگاه و پروفایل
+        return render(
+            request,
+            "arcade/hub.html",
+            {
+                "games": games,
+                "version": asset_version(),
+                "tab": request.GET.get("tab", "")[:16],
+                "dev_auth": settings.DEBUG and getattr(settings, "ARCADE_DEV_AUTH", False),
+            },
+        )
     return render(
         request,
         "arcade/app.html",

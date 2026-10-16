@@ -27,7 +27,8 @@ from leaderboard.queries import announce_weekly_champions
 
 from .concurrency import PerChatUpdateProcessor
 from .db import db
-from .handlers import admin, arcade, flow, group, group_settings, private, shop
+from .duels import DuelRunner
+from .handlers import admin, arcade, duel, flow, group, group_settings, private, shop
 from .runner import MatchManager
 from .tg import tg_call
 
@@ -40,6 +41,7 @@ GAME_SETTINGS_REFRESH_SECONDS = 15
 PRIVATE_COMMANDS = [
     ("start", "شروع"),
     ("me", "پروفایل من"),
+    ("duel", "حریف تصادفی"),
     ("invite", "دعوت دوستان"),
     ("shop", "فروشگاه"),
     ("arcade", "تمرین آزاد آرکید"),
@@ -112,6 +114,9 @@ async def post_init(application: Application) -> None:
         minutes = settings.BACKUP_INTERVAL_MINUTES * 60
         application.job_queue.run_repeating(backup_job, interval=minutes, first=minutes, name="backup")
     await manager.recover()
+    duel_runner = DuelRunner(application)
+    application.bot_data["duels"] = duel_runner
+    duel_runner.start()
     # شنبه ساعت ۰۰:۰۵ تهران (در PTB روز ۶ = شنبه)، و یک بار هم موقع بالا آمدن برای جبران خاموشی
     application.job_queue.run_daily(
         weekly_champions_job, time=datetime.time(0, 5, tzinfo=TEHRAN), days=(6,), name="weekly_champions"
@@ -136,6 +141,7 @@ def register_handlers(application: Application) -> None:
     add(CommandHandler("history", private.history))
     add(CommandHandler("shop", shop.shop))
     add(CommandHandler("arcade", arcade.arcade))
+    add(CommandHandler("duel", duel.duel))
 
     add(CommandHandler("game", flow.game))
     add(CommandHandler("cancel", group.cancel))
@@ -154,6 +160,7 @@ def register_handlers(application: Application) -> None:
     add(CommandHandler("stats", admin.stats))
     add(CommandHandler("backup", admin.backup_cmd))
 
+    add(CallbackQueryHandler(duel.duel_callback, pattern=r"^du:"))
     add(CallbackQueryHandler(group.game_callback, pattern=r"^g:\d+:"))
     add(CallbackQueryHandler(group.join_callback, pattern=r"^j:\d+$"))
     add(CallbackQueryHandler(group.cancel_callback, pattern=r"^x:\d+$"))

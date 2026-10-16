@@ -81,5 +81,5 @@ html, body {
 #controls { display: flex; flex-direction: column; gap: 8px; width: min(100%, 560px); }
 #controls .row { display: flex; gap: 8px; }
 #controls .btn { flex: 1 1 0; }
-#raise-range { flex: 2 1 0; accent-color: var(--accent2); }
+#raise-range { flex: 2 1 0; accent-color: var(--accent2); direction: ltr; } /* کم به زیاد از چپ به راست */
 #actions { width: min(100%, 560px); }

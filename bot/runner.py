@@ -773,7 +773,10 @@ class MatchManager:
     # ================================================================ بازیابی بعد از ری‌استارت
     async def recover(self) -> None:
         matches = await db(
-            lambda: list(Match.objects.filter(status__in=ACTIVE_STATUSES).select_related("group", "creator"))
+            # دوئل‌های حریف تصادفی گروه ندارند و ``bot.duels`` آن‌ها را دنبال می‌کند
+            lambda: list(
+                Match.objects.filter(status__in=ACTIVE_STATUSES, group__isnull=False).select_related("group", "creator")
+            )
         )()
         for match in matches:
             try:

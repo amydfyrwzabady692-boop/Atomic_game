@@ -26,7 +26,10 @@ ACTIVE_STATUSES = [MatchStatus.LOBBY, MatchStatus.RUNNING]
 
 
 class Match(models.Model):
-    group = models.ForeignKey("core.TelegramGroup", on_delete=models.CASCADE, related_name="matches", verbose_name="گروه")
+    # خالی برای دوئل دونفره‌ی «حریف تصادفی» که در هیچ گروهی نیست
+    group = models.ForeignKey(
+        "core.TelegramGroup", on_delete=models.CASCADE, related_name="matches", verbose_name="گروه", null=True, blank=True
+    )
     game_type = models.CharField(verbose_name="بازی", max_length=32)
     creator = models.ForeignKey("core.TelegramUser", on_delete=models.PROTECT, related_name="created_matches", verbose_name="سازنده")
     entry_fee = models.PositiveIntegerField(verbose_name="ورودی", default=0)
@@ -206,3 +209,77 @@ class GameSetting(models.Model):
             errors["min_players"] = "حداقل نمی‌تواند از حداکثر بیشتر باشد."
         if errors:
             raise ValidationError(errors)
+
+
+# ---------------------------------------------------------------------- حریف تصادفی (دوئل)
+class DuelTicket(models.Model):
+    """درخواست جستجوی حریف. ``stake`` خالی یعنی «مقدار سکه برایم فرقی نمی‌کند»."""
+
+    class Status(models.TextChoices):
+        SEARCHING = "SEARCHING", "در جستجو"
+        MATCHED = "MATCHED", "حریف پیدا شد"
+        CANCELLED = "CANCELLED", "لغو شد"
+        EXPIRED = "EXPIRED", "منقضی شد"
+
+    user = models.ForeignKey("core.TelegramUser", on_delete=models.CASCADE, related_name="duel_tickets", verbose_name="کاربر")
+    game_type = models.CharField(verbose_name="بازی", max_length=32)
+    stake = models.PositiveIntegerField(verbose_name="سکه‌ی پیشنهادی", null=True, blank=True)
+    status = models.CharField(verbose_name="وضعیت", max_length=10, choices=Status.choices, default=Status.SEARCHING)
+    duel = models.ForeignKey("Duel", null=True, blank=True, on_delete=models.SET_NULL, related_name="tickets", verbose_name="دوئل")
+    message_id = models.BigIntegerField(verbose_name="شناسه‌ی پیام ربات", null=True, blank=True)
+    created_at = models.DateTimeField(verbose_name="تاریخ ایجاد", auto_now_add=True)
+    expires_at = models.DateTimeField(verbose_name="انقضا")
+
+    class Meta:
+        verbose_name = "جستجوی حریف"
+        verbose_name_plural = "جستجوهای حریف"
+        indexes = [models.Index(fields=["status", "game_type", "created_at"])]
+        constraints = [
+            models.UniqueConstraint(fields=["user"], condition=Q(status="SEARCHING"), name="one_search_per_user")
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user_id} {self.game_type} {self.stake} [{self.status}]"
+
+
+class Duel(models.Model):
+    """دو بازیکنی که به هم رسیده‌اند: اول روی مقدار سکه توافق می‌کنند، بعد بازی شروع می‌شود."""
+
+    class Status(models.TextChoices):
+        NEGOTIATING = "NEGOTIATING", "توافق روی سکه"
+        PLAYING = "PLAYING", "در حال بازی"
+        FINISHED = "FINISHED", "تمام شد"
+        CANCELLED = "CANCELLED", "لغو شد"
+
+    game_type = models.CharField(verbose_name="بازی", max_length=32)
+    player_a = models.ForeignKey("core.TelegramUser", on_delete=models.PROTECT, related_name="+", verbose_name="بازیکن اول")
+    player_b = models.ForeignKey("core.TelegramUser", on_delete=models.PROTECT, related_name="+", verbose_name="بازیکن دوم")
+    # پیشنهاد هر طرف؛ خالی یعنی هنوز پیشنهادی نداده. وقتی دو پیشنهاد برابر شد بازی شروع می‌شود.
+    offer_a = models.PositiveIntegerField(verbose_name="پیشنهاد اول", null=True, blank=True)
+    offer_b = models.PositiveIntegerField(verbose_name="پیشنهاد دوم", null=True, blank=True)
+    stake = models.PositiveIntegerField(verbose_name="سکه‌ی توافق‌شده", null=True, blank=True)
+    status = models.CharField(verbose_name="وضعیت", max_length=12, choices=Status.choices, default=Status.NEGOTIATING)
+    cancel_reason = models.CharField(verbose_name="دلیل لغو", max_length=32, blank=True, default="")
+    match = models.OneToOneField(Match, null=True, blank=True, on_delete=models.SET_NULL, related_name="duel", verbose_name="مسابقه")
+    message_a = models.BigIntegerField(verbose_name="پیام ربات برای اول", null=True, blank=True)
+    message_b = models.BigIntegerField(verbose_name="پیام ربات برای دوم", null=True, blank=True)
+    # با هر تغییر بالا می‌رود تا ربات بفهمد پیام‌های دو طرف را باید به‌روز کند
+    version = models.PositiveIntegerField(verbose_name="نسخه", default=1)
+    notified_version = models.PositiveIntegerField(verbose_name="نسخه‌ی اطلاع‌داده‌شده", default=0)
+    created_at = models.DateTimeField(verbose_name="تاریخ ایجاد", auto_now_add=True)
+    expires_at = models.DateTimeField(verbose_name="مهلت توافق")
+
+    class Meta:
+        verbose_name = "دوئل"
+        verbose_name_plural = "دوئل‌ها"
+        indexes = [models.Index(fields=["status"])]
+
+    def __str__(self) -> str:
+        return f"#{self.pk} {self.game_type} {self.player_a_id}-{self.player_b_id} [{self.status}]"
+
+    def side_of(self, user_id: int) -> str | None:
+        if user_id == self.player_a_id:
+            return "a"
+        if user_id == self.player_b_id:
+            return "b"
+        return None
