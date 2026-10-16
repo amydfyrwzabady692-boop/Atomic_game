@@ -47,9 +47,17 @@ def normalize_fa(text: str, *, keep_spaces: bool = True) -> str:
     return text
 
 
+_ALEF_FOLD = str.maketrans({"آ": "ا"})  # آ → ا
+
+
+def fold_alef(text: str) -> str:
+    """«آ» را «ا» می‌کند؛ برای مقایسه‌ی جواب‌ها (کاربر «اسمان» را هم به‌جای «آسمان» می‌نویسد)."""
+    return text.translate(_ALEF_FOLD)
+
+
 def answers_match(given: str, expected: str) -> bool:
-    """مقایسه‌ی جواب بدون حساسیت به فاصله/نیم‌فاصله."""
-    return normalize_fa(given, keep_spaces=False) == normalize_fa(expected, keep_spaces=False)
+    """مقایسه‌ی جواب بدون حساسیت به فاصله/نیم‌فاصله و «آ»/«ا»."""
+    return fold_alef(normalize_fa(given, keep_spaces=False)) == fold_alef(normalize_fa(expected, keep_spaces=False))
 
 
 def fa_digits(value) -> str:
@@ -61,10 +69,18 @@ def fa_num(value: int) -> str:
     return fa_digits(f"{int(value):,}").replace(",", "٬")
 
 
+# منفی یونیکد، خط تیره‌های کوتاه/بلند و خط فاصله‌ها → «-» معمولی
+_MINUS = str.maketrans({"−": "-", "–": "-", "—": "-", "‐": "-", "‑": "-"})
+
+
 def parse_int(text: str) -> int | None:
-    text = normalize_fa(text, keep_spaces=False).replace(",", "").replace("٬", "")
+    """عدد صحیح از متن کاربر: ارقام فارسی/عربی، جداکننده‌ی هزارگان و انواع علامت منفی. در کیبورد فارسی
+    علامت منفی گاهی آخر عدد تایپ می‌شود («۸۳-»)؛ آن هم منفی حساب می‌شود."""
+    text = normalize_fa(text, keep_spaces=False).replace(",", "").replace("٬", "").translate(_MINUS)
     if re.fullmatch(r"-?\d{1,12}", text):
         return int(text)
+    if re.fullmatch(r"\d{1,12}-", text):
+        return -int(text[:-1])
     return None
 
 

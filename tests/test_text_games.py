@@ -481,3 +481,25 @@ async def test_xo_move_timeout_loses():
     assert ctx.ended
     assert game.scores[game.x.user_id] == 1
     assert "وقت" in ctx.edits[-1]["text"]
+
+
+async def test_hangman_alef_with_madda_is_the_same_letter():
+    ctx, game = await start_hangman(word="آسمان")  # آسمان
+    await game.on_message(ctx.msg(0, "ا"))  # «ا» هم «آ» و هم «ا» را باز می‌کند
+    assert game.lives == 6 and game.pattern() == "آ _ _ ا _"
+    await game.on_message(ctx.msg(1, "آ"))  # همان حرف است: تکراری حساب می‌شود، نه غلط
+    assert game.lives == 6
+    await game.on_message(ctx.msg(1, "اسمان"))  # «اسمان» بدون مد هم درست است
+    assert game.scores[2] == 10 and not game.round_open
+
+
+async def test_answers_accept_alef_without_madda():
+    from core.textutils import answers_match
+    from games.plugins.anagram import AnagramGame
+
+    assert answers_match("اب و هوا", "آب و هوا")  # اب و هوا ≈ آب و هوا
+    ctx = FakeContext(options={"rounds": 1}, content=FakeContent(words=["آسمان"]))
+    game = AnagramGame(ctx)
+    await game.start()
+    await game.on_message(ctx.msg(0, "اسمان"))
+    assert game.scores[1] == 10

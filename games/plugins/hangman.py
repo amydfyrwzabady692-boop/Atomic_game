@@ -4,6 +4,13 @@ from games.engine.base import IncomingMessage
 from games.engine.registry import register_game
 from games.engine.rounds import RoundGame
 
+# «آ» و «ا» در این بازی یک حرف‌اند: حدس «ا» حرف «آ» کلمه را هم باز می‌کند و برعکس
+LETTER_BASE = str.maketrans({"آ": "ا"})  # آ → ا
+
+
+def base(text: str) -> str:
+    return text.translate(LETTER_BASE)
+
 
 @register_game
 class HangmanGame(RoundGame):
@@ -27,7 +34,7 @@ class HangmanGame(RoundGame):
         await self.next_round()
 
     def pattern(self) -> str:
-        return " ".join(ch if ch in self.revealed else "_" for ch in self.word)
+        return " ".join(ch if base(ch) in self.revealed else "_" for ch in self.word)
 
     def _board(self, note: str = "") -> str:
         return texts.HANGMAN_BOARD.format(
@@ -60,19 +67,20 @@ class HangmanGame(RoundGame):
     async def on_message(self, msg: IncomingMessage) -> None:
         if not self.round_open:
             return
-        guess = normalize_fa(msg.text, keep_spaces=False)
+        guess = base(normalize_fa(msg.text, keep_spaces=False))
         uid = msg.player.user_id
+        word = base(self.word)
 
         if len(guess) == 1 and guess.isalpha():
             if guess in self.revealed or guess in self.wrong:
                 return
-            if guess not in self.word:
+            if guess not in word:
                 self.wrong.append(guess)
                 await self._miss(msg, guess)
                 return
             self.revealed.add(guess)
             self.add_score(uid, self.letter_points)
-            if all(ch in self.revealed for ch in self.word):
+            if all(ch in self.revealed for ch in word):
                 await self.ctx.edit(self.message_id, self._board(), urgent=True)
                 await self.ctx.send(texts.HANGMAN_COMPLETED.format(word=self.word))
                 await self.close_round()
@@ -86,8 +94,8 @@ class HangmanGame(RoundGame):
         # حدس کل کلمه: فقط پیام هم‌طول با کلمه حدس حساب می‌شود (بقیه گپ معمولی‌اند)
         if len(guess) != len(self.word):
             return
-        if guess == self.word:
-            self.revealed.update(self.word)
+        if guess == word:
+            self.revealed.update(word)
             self.add_score(uid, self.word_points)
             await self.ctx.edit(self.message_id, self._board(), urgent=True)
             await self.ctx.send(

@@ -1,5 +1,5 @@
 from core import texts
-from core.textutils import fa_num, normalize_fa
+from core.textutils import fa_num, fold_alef, normalize_fa
 from games.engine.base import BaseGame, IncomingMessage
 from games.engine.registry import register_game
 
@@ -82,7 +82,7 @@ class WordChainGame(BaseGame):
         if len(word) < 2 or len(word) > 20 or " " in msg.text.strip():
             return
         name = msg.player.name
-        if not word.startswith(self.letter):
+        if not fold_alef(word).startswith(fold_alef(self.letter)):
             await self._warn("letter", texts.CHAIN_WRONG_LETTER.format(name=name, letter=self.letter))
             return
         if word in self.used:

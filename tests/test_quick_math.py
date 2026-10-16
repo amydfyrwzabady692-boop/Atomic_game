@@ -75,3 +75,22 @@ async def test_full_game_ends_and_ranks_by_score_then_time():
     assert standings[1].score == 20 and standings[2].score == 10 and standings[3].score == 0
     assert standings[3].reached_at is None
     assert standings[2].reached_at < standings[1].reached_at
+
+
+def test_answers_are_never_negative():
+    for seed in range(3000):
+        rng = random.Random(seed)
+        for level in range(1, 10):
+            text, answer = make_problem(rng, level)
+            assert answer >= 0, text
+            assert eval(text.replace("×", "*").replace("−", "-")) == answer  # noqa: S307
+
+
+def test_parse_int_accepts_every_minus_form():
+    from core.textutils import parse_int
+
+    assert parse_int("-83") == -83
+    assert parse_int("−۸۳") == -83
+    assert parse_int("۸۳-") == -83
+    assert parse_int("۱٬۲۰۰") == 1200
+    assert parse_int("8-3") is None and parse_int("--5") is None

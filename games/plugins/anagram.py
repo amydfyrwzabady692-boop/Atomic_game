@@ -1,5 +1,5 @@
 from core import texts
-from core.textutils import normalize_fa
+from core.textutils import fold_alef, normalize_fa
 from games.engine.base import IncomingMessage
 from games.engine.registry import register_game
 from games.engine.rounds import RoundGame
@@ -50,7 +50,7 @@ class AnagramGame(RoundGame):
 
     async def _is_correct(self, text: str) -> bool:
         guess = normalize_fa(text, keep_spaces=False)
-        if guess == self.word:
+        if fold_alef(guess) == fold_alef(self.word):
             return True
         # کلمه‌ی معتبر دیگری با همین حروف هم قبول است (مثل «مار» و «رام»)
         return sorted(guess) == sorted(self.word) and await self.ctx.content.is_valid_word(guess)

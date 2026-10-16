@@ -6,7 +6,8 @@ from games.engine.rounds import RoundGame
 
 
 def make_problem(rng, level: int) -> tuple[str, int]:
-    """مسئله‌ای با سختی ``level`` (از ۱) می‌سازد: (متن، جواب)."""
+    """مسئله‌ای با سختی ``level`` (از ۱) می‌سازد: (متن، جواب). جواب هیچ‌وقت منفی نیست؛ تایپ عدد منفی با
+    کیبورد فارسی (علامت منفی آخر عدد) گیج‌کننده است و جواب درست را غلط حساب می‌کرد."""
     if level <= 2:
         a, b = rng.randint(5, 40), rng.randint(5, 40)
         return f"{a} + {b}", a + b
@@ -21,11 +22,13 @@ def make_problem(rng, level: int) -> tuple[str, int]:
         return f"{a} × {b}", a * b
     if level <= 8:
         a, b, c = rng.randint(4, 15), rng.randint(4, 15), rng.randint(10, 99)
-        if rng.random() < 0.5:
+        if rng.random() < 0.5 or c > a * b:
             return f"{a} × {b} + {c}", a * b + c
         return f"{a} × {b} − {c}", a * b - c
     a, b, c = rng.randint(11, 25), rng.randint(6, 19), rng.randint(3, 9)
     d = rng.randint(2, 9)
+    if c * d > a * b:
+        return f"{a} × {b} + {c} × {d}", a * b + c * d
     return f"{a} × {b} − {c} × {d}", a * b - c * d
 
 
