@@ -491,7 +491,12 @@ async def test_rules_command_lists_games_and_shows_each_games_rules(app):
     await group.rules(update, context)
     home = update.replies[0]
     assert "قوانین کلی" in home["text"] and texts.COINS_NOTE in home["text"]
-    assert [b.callback_data for b in buttons_of(home["reply_markup"])] == ["rules:t", "rules:a"]
+    assert [b.callback_data for b in buttons_of(home["reply_markup"])] == [
+        "rules:join", "rules:score", "rules:types", "rules:t", "rules:a"
+    ]
+    for topic, phrase in (("join", "زمان عضوگیری"), ("score", "امتیاز صفر یعنی باخت"), ("types", "شطرنج")):
+        page = await click(app, 211, f"rules:{topic}", 1, group.rules_callback)
+        assert phrase in page.edits[-1]["text"] and "{" not in page.edits[-1]["text"]
 
     listing = await click(app, 211, "rules:t", 1, group.rules_callback)
     labels = [b.text for b in buttons_of(listing.edits[-1]["reply_markup"])]

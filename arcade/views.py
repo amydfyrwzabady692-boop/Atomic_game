@@ -301,3 +301,39 @@ def leaderboard(request, token: str):
             ],
         }
     )
+
+
+_font_cache: dict[str, str | None] = {}
+
+
+def _font_path(weight: str) -> str | None:
+    """فایل فونت Vazirmatn نصب‌شده روی سرور (بسته‌ی fonts-vazirmatn در Dockerfile)."""
+    if weight not in _font_cache:
+        from pathlib import Path
+
+        from games.content.typing_image import _candidates
+
+        regular = next((p for p in _candidates() if p and "Vazirmatn" in p and Path(p).is_file()), None)
+        found = regular
+        if regular and weight == "bold":
+            folder = Path(regular).parent
+            found = next(
+                (str(p) for name in ("Bold", "ExtraBold", "Black") for p in sorted(folder.glob(f"Vazirmatn*-{name}.ttf"))),
+                None,
+            )
+        _font_cache[weight] = found
+    return _font_cache[weight]
+
+
+@require_GET
+def font(request, weight: str):
+    """فونت صفحه‌های مینی‌اپ از خود سرور؛ اگر نصب نباشد ۴۰۴ و مرورگر فونت سیستم را نشان می‌دهد."""
+    from django.http import FileResponse
+
+    path = _font_path(weight) if weight in ("regular", "bold") else None
+    if path is None:
+        raise Http404
+    response = FileResponse(open(path, "rb"), content_type="font/ttf")
+    response["Cache-Control"] = "public, max-age=31536000, immutable"
+    response["Access-Control-Allow-Origin"] = "*"
+    return response

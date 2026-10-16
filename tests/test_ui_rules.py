@@ -133,7 +133,7 @@ def test_rules_text_mentions_player_counts_and_falls_back_to_the_description():
     assert "۲ بازیکن" in render.rules_text(games["chess"])
     assert "۲ تا ۲۰ بازیکن" in render.rules_text(games["quiz"])
     bare = SimpleNamespace(
-        rules=(), description_fa="توضیح کوتاه.", emoji="🎮", title_fa="آزمایشی", min_players=2, max_players=4, is_arcade=False
+        rules=(), style="نوبتی.", description_fa="توضیح کوتاه.", emoji="🎮", title_fa="آزمایشی", min_players=2, max_players=4, is_arcade=False
     )
     assert "توضیح کوتاه." in render.rules_text(bare) and render.rules_alert(bare) == "• توضیح کوتاه."
 

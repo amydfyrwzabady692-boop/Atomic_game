@@ -357,3 +357,18 @@ def test_all_attempts_done_detection(client, group, make_user):
     assert not arcade_services.all_attempts_done(match)
     submit_run(client, b, match, max_ms=2000)
     assert arcade_services.all_attempts_done(match)
+
+
+def test_font_is_served_from_our_server(client, monkeypatch, tmp_path):
+    from arcade import views
+
+    page = client.get("/arcade/").content.decode()
+    assert "jsdelivr" not in page and "/arcade/font/regular.ttf" in page
+    font = tmp_path / "Vazirmatn-Regular.ttf"
+    font.write_bytes(b"\x00\x01\x00\x00fake-font")
+    monkeypatch.setattr(views, "_font_cache", {"regular": str(font), "bold": None})
+    response = client.get("/arcade/font/regular.ttf")
+    assert response.status_code == 200 and b"".join(response.streaming_content).startswith(b"\x00\x01")
+    assert "immutable" in response["Cache-Control"]
+    assert client.get("/arcade/font/bold.ttf").status_code == 404
+    assert client.get("/arcade/font/other.ttf").status_code == 404

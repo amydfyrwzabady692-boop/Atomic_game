@@ -461,3 +461,53 @@ async def test_bot_runs_tictactoe_through_the_mini_app(_fresh_redis):
     assert "پایان دوز" in app.bot.sent[-1]["text"]
     winner = await sync_to_async(TelegramUser.objects.get)(pk=x)
     assert winner.wins == 1
+
+
+# ------------------------------------------------------------------ شطرنج با کامپیوتر
+def test_computer_finds_mate_and_does_not_blunder():
+    import random
+
+    from games.chess import ai
+
+    mate = Position.from_fen("r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4")
+    for level in ("medium", "hard"):
+        assert str(ai.choose_move(mate, level, random.Random(3))) == "h5f7"
+    # وزیر سیاه را بی‌دفاع زدن: کامپیوتر متوسط آن را می‌زند
+    free_queen = Position.from_fen("rnb1kbnr/pppp1ppp/8/4p3/3qP3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 3")
+    assert str(ai.choose_move(free_queen, "medium", random.Random(3))) == "f3d4"
+    assert ai.choose_move(Position.from_fen("7k/5Q2/6K1/8/8/8/8/8 b - - 0 1"), "hard") is None  # پات: حرکتی نیست
+    assert ai.choose_move(Position.initial(), "easy", random.Random(1)) in Position.initial().legal_moves()
+
+
+def test_practice_chess_api_plays_against_the_computer(client, make_user):
+    from arcade.models import ChessPractice
+
+    user = make_user(first_name="تمرین")
+    assert client.get("/arcade/chess/").status_code == 200
+    status, data = post(client, "practice/chess/state", user)
+    assert data == {"ok": True, "changed": False, "none": True}
+    status, data = post(client, "practice/chess/new", user, level="easy")
+    state = data["state"]
+    assert status == 200 and state["practice"] and state["level"] == "easy"
+    assert state["players"][state["you"]] == "تمرین" and "کامپیوتر" in state["players"]["b" if state["you"] == "w" else "w"]
+    assert state["turn"] == state["you"]  # اگر کامپیوتر سفید بود، حرکت اولش را زده است
+    game_id = state["game_id"]
+    for _ in range(3):
+        src = next(iter(state["legal"]))
+        dst = state["legal"][src][0]
+        status, data = post(client, "practice/chess/move", user, game_id=game_id, src=int(src), dst=dst)
+        state = data["state"]
+        assert status == 200 and (state["over"] or state["turn"] == state["you"])
+    assert post(client, "practice/chess/state", user)[1]["state"]["game_id"] == game_id  # ادامه‌ی بازی
+    other = make_user()
+    assert post(client, "practice/chess/move", other, game_id=game_id, src=12, dst=28)[0] == 404
+    status, data = post(client, "practice/chess/action", user, game_id=game_id, action="resign")
+    assert data["state"]["over"]["reason"] == "resign" and ChessPractice.objects.get(pk=game_id).finished
+    assert post(client, "practice/chess/state", user)[1].get("none") is True
+    post(client, "practice/chess/new", user, level="nonsense")
+    assert ChessPractice.objects.filter(user=user, finished=False).get().level == "medium"
+
+
+def test_practice_menu_has_a_chess_tile(client):
+    page = client.get("/arcade/").content.decode()
+    assert 'chessPractice: "/arcade/chess/"' in page

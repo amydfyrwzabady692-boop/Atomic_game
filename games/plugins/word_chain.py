@@ -16,6 +16,7 @@ class WordChainGame(BaseGame):
     max_players = 10
     players_ceiling = 20
     start_seconds = 20
+    style_fa = "نوبتی با حذف: مهلت هر نوبت از {start_seconds} ثانیه شروع و کم‌کم تا {min_seconds} ثانیه کوتاه می‌شود."
     rules_fa = [
         "به‌نوبت کلمه‌ای بگو که با حرف آخر کلمه‌ی قبلی شروع شود.",
         "کلمه‌ی تکراری یا خارج از فهرست کلمات قبول نیست.",

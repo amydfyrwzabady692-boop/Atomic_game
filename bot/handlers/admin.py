@@ -164,3 +164,18 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Telegr
             coins=fa_num(data["coins"]),
         ),
     )
+
+
+@command(superadmin=True)
+async def backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, user):
+    """/backup — پشتیبان همین حالا در پیوی همین مدیر."""
+    from ..backup import send_backup
+
+    await reply(update, texts.BACKUP_STARTED)
+    try:
+        sent = await send_backup(context.bot, [user.tg_id])
+    except Exception:
+        logging.getLogger(__name__).exception("manual backup failed")
+        sent = 0
+    if not sent:
+        await reply(update, texts.BACKUP_FAILED)

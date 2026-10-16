@@ -91,8 +91,9 @@ async def test_full_match_lifecycle_pays_winner():
     assert await match_status(active.match_id) == MatchStatus.FINISHED
     result_text = app.bot.sent[-1]["text"]
     assert "پایان حساب سریع" in result_text and "🥇" in result_text
-    # نفر اول ۶۰٪ از ۳۰۰ + دستاوردهای اولین بازی/برد؛ دو نفر دیگر مساوی (۳۰+۱۰)/۲
-    assert await coins_of(users) == [900 + 180 + 150, 900 + 60 + 50, 900 + 60 + 50]
+    # فقط نفر اول امتیاز گرفت، پس کل ۳۰۰ مال اوست (+ دستاوردهای اولین بازی/برد)؛
+    # دو نفر دیگر با امتیاز صفر جایزه‌ای نمی‌گیرند و فقط دستاورد «اولین بازی» را دارند
+    assert await coins_of(users) == [900 + 300 + 150, 900 + 50, 900 + 50]
     assert await sync_to_async(find_mismatches)() == []
     assert not app.job_queue.pending(f"m{active.match_id}:game:round")
 

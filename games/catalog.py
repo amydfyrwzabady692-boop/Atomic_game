@@ -28,6 +28,8 @@ class GameInfo:
     variants: dict = field(default_factory=dict)
     suggested_minutes: int = 5
     rules: tuple = ()  # قوانین کوتاه بازی، خط‌به‌خط
+    play_style: str = "turns"  # rounds | turns | arcade
+    style: str = ""  # یک خط توضیح نوع بازی با عددهای واقعی (تعداد راند، مهلت حرکت، …)
     # پیش‌فرض‌ها و بازه‌ی مجاز تنظیم تعداد شرکت‌کننده از پنل ادمین
     default_min: int = 2
     default_max: int = 20
@@ -49,6 +51,16 @@ class GameInfo:
         return self.floor == self.ceiling
 
 
+def _arcade_style(sim) -> str:
+    from django.conf import settings
+
+    from core.texts import ARCADE_STYLE, fa_num
+
+    return ARCADE_STYLE.format(
+        minutes=fa_num(sim.suggested_minutes), attempts=fa_num(settings.ARCADE_DEFAULT_ATTEMPTS)
+    )
+
+
 def defaults() -> dict[str, GameInfo]:
     from arcade.sim import all_simulators
     from games.engine.registry import all_games
@@ -65,6 +77,8 @@ def defaults() -> dict[str, GameInfo]:
             variant_title_fa=cls.variant_title_fa,
             variants=dict(cls.variants),
             rules=cls.rules(),
+            play_style=cls.play_style,
+            style=cls.style(),
             default_min=cls.min_players,
             default_max=cls.max_players,
             floor=cls.players_floor,
@@ -85,6 +99,8 @@ def defaults() -> dict[str, GameInfo]:
             variants=dict(sim.variants),
             suggested_minutes=sim.suggested_minutes,
             rules=tuple(sim.rules_fa),
+            play_style="arcade",
+            style=_arcade_style(sim),
             default_min=2,
             default_max=ARCADE_DEFAULT_MAX,
             floor=2,

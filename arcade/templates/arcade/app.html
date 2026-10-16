@@ -6,10 +6,8 @@
 <meta name="theme-color" content="#141a2e">
 <title>آرکید</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E🎮%3C/text%3E%3C/svg%3E">
-<link rel="preconnect" href="https://cdn.jsdelivr.net">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
 <link rel="stylesheet" href="{% static 'arcade/common/app.css' %}?v={{ version }}">
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preload" href="/arcade/font/regular.ttf" as="font" type="font/ttf" crossorigin>
 </head>
 <body>
 <canvas id="stage" aria-label="بازی"></canvas>
@@ -64,6 +62,7 @@
 </section>
 
 {{ games|json_script:"games-data" }}
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>
 window.ARCADE_BOOT = {
   gameKey: "{{ game_key|escapejs }}",
@@ -71,6 +70,8 @@ window.ARCADE_BOOT = {
   staticBase: "{% static 'arcade/' %}",
   apiBase: "{% url 'arcade:app' %}api/",
   playBase: "{% url 'arcade:app' %}play/",
+  chessPractice: "{% url 'arcade:chess_practice' %}",
+  pieceBase: "{% url 'arcade:app' %}piece/",
   devAuth: {{ dev_auth|yesno:"true,false" }},
   version: "{{ version }}",
   games: JSON.parse(document.getElementById("games-data").textContent)

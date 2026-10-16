@@ -67,10 +67,19 @@
     toastTimer = setTimeout(function () { el.classList.add("hidden"); }, 2600);
   }
 
+  var PRACTICE = !!BOOT.practice;
+  var PATHS = PRACTICE
+    ? { "board/state": "practice/chess/state", "board/move": "practice/chess/move", "board/action": "practice/chess/action" }
+    : {};
   function api(path, body) {
     body = body || {};
     body.initData = initData;
-    body.match_token = BOOT.token;
+    if (PRACTICE) {
+      path = PATHS[path] || path;
+      if (state && state.game_id) body.game_id = state.game_id;
+    } else {
+      body.match_token = BOOT.token;
+    }
     return fetch(BOOT.apiBase + path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -234,6 +243,7 @@
     if (state.over) { el.textContent = resultTitle(); return; }
     var mine = state.you === state.turn;
     var text = state.you ? (mine ? "نوبت توست" : "نوبت حریف است") : "نوبت " + (state.players[state.turn] || "");
+    if (PRACTICE && !mine) text = "کامپیوتر در حال فکر کردن…";
     if (state.check !== null) { text = "کیش! " + text; el.className = "alert"; }
     else if (mine) el.className = "mine";
     if (state.draw_offer === "opponent") text += " · حریف پیشنهاد مساوی داده است";
@@ -314,6 +324,19 @@
   // ------------------------------------------------------------------ حرکت
   function send(src, dst, promo) {
     busy = true;
+    if (PRACTICE) {
+      // حرکت بازیکن همان لحظه روی تخته دیده می‌شود؛ جواب کامپیوتر با پاسخ سرور می‌آید
+      var board = state.board.split("");
+      board[dst] = board[src];
+      board[src] = ".";
+      state.board = board.join("");
+      state.last = [src, dst];
+      state.turn = state.turn === "w" ? "b" : "w";
+      state.legal = {};
+      selected = null;
+      paint(dst);
+      status();
+    }
     api("board/move", { src: src, dst: dst, promo: promo || "" }).then(function (response) {
       busy = false;
       if (!apply(response)) { selected = null; paint(null); }
@@ -387,8 +410,29 @@
   });
   $("draw-btn").addEventListener("click", function () { act("draw"); });
   $("result-close").addEventListener("click", function () {
+    if (PRACTICE) { $("result").classList.add("hidden"); chooseLevel(); return; }
     if (tg && tg.close) { try { tg.close(); return; } catch (e) { /* قدیمی */ } }
     $("result").classList.add("hidden");
+  });
+  function chooseLevel() {
+    $("loading").classList.add("hidden");
+    $("levels").classList.remove("hidden");
+  }
+  Array.prototype.forEach.call(document.querySelectorAll("#levels [data-level]"), function (button) {
+    button.addEventListener("click", function () {
+      if (busy) return;
+      busy = true;
+      state = null;
+      resultShown = false;
+      api("practice/chess/new", { level: button.dataset.level }).then(function (response) {
+        busy = false;
+        if (!response.ok) { toast(errorText(response.error)); return; }
+        $("levels").classList.add("hidden");
+        $("game").classList.remove("hidden");
+        squares = [];
+        apply(response);
+      });
+    });
   });
   $("result-view").addEventListener("click", function () { $("result").classList.add("hidden"); });
 
@@ -404,6 +448,18 @@
 
   if (!initData) {
     fail(errorText("auth_missing"));
+    return;
+  }
+  if (PRACTICE) {
+    document.body.classList.add("practice");
+    $("result-close").textContent = "بازی دوباره";
+    api("board/state", {}).then(function (response) {
+      if (!response.ok) { fail(errorText(response.error)); return; }
+      if (response.none) { chooseLevel(); return; } // بازی نیمه‌کاره‌ای نیست
+      apply(response);
+      $("loading").classList.add("hidden");
+      $("game").classList.remove("hidden");
+    });
     return;
   }
   api("board/state", {}).then(function (response) {

@@ -131,6 +131,9 @@ class BaseGame:
     # قوانین کوتاه بازی (سه خط)؛ ``{نام}`` با ثابت هم‌نام کلاس پر می‌شود. جمع سه خط باید در یک
     # پنجره‌ی هشدار تلگرام (۲۰۰ نویسه) جا شود.
     rules_fa: ClassVar[list[str]] = []
+    # نوع بازی برای راهنما: rounds (راندی) یا turns (نوبتی) و یک خط توضیح با عددهای همین کلاس
+    play_style: ClassVar[str] = "turns"
+    style_fa: ClassVar[str] = "نوبتی: هر حرکت {move_seconds} ثانیه."
     emoji: ClassVar[str] = "🎮"
     min_players: ClassVar[int] = 2
     max_players: ClassVar[int] = 20
@@ -155,6 +158,10 @@ class BaseGame:
     @classmethod
     def rules(cls) -> tuple[str, ...]:
         return format_rules(cls, cls.rules_fa)
+
+    @classmethod
+    def style(cls) -> str:
+        return format_rules(cls, [cls.style_fa])[0] if cls.style_fa else ""
 
     # ------------------------------------------------------------ امتیاز
     def add_score(self, user_id: int, points: int) -> None:
