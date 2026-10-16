@@ -1,11 +1,14 @@
-"""تنها نقطه‌ی مجاز برای تغییر موجودی سکه."""
+"""تنها نقطه‌ی مجاز برای تغییر موجودی سکه.
 
-import uuid
+سکه فقط ارز مجازی تفریحی است: خرید با پول واقعی، برداشت و انتقال بین کاربران
+وجود ندارد و نباید اضافه شود.
+"""
+
 from django.db import transaction
 
 from core.models import TelegramUser
 
-from .models import CoinTransaction, TxType
+from .models import CoinTransaction
 
 
 class InsufficientFunds(Exception):
@@ -58,53 +61,3 @@ def apply_transaction(user, amount: int, type: str, idempotency_key: str, match=
     if isinstance(user, TelegramUser):
         user.coins = balance
     return tx
-
-
-def transfer_coins(from_user, to_user, amount: int) -> tuple[CoinTransaction, CoinTransaction]:
-    """انتقال مستقیم سکه از یک کاربر به کاربر دیگر با قفل ردیف و تراکنش اتمیک."""
-    amount = int(amount)
-    if amount <= 0:
-        raise ValueError("مقدار انتقال باید بیشتر از صفر باشد.")
-    from_id = from_user.pk if isinstance(from_user, TelegramUser) else int(from_user)
-    to_id = to_user.pk if isinstance(to_user, TelegramUser) else int(to_user)
-    if from_id == to_id:
-        raise ValueError("انتقال به خودتان امکان‌پذیر نیست.")
-
-    idempotency_base = f"transfer:{uuid.uuid4().hex[:16]}"
-
-    with transaction.atomic():
-        first_id, second_id = sorted([from_id, to_id])
-        locked_users = {u.pk: u for u in TelegramUser.objects.select_for_update().filter(pk__in=[first_id, second_id])}
-        sender = locked_users[from_id]
-        receiver = locked_users[to_id]
-
-        if sender.coins < amount:
-            raise InsufficientFunds(sender.coins, amount)
-
-        sender.coins -= amount
-        sender.save(update_fields=["coins"])
-        tx_out = CoinTransaction.objects.create(
-            user_id=from_id,
-            amount=-amount,
-            balance_after=sender.coins,
-            type=TxType.TRANSFER_OUT,
-            idempotency_key=f"{idempotency_base}:out",
-        )
-
-        receiver.coins += amount
-        receiver.save(update_fields=["coins"])
-        tx_in = CoinTransaction.objects.create(
-            user_id=to_id,
-            amount=amount,
-            balance_after=receiver.coins,
-            type=TxType.TRANSFER_IN,
-            idempotency_key=f"{idempotency_base}:in",
-        )
-
-    if isinstance(from_user, TelegramUser):
-        from_user.coins = sender.coins
-    if isinstance(to_user, TelegramUser):
-        to_user.coins = receiver.coins
-
-    return tx_out, tx_in
-
