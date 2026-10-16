@@ -33,14 +33,17 @@ def main_menu(context, daily: bool = False) -> InlineKeyboardMarkup:
             [ui.button(texts.MENU_ADD_BTN, url=add_link, style=ui.PRIMARY)],
             first_row,
             [
-                ui.button(texts.MENU_ARCADE_BTN, "pm:arcade", style=ui.SUCCESS),
+                ui.button(texts.MENU_WALLET_BTN, "pm:wallet", style=ui.SUCCESS),
                 ui.button(texts.MENU_SHOP_BTN, "pm:shop", style=ui.PRIMARY),
             ],
             [
-                ui.button(texts.MENU_INVITE_BTN, "pm:invite", style=ui.SUCCESS),
-                ui.button(texts.MENU_RULES_BTN, "pm:rules", style=ui.PRIMARY),
+                ui.button(texts.MENU_ARCADE_BTN, "pm:arcade", style=ui.SUCCESS),
+                ui.button(texts.MENU_INVITE_BTN, "pm:invite", style=ui.PRIMARY),
             ],
-            [ui.button(texts.MENU_HELP_BTN, "pm:help", style=ui.PRIMARY)],
+            [
+                ui.button(texts.MENU_RULES_BTN, "pm:rules", style=ui.PRIMARY),
+                ui.button(texts.MENU_HELP_BTN, "pm:help", style=ui.PRIMARY),
+            ],
         ]
     )
 
@@ -99,6 +102,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user
     from . import arcade as arcade_handlers
     from . import group as group_handlers
     from . import shop as shop_handlers
+    from . import wallet as wallet_handlers
 
     if update.effective_chat.type != ChatType.PRIVATE:
         return
@@ -110,6 +114,8 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user
         "shop": shop_handlers.shop,
         "arcade": arcade_handlers.arcade,
         "rules": group_handlers.rules,
+        "wallet": wallet_handlers.wallet_cmd,
+        "back": start,
     }
     handler = actions.get(query.data.split(":", 1)[1])
     if handler is not None:
