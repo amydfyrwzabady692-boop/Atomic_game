@@ -113,7 +113,30 @@ def start_link(username: str, payload: str = "join") -> str:
 
 
 def miniapp_link(username: str, token: str) -> str:
-    return f"https://t.me/{username}/{settings.MINIAPP_SHORT_NAME}?startapp={token}"
+    """لینک مستقیم مینی‌اپ برای دکمه‌های داخل گروه (دکمه‌ی web_app در گروه مجاز نیست).
+
+    با ``MINIAPP_SHORT_NAME`` لینک مینی‌اپی است که در BotFather با /newapp و همین نام کوتاه ساخته شده؛
+    اگر خالی باشد لینک «مینی‌اپ اصلی» ربات (BotFather ← Bot Settings ← Configure Mini App) ساخته می‌شود.
+    اگر هیچ‌کدام در BotFather تنظیم نشده باشد، تلگرام به‌جای صفحه‌ی بازی فقط چت ربات را باز می‌کند؛
+    برای همین زیر هر دکمه یک راه پشتیبان (``open_in_bot_link``) هم هست.
+    """
+    short = (settings.MINIAPP_SHORT_NAME or "").strip()
+    if short:
+        return f"https://t.me/{username}/{short}?startapp={token}"
+    return f"https://t.me/{username}?startapp={token}"
+
+
+OPEN_PAYLOAD_PREFIX = "p_"
+
+
+def open_in_bot_link(username: str, token: str) -> str:
+    """راه پشتیبان: پیوی ربات باز می‌شود و ربات دکمه‌ی web_app همین بازی را می‌فرستد."""
+    return start_link(username, OPEN_PAYLOAD_PREFIX + token)
+
+
+def game_page_url(token: str) -> str:
+    """آدرس مستقیم صفحه‌ی بازی برای دکمه‌ی web_app در پیوی (شطرنج/دوز یا آرکید)."""
+    return f"{settings.MINIAPP_BASE_URL.rstrip('/')}/arcade/?tgWebAppStartParam={token}"
 
 
 def lobby_text(match, info: GameInfo, names: list[str], remaining: int, prize_note: str = "") -> str:
@@ -250,13 +273,17 @@ def live_keyboard(username: str, token: str, game_key: str) -> InlineKeyboardMar
                     style=ui.SUCCESS,
                 )
             ],
+            [ui.button(texts.OPEN_IN_BOT_BTN, url=open_in_bot_link(username, token), style=ui.PRIMARY)],
             [ui.button(texts.RULES_BTN, f"rl:{game_key}", style=ui.PRIMARY)],
         ]
     )
 
 
 def arcade_keyboard(username: str, token: str, game_key: str = "") -> InlineKeyboardMarkup:
-    rows = [[ui.button(texts.ARCADE_PLAY_BTN, url=miniapp_link(username, token), style=ui.SUCCESS)]]
+    rows = [
+        [ui.button(texts.ARCADE_PLAY_BTN, url=miniapp_link(username, token), style=ui.SUCCESS)],
+        [ui.button(texts.OPEN_IN_BOT_BTN, url=open_in_bot_link(username, token), style=ui.PRIMARY)],
+    ]
     if game_key:
         rows.append([ui.button(texts.RULES_BTN, f"rl:{game_key}", style=ui.PRIMARY)])
     return InlineKeyboardMarkup(rows)

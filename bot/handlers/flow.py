@@ -24,6 +24,8 @@ from ..users import ensure_group, is_group_admin
 from .common import answer, callback, command, manager_of, reply
 
 DRAFT_TTL = 300
+# منوی ساخت بازی اگر سازنده این‌قدر ثانیه دکمه‌ای نزند پاک می‌شود (فقط منو؛ لابی و مسابقه هرگز)
+MENU_IDLE_SECONDS = 30
 STEPS = ["variant", "fee", "split", "window", "join"]
 
 ERROR_TEXTS = {
@@ -71,6 +73,39 @@ def enabled_games(group: TelegramGroup) -> dict[str, GameInfo]:
     """بازی‌های قابل‌ساخت در این گروه. بازی‌های آرکید تا راه‌اندازی مینی‌اپ پیشنهاد نمی‌شوند."""
     arcade = render.arcade_ready()
     return {k: g for k, g in catalog().items() if group.game_enabled(k) and (arcade or not g.is_arcade)}
+
+
+# ------------------------------------------------------------------ پاک شدن منوی بی‌استفاده
+_menu_jobs: dict[tuple[int, int], object] = {}
+
+
+def _arm_menu_timeout(context, chat_id: int, message_id: int) -> None:
+    """زمان‌سنج ۳۰ ثانیه‌ی منو را (دوباره) شروع می‌کند؛ هر کلیک سازنده آن را از نو می‌شمارد."""
+    key = (chat_id, message_id)
+    _disarm_menu_timeout(chat_id, message_id)
+    application = context.application
+
+    async def run(_context):
+        if _menu_jobs.get(key) is not job:
+            return
+        _menu_jobs.pop(key, None)
+        # فقط اگر هنوز منو است: پیش‌نویس هست و این پیام به لابی تبدیل نشده
+        if await get_redis().get(_draft_key(chat_id, message_id)) is None:
+            return
+        active = application.bot_data["manager"].active.get(chat_id) if "manager" in application.bot_data else None
+        if active is not None and active.lobby_message_id == message_id:
+            return
+        await get_redis().delete(_draft_key(chat_id, message_id))
+        await tg_call(application.bot.delete_message, chat_id, message_id)
+
+    job = application.job_queue.run_once(run, MENU_IDLE_SECONDS, name=f"menu_idle:{chat_id}:{message_id}")
+    _menu_jobs[key] = job
+
+
+def _disarm_menu_timeout(chat_id: int, message_id: int) -> None:
+    job = _menu_jobs.pop((chat_id, message_id), None)
+    if job is not None:
+        job.schedule_removal()
 
 
 # ------------------------------------------------------------------ صفحه‌ها
@@ -181,6 +216,7 @@ async def game(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Telegra
     message = await reply(update, text, keyboard)
     if message:
         await _save_draft(chat.id, message.message_id, {"creator": user.tg_id})
+        _arm_menu_timeout(context, chat.id, message.message_id)
 
 
 async def _show(query, text, keyboard) -> None:
@@ -199,6 +235,7 @@ async def new_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     if draft["creator"] != user.tg_id:
         await answer(query, texts.NOT_YOUR_MENU, alert=True)
         return
+    _arm_menu_timeout(context, chat.id, message_id)
 
     parts = query.data.split(":", 2)
     action = parts[1]
@@ -207,6 +244,7 @@ async def new_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     games = enabled_games(group)
 
     if action == "x":
+        _disarm_menu_timeout(chat.id, message_id)
         await get_redis().delete(_draft_key(chat.id, message_id))
         await tg_call(query.message.delete)
         return
@@ -264,6 +302,8 @@ async def new_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         options["attempts"] = settings.ARCADE_DEFAULT_ATTEMPTS
     split = settings.PRIZE_SPLITS[draft.get("split", "100")]
     manager = manager_of(context)
+    # از این لحظه پیام منو لابی می‌شود و دیگر نباید خودکار پاک شود
+    _disarm_menu_timeout(chat.id, message_id)
     await get_redis().delete(_draft_key(chat.id, message_id))
     try:
         active = await manager.create_lobby(

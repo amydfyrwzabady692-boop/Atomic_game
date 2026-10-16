@@ -394,9 +394,14 @@ class MatchManager:
             await self._run_locked(active, active.game.start)
 
     # ================================================================ لغو
-    async def cancel(self, active: ActiveMatch, reason: str) -> None:
+    async def cancel(self, active: ActiveMatch, reason: str, *, only_lobby: bool = False) -> bool:
+        """مسابقه را لغو می‌کند. با ``only_lobby`` فقط اگر هنوز در لابی باشد (درخواست سازنده/ادمین گروه)؛
+        بررسی داخل قفل است تا با شروع هم‌زمان مسابقه قاطی نشود. اگر لغو انجام نشد ``False``."""
         async with active.lock:
+            if only_lobby and active.phase != "lobby":
+                return False
             await self._cancel_locked(active, reason)
+            return True
 
     async def _cancel_locked(self, active: ActiveMatch, reason: str) -> None:
         if active.phase == "done":

@@ -54,7 +54,9 @@ async def cancel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, us
     if not await _can_cancel(context, active, chat_id, user):
         await answer(query, texts.CANCEL_NOT_ALLOWED, alert=True)
         return
-    await manager.cancel(active, "manual")
+    # مسابقه‌ی شروع‌شده تا اعلام نتیجه لغو نمی‌شود (ورودی‌ها پرداخت شده و بازی در جریان است)
+    if not await manager.cancel(active, "manual", only_lobby=True):
+        await answer(query, texts.CANCEL_STARTED, alert=True)
 
 
 @command(group=True)
@@ -68,7 +70,8 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Teleg
     if not await _can_cancel(context, active, chat_id, user):
         await reply(update, texts.CANCEL_NOT_ALLOWED)
         return
-    await manager.cancel(active, "manual")
+    if not await manager.cancel(active, "manual", only_lobby=True):
+        await reply(update, texts.CANCEL_STARTED)
 
 
 # ------------------------------------------------------------------ پیام‌ها و دکمه‌های بازی

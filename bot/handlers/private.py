@@ -78,6 +78,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Telegr
     else:
         daily_on = await _daily_enabled()
         text = texts.START_BACK.format(name=name, coins=fa_num(user.coins))
+    if payload.startswith(render.OPEN_PAYLOAD_PREFIX):
+        # دکمه‌ی پشتیبان زیر صفحه‌ی بازی در گروه: صفحه‌ی بازی را با دکمه‌ی web_app همین‌جا باز می‌کنیم
+        await _send_open_game(update, payload[len(render.OPEN_PAYLOAD_PREFIX) :])
+        return
     if payload == "join":
         text += "\n\n" + texts.START_JOIN_HINT
     await reply(update, text, main_menu(context, daily=daily_on))
@@ -86,6 +90,35 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Telegr
 @db
 def _daily_enabled() -> bool:
     return economy.get_settings().daily_enabled
+
+
+@db
+def _open_match_token(token: str) -> str | None:
+    """توکن مسابقه‌ی در جریانی که صفحه‌ی مینی‌اپ دارد (آرکید، شطرنج، دوز و …)؛ وگرنه ``None``."""
+    from games.models import ACTIVE_STATUSES, Match
+
+    match = Match.objects.filter(token=token[:24], status__in=ACTIVE_STATUSES).only("game_type").first()
+    if match is None:
+        return None
+    from arcade import board
+
+    if match.game_type.startswith("arcade_") or board.live_match(match.token) is not None:
+        return match.token
+    return None
+
+
+async def _send_open_game(update: Update, token: str) -> None:
+    from telegram import WebAppInfo
+
+    if not render.arcade_ready():
+        await reply(update, texts.OPEN_GAME_NOT_CONFIGURED)
+        return
+    found = await _open_match_token(token) if token else None
+    if found is None:
+        await reply(update, texts.OPEN_GAME_GONE)
+        return
+    button = ui.button(texts.OPEN_GAME_BTN, web_app=WebAppInfo(url=render.game_page_url(found)), style=ui.SUCCESS)
+    await reply(update, texts.OPEN_GAME, InlineKeyboardMarkup([[button]]))
 
 
 @command()

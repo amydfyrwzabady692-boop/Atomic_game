@@ -747,3 +747,95 @@ def test_currency_name_can_be_changed(settings):
         settings.COIN_NAME, settings.COIN_EMOJI = "سکه", "🪙"
         importlib.reload(module)
     assert "سکه" in module.COINS_NOTE
+
+
+# ====================================================================== منوی بی‌استفاده، لغو بعد از شروع، لینک پشتیبان
+async def test_idle_game_menu_is_deleted_after_30_seconds(app):
+    from core.redis import get_redis
+
+    await start_user(app, 401)
+    _, menu_id = await open_game_menu(app, 401)
+    assert len(app.job_queue.pending(f"menu_idle:{GROUP_ID}:{menu_id}")) == 1
+    await app.job_queue.fire(f"menu_idle:{GROUP_ID}:{menu_id}")
+    assert (GROUP_ID, menu_id) in app.bot.deleted
+    assert await get_redis().get(f"draft:{GROUP_ID}:{menu_id}") is None
+
+
+async def test_each_click_restarts_the_menu_timer_and_lobby_is_never_deleted(app):
+    await start_user(app, 402)
+    _, menu_id = await open_game_menu(app, 402)
+    name = f"menu_idle:{GROUP_ID}:{menu_id}"
+    first = app.job_queue.pending(name)[0]
+    await click(app, 402, "n:g:quick_math", menu_id)
+    assert first.removed and len(app.job_queue.pending(name)) == 1
+    for data in ("n:f:100", "n:s:100", "n:t:60"):
+        await click(app, 402, data, menu_id)
+    # منو به لابی تبدیل شد: زمان‌سنج منو دیگر فعال نیست و پیام پاک نمی‌شود
+    assert app.job_queue.pending(name) == []
+    assert (GROUP_ID, menu_id) not in app.bot.deleted
+    assert (await sync_to_async(Match.objects.get)()).status == MatchStatus.LOBBY
+
+
+async def test_started_match_cannot_be_cancelled_from_the_group(app):
+    await start_user(app, 411)
+    await start_user(app, 412)
+    _, menu_id = await open_game_menu(app, 411)
+    for data in ("n:g:quick_math", "n:f:100", "n:s:100", "n:t:60"):
+        await click(app, 411, data, menu_id)
+    match = await sync_to_async(Match.objects.get)()
+    await click(app, 412, f"j:{match.pk}", menu_id, group.join_callback)
+    await app.job_queue.fire("lobby_close")
+    assert (await sync_to_async(Match.objects.get)()).status == MatchStatus.RUNNING
+
+    pressed = await click(app, 411, f"x:{match.pk}", menu_id, group.cancel_callback)
+    assert pressed.answers[0] == (texts.CANCEL_STARTED, True)
+    app.bot.admins.add((GROUP_ID, 412))
+    reset_clients()
+    update, context = make_update(app, 412, chat_id=GROUP_ID, chat_type="supergroup", text="/cancel")
+    await group.cancel(update, context)
+    assert update.replies[0]["text"] == texts.CANCEL_STARTED
+    assert (await sync_to_async(Match.objects.get)()).status == MatchStatus.RUNNING
+    assert GROUP_ID in manager_of_app(app).active
+
+
+def manager_of_app(app):
+    return app.bot_data["manager"]
+
+
+async def test_open_in_bot_fallback_sends_a_web_app_button(app, settings):
+    from bot import render
+    from games.engine import services
+
+    settings.MINIAPP_BASE_URL = "https://arcade.test"
+    users = [await get_user_started(app, 421), await get_user_started(app, 422)]
+    grp = await sync_to_async(TelegramGroup.objects.get_or_create)(chat_id=GROUP_ID, defaults={"title": "x"})
+    match = await sync_to_async(services.create_match)(
+        grp[0], users[0], "arcade_pins", entry_fee=0, prize_split=[100], join_seconds=60, min_players=2, max_players=5,
+        options={"attempts": 3, "window_minutes": 5},
+    )  # fmt: skip
+    keyboard = render.arcade_keyboard("test_bot", match.token, "pins")
+    urls = [b.url for b in buttons_of(keyboard) if b.url]
+    assert f"start=p_{match.token}" in urls[1]
+
+    update, context = make_update(app, 421, text=f"/start p_{match.token}")
+    await private.start(update, context)
+    button = buttons_of(update.replies[0]["reply_markup"])[0]
+    assert button.web_app.url == f"https://arcade.test/arcade/?tgWebAppStartParam={match.token}"
+
+    gone, context = make_update(app, 421, text="/start p_nope")
+    await private.start(gone, context)
+    assert gone.replies[0]["text"] == texts.OPEN_GAME_GONE
+
+
+async def get_user_started(app, tg_id):
+    await start_user(app, tg_id)
+    return await get_user(tg_id)
+
+
+def test_miniapp_link_uses_short_name_or_main_app(settings):
+    from bot import render
+
+    settings.MINIAPP_SHORT_NAME = "arcade"
+    assert render.miniapp_link("b", "T") == "https://t.me/b/arcade?startapp=T"
+    settings.MINIAPP_SHORT_NAME = ""
+    assert render.miniapp_link("b", "T") == "https://t.me/b?startapp=T"
