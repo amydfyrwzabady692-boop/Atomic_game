@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from core.models import TelegramGroup, TelegramUser
 from leaderboard.progress import award, check_progress_achievements, level_for_xp
-from wallet.economy import try_reward_referral
+from wallet.economy import ReferralResult, try_reward_referral
 from wallet.models import TxType
 from wallet.services import InsufficientFunds, apply_transaction
 
@@ -46,7 +46,8 @@ class PlayerResult:
 class MatchResult:
     match: Match
     players: list[PlayerResult]
-    referral_rewards: list[tuple[TelegramUser, TelegramUser]] = field(default_factory=list)
+    # (نتیجه‌ی دعوت، دعوت‌شده) برای پیام به دعوت‌کننده
+    referral_rewards: list[tuple[ReferralResult, TelegramUser]] = field(default_factory=list)
 
 
 def create_match(
@@ -178,6 +179,8 @@ def finish_match(match_id: int, standings: list[Standing]) -> MatchResult | None
         paid_groups = [g for g in groups if g[0].score > 0] or groups
         shares = compute_payouts(match.pot, match.prize_split, [[s.user_id for s in g] for g in paid_groups])
         payouts = {uid: shares.get(uid, 0) for uid in entries}
+        # بازی رایگان (ورودی صفر) فقط برای سرگرمی است: سکه، XP، برد، آمار و دستاورد ندارد
+        free = match.entry_fee == 0
 
         results: list[PlayerResult] = []
         rank = 1
@@ -188,7 +191,7 @@ def finish_match(match_id: int, standings: list[Standing]) -> MatchResult | None
                 # تساوی صفر-صفر (مثلاً وقتی هیچ‌کس بازی نکرده) «برد» حساب نمی‌شود؛
                 # وگرنه می‌شد با مسابقه‌های خالی، آمار برد و جایزه‌ی دستاوردها را جمع کرد.
                 scored = s.score > 0
-                xp = settings.XP_PARTICIPATION + (settings.XP_BY_RANK.get(rank, 0) if scored else 0)
+                xp = 0 if free else settings.XP_PARTICIPATION + (settings.XP_BY_RANK.get(rank, 0) if scored else 0)
                 if prize:
                     apply_transaction(entry.user, prize, TxType.PRIZE, f"prize:{match.pk}:{s.user_id}", match)
                 entry.score, entry.score_at, entry.rank, entry.prize, entry.xp_gained = (
@@ -202,13 +205,14 @@ def finish_match(match_id: int, standings: list[Standing]) -> MatchResult | None
 
                 user = TelegramUser.objects.select_for_update().get(pk=s.user_id)
                 old_level = user.level
-                user.games_played += 1
-                won = rank == 1 and scored
-                if won:
-                    user.wins += 1
-                user.xp += xp
-                user.level = level_for_xp(user.xp)
-                user.save(update_fields=["games_played", "wins", "xp", "level"])
+                won = rank == 1 and scored and not free
+                if not free:
+                    user.games_played += 1
+                    if won:
+                        user.wins += 1
+                    user.xp += xp
+                    user.level = level_for_xp(user.xp)
+                    user.save(update_fields=["games_played", "wins", "xp", "level"])
                 results.append(PlayerResult(user, s.score, rank, prize, xp, user.level > old_level, won=won))
             rank += len(group)
 
@@ -217,15 +221,15 @@ def finish_match(match_id: int, standings: list[Standing]) -> MatchResult | None
         match.save(update_fields=["status", "finished_at"])
 
         referral_rewards = []
-        for r in results:
+        for r in [] if free else results:
             r.achievements = check_progress_achievements(r.user)
             if r.won:
                 extra = _special_win_achievement(match)
                 if extra and (a := award(r.user, extra)):
                     r.achievements.append(a)
-            referrer = try_reward_referral(r.user)
-            if referrer:
-                referral_rewards.append((referrer, r.user))
+            referral = try_reward_referral(r.user)
+            if referral:
+                referral_rewards.append((referral, r.user))
         for r in results:
             r.user.refresh_from_db()
     return MatchResult(match, results, referral_rewards)

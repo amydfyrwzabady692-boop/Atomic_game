@@ -70,6 +70,24 @@ def split_label(split: list[int]) -> str:
     return texts.SPLIT_LABELS.get(key, key)
 
 
+def referral_text(referral, invitee) -> str:
+    """پیام به دعوت‌کننده بعد از اولین بازی سکه‌ای دوستش: جایزه یا پیشرفت تا جایزه‌ی بعدی.
+    اگر جایزه‌ی دعوت در تنظیمات خاموش باشد متن خالی برمی‌گرداند (پیامی فرستاده نمی‌شود)."""
+    name = escape(invitee.display_name)
+    if referral.reward:
+        return texts.REFERRAL_REWARDED.format(name=name, count=fa_num(referral.count), amount=fa_num(referral.reward))
+    if referral.next_reward <= 0:
+        return ""
+    progress = referral.count % referral.every
+    return texts.REFERRAL_PROGRESS.format(
+        name=name,
+        progress=fa_num(progress),
+        every=fa_num(referral.every),
+        left=fa_num(referral.every - progress),
+        reward=fa_num(referral.next_reward),
+    )
+
+
 def fee_label(fee: int) -> str:
     return texts.FEE_FREE if fee == 0 else texts.FEE_BTN.format(amount=fa_num(fee))
 
@@ -142,7 +160,7 @@ def lobby_keyboard(match_id: int, username: str, game_key: str = "") -> InlineKe
         ]
     ]
     if game_key:
-        rows.append([ui.button(texts.RULES_BTN, f"rl:{game_key}")])
+        rows.append([ui.button(texts.RULES_BTN, f"rl:{game_key}", style=ui.PRIMARY)])
     rows.append([ui.button(texts.START_BOT_BTN, url=start_link(username), style=ui.PRIMARY)])
     return InlineKeyboardMarkup(rows)
 
@@ -232,7 +250,7 @@ def live_keyboard(username: str, token: str, game_key: str) -> InlineKeyboardMar
                     style=ui.SUCCESS,
                 )
             ],
-            [ui.button(texts.RULES_BTN, f"rl:{game_key}")],
+            [ui.button(texts.RULES_BTN, f"rl:{game_key}", style=ui.PRIMARY)],
         ]
     )
 
@@ -240,5 +258,5 @@ def live_keyboard(username: str, token: str, game_key: str) -> InlineKeyboardMar
 def arcade_keyboard(username: str, token: str, game_key: str = "") -> InlineKeyboardMarkup:
     rows = [[ui.button(texts.ARCADE_PLAY_BTN, url=miniapp_link(username, token), style=ui.SUCCESS)]]
     if game_key:
-        rows.append([ui.button(texts.RULES_BTN, f"rl:{game_key}")])
+        rows.append([ui.button(texts.RULES_BTN, f"rl:{game_key}", style=ui.PRIMARY)])
     return InlineKeyboardMarkup(rows)

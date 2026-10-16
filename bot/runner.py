@@ -491,15 +491,14 @@ class MatchManager:
         if result is None:
             return
         await self._announce_result(active, result)
-        for referrer, invitee in result.referral_rewards:
-            from django.conf import settings
-
+        for referral, invitee in result.referral_rewards:
+            message = render.referral_text(referral, invitee)
+            if not message:
+                continue
             await tg_call(
                 self.bot.send_message,
-                referrer.tg_id,
-                texts.REFERRAL_REWARDED.format(
-                    name=escape(invitee.display_name), amount=fa_num(settings.REFERRAL_REWARD)
-                ),
+                referral.referrer.tg_id,
+                message,
                 parse_mode="HTML",
             )
         logger.info(

@@ -40,7 +40,6 @@ GAME_SETTINGS_REFRESH_SECONDS = 15
 PRIVATE_COMMANDS = [
     ("start", "شروع"),
     ("me", "پروفایل من"),
-    ("daily", "جایزه‌ی روزانه"),
     ("invite", "دعوت دوستان"),
     ("shop", "فروشگاه"),
     ("arcade", "تمرین آزاد آرکید"),

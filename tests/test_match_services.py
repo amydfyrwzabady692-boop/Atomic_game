@@ -193,7 +193,7 @@ def test_finish_with_full_tie_returns_stakes(group, make_user):
     assert [r.rank for r in result.players] == [1, 1]
 
 
-def test_free_match_pays_nothing_but_gives_xp(group, make_user):
+def test_free_match_gives_no_coins_xp_or_stats(group, make_user):
     a, b = make_user(0), make_user(0)
     match = new_match(group, a, fee=0)
     services.join_match(match.pk, a)
@@ -203,7 +203,8 @@ def test_free_match_pays_nothing_but_gives_xp(group, make_user):
     assert all(r.prize == 0 for r in result.players)
     assert not CoinTransaction.objects.filter(type__in=[TxType.PRIZE, TxType.ENTRY_FEE]).exists()
     a.refresh_from_db()
-    assert a.xp == 40
+    assert (a.xp, a.games_played, a.wins) == (0, 0, 0)
+    assert all(r.xp == 0 and not r.won for r in result.players)
 
 
 def test_cannot_cancel_finished_match(group, make_user):

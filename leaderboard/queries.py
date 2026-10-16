@@ -49,7 +49,8 @@ def top_players(
     """بر اساس سکه‌ی برده‌شده و سپس تعداد برد."""
     if since is None and until is None:
         since, until = period_range(period)
-    qs = MatchPlayer.objects.filter(match__status=MatchStatus.FINISHED)
+    # بازی‌های رایگان امتیازی ندارند و در رتبه‌بندی حساب نمی‌شوند
+    qs = MatchPlayer.objects.filter(match__status=MatchStatus.FINISHED, match__entry_fee__gt=0)
     if group_id is not None:
         qs = qs.filter(match__group_id=group_id)
     if since is not None:
@@ -82,7 +83,7 @@ def top_players(
 
 def profile_stats(user: TelegramUser) -> dict:
     best = (
-        MatchPlayer.objects.filter(user=user, rank=1, match__status=MatchStatus.FINISHED)
+        MatchPlayer.objects.filter(user=user, rank=1, match__status=MatchStatus.FINISHED, match__entry_fee__gt=0)
         .values("match__game_type")
         .annotate(n=Count("id"))
         .order_by("-n")

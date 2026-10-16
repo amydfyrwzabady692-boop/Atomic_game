@@ -18,6 +18,8 @@ from games.chess import live
 from games.chess.engine import START_FEN, Position
 from games.models import Match, MatchStatus
 from games.plugins.connect4 import COLUMNS, ConnectFourGame, winning_cells
+from wallet.models import TxType
+from wallet.services import apply_transaction
 
 from .fake_telegram import FakeApplication
 from .fakes import FakeContext
@@ -232,13 +234,15 @@ def _fresh_redis():
 def make_world():
     group = TelegramGroup.objects.create(chat_id=CHAT_ID, title="شطرنج")
     users = [TelegramUser.objects.create(tg_id=8100 + i, first_name=f"شطرنج‌باز{i}", started_bot=True) for i in range(2)]
+    for user in users:
+        apply_transaction(user, 500, TxType.ADMIN_GRANT, f"chess-test:{user.pk}")
     return group, users
 
 
 async def start_chess(app):
     group, users = await make_world()
     manager = MatchManager(app)
-    active = await manager.create_lobby(group, users[0], get_info("chess"), fee=0, split=[100], join_seconds=60, options={})
+    active = await manager.create_lobby(group, users[0], get_info("chess"), fee=50, split=[100], join_seconds=60, options={})
     for user in users:
         await manager.join(active, user)
     await app.job_queue.fire("lobby_close")
@@ -442,7 +446,7 @@ async def test_bot_runs_tictactoe_through_the_mini_app(_fresh_redis):
     group, users = await make_world()
     manager = MatchManager(app)
     active = await manager.create_lobby(
-        group, users[0], get_info("tictactoe"), fee=0, split=[100], join_seconds=60, options={}
+        group, users[0], get_info("tictactoe"), fee=50, split=[100], join_seconds=60, options={}
     )
     for user in users:
         await manager.join(active, user)

@@ -321,3 +321,19 @@ def test_admin_can_grant_virtual_credit_from_the_user_list(staff_client, make_us
     assert [u.coins for u in users] == [260, 250]
     assert CoinTransaction.objects.filter(type=TxType.ADMIN_GRANT, amount=250).count() == 2
     assert find_mismatches() == []
+
+
+def test_admin_can_edit_economy_settings(staff_client):
+    from wallet.models import EconomySettings
+
+    listing = staff_client.get(reverse("admin:wallet_economysettings_changelist"))
+    assert listing.status_code == 302
+    url = listing["Location"]
+    assert staff_client.get(url).status_code == 200
+    done = staff_client.post(
+        url, {"signup_bonus": "0", "daily_enabled": "", "referral_every": "5", "referral_reward": "7"}
+    )
+    assert done.status_code == 302
+    config = EconomySettings.load()
+    assert (config.signup_bonus, config.daily_enabled, config.referral_every, config.referral_reward) == (0, False, 5, 7)
+    assert EconomySettings.objects.count() == 1

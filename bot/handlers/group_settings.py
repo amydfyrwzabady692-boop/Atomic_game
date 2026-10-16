@@ -42,10 +42,14 @@ def home_screen(group: TelegramGroup):
         [
             [ui.button(texts.SETTINGS_GAMES_BTN, "set:games", style=ui.PRIMARY)],
             [
-                ui.button(texts.SETTINGS_MIN_BTN.format(v=fa_num(group.min_entry)), "set:min"),
-                ui.button(texts.SETTINGS_MAX_BTN.format(v=fa_num(group.max_entry)), "set:max"),
+                ui.button(texts.SETTINGS_MIN_BTN.format(v=fa_num(group.min_entry)), "set:min", style=ui.PRIMARY),
+                ui.button(texts.SETTINGS_MAX_BTN.format(v=fa_num(group.max_entry)), "set:max", style=ui.PRIMARY),
             ],
-            [ui.button(texts.SETTINGS_JOIN_BTN.format(v=fa_num(group.default_join_seconds)), "set:join")],
+            [
+                ui.button(
+                    texts.SETTINGS_JOIN_BTN.format(v=fa_num(group.default_join_seconds)), "set:join", style=ui.PRIMARY
+                )
+            ],
             [
                 ui.button(
                     texts.SETTINGS_USERS_BTN.format(v=yes_no),
@@ -64,7 +68,7 @@ def games_screen(group: TelegramGroup):
         ui.button(
             f"{texts.ON if group.game_enabled(key) else texts.OFF} {info.title_fa}",
             f"set:tg:{key}",
-            style=ui.SUCCESS if group.game_enabled(key) else "",
+            style=ui.SUCCESS if group.game_enabled(key) else ui.DANGER,
         )
         for key, info in catalog().items()
     ]

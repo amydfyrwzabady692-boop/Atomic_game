@@ -127,12 +127,12 @@ ARCADE_MIN_TAP_GAP_MS = 50
 ARCADE_DEV_AUTH = env.bool("ARCADE_DEV_AUTH", default=False)
 
 # ---------------------------------------------------------------- اقتصاد سکه (تماماً مجازی)
-SIGNUP_BONUS = 1000
+# هدیه‌ی ثبت‌نام، روشن/خاموش جایزه‌ی روزانه و جایزه‌ی دعوت در پنل ادمین (تنظیمات اقتصاد سکه) است.
+# مقدارهای زیر فقط وقتی جایزه‌ی روزانه روشن باشد استفاده می‌شوند.
 DAILY_BASE = 200
 DAILY_STEP = 50
 DAILY_MAX = 700
 RESCUE_AMOUNT = 100
-REFERRAL_REWARD = 300
 REFERRAL_MIN_ACCOUNT_AGE_HOURS = 24
 ENTRY_FEE_CHOICES = [0, 50, 100, 250, 500, 1000]
 PRIZE_SPLITS = {

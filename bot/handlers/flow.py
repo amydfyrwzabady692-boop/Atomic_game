@@ -95,12 +95,13 @@ def main_menu(group: TelegramGroup):
     return text, InlineKeyboardMarkup(rows)
 
 
-def steps_for(info: GameInfo) -> list[str]:
+def steps_for(info: GameInfo, draft: dict | None = None) -> list[str]:
     steps = []
     if info.variants:
         steps.append("variant")
     steps.append("fee")
-    if info.max_players > 2:
+    # بازی رایگان جایزه‌ای ندارد که تقسیم شود
+    if info.max_players > 2 and (draft or {}).get("fee") != 0:
         steps.append("split")
     if info.is_arcade:
         steps.append("window")
@@ -109,7 +110,7 @@ def steps_for(info: GameInfo) -> list[str]:
 
 
 def next_step(draft: dict, info: GameInfo) -> str | None:
-    for step in steps_for(info):
+    for step in steps_for(info, draft):
         if step not in draft:
             return step
     return None
@@ -228,7 +229,7 @@ async def new_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         return
 
     if action == "b":
-        done = [s for s in steps_for(info) if s in draft]
+        done = [s for s in steps_for(info, draft) if s in draft]
         if not done:
             draft = {"creator": user.tg_id}
             await _save_draft(chat.id, message_id, draft)
@@ -239,6 +240,8 @@ async def new_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         draft["variant"] = value
     elif action == "f" and value.isdigit() and group.fee_allowed(int(value)):
         draft["fee"] = int(value)
+        if draft["fee"] == 0:
+            draft.pop("split", None)
     elif action == "s" and value in settings.PRIZE_SPLITS:
         draft["split"] = value
     elif action == "w" and value.isdigit() and int(value) in settings.PLAY_WINDOW_CHOICES:

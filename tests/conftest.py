@@ -62,3 +62,18 @@ def close_edit_queues(monkeypatch):
         loop = tasks[0].get_loop()
         if not loop.is_closed() and not loop.is_running():
             loop.run_until_complete(queue.close())
+
+
+@pytest.fixture
+def economy_settings(db):
+    """تنظیمات اقتصاد (پنل ادمین) را برای یک تست عوض می‌کند: ``economy_settings(daily_enabled=True)``"""
+    from wallet.models import EconomySettings
+
+    def _set(**fields) -> EconomySettings:
+        obj = EconomySettings.load()
+        for name, value in fields.items():
+            setattr(obj, name, value)
+        obj.save()
+        return obj
+
+    return _set

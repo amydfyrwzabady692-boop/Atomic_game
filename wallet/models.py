@@ -47,3 +47,40 @@ class CoinTransaction(models.Model):
 
     def delete(self, *args, **kwargs):
         raise LedgerImmutableError("تراکنش‌های ledger قابل حذف نیستند.")
+
+
+class EconomySettings(models.Model):
+    """تنظیمات اقتصاد سکه که از پنل ادمین عوض می‌شود. فقط یک ردیف (pk=1) دارد."""
+
+    signup_bonus = models.PositiveIntegerField(
+        verbose_name="هدیه‌ی ثبت‌نام", default=0, help_text="سکه‌ای که کاربر با اولین /start می‌گیرد. ۰ = خاموش."
+    )
+    daily_enabled = models.BooleanField(
+        verbose_name="جایزه‌ی روزانه فعال", default=False, help_text="جایزه‌ی روزانه و سکه‌ی نجات (موجودی صفر)."
+    )
+    referral_every = models.PositiveIntegerField(
+        verbose_name="تعداد دعوت برای هر جایزه",
+        default=10,
+        help_text="هر چند دوست دعوت‌شده (که اولین بازی سکه‌ای‌شان را انجام داده‌اند) یک جایزه می‌دهد.",
+    )
+    referral_reward = models.PositiveIntegerField(
+        verbose_name="جایزه‌ی دعوت (سکه)", default=3, help_text="سکه‌ی هر جایزه‌ی دعوت. ۰ = خاموش."
+    )
+    updated_at = models.DateTimeField(verbose_name="آخرین تغییر", auto_now=True)
+
+    class Meta:
+        verbose_name = "تنظیمات اقتصاد سکه"
+        verbose_name_plural = "تنظیمات اقتصاد سکه"
+
+    def __str__(self) -> str:
+        return "تنظیمات اقتصاد سکه"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        self.referral_every = max(1, self.referral_every)
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls) -> "EconomySettings":
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj

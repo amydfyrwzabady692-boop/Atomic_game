@@ -27,6 +27,13 @@ from wallet.models import CoinTransaction, TxType
 from .fake_telegram import FakeApplication
 
 pytestmark = pytest.mark.django_db(transaction=True)
+# بیشتر تست‌ها کاربری با موجودی اولیه لازم دارند؛ این‌جا هدیه‌ی ثبت‌نام (که پیش‌فرض خاموش است) روشن می‌شود
+START_COINS = 1000
+
+
+@pytest.fixture(autouse=True)
+def _start_coins(economy_settings):
+    economy_settings(signup_bonus=START_COINS)
 
 GROUP_ID = -100555
 _ids = itertools.count(1)
@@ -153,14 +160,35 @@ async def start_user(app, tg_id, payload="", name="علی"):
 
 
 # ====================================================================== /start و اقتصاد
-async def test_start_gives_signup_bonus_once(app):
+async def set_economy(**fields):
+    from wallet.models import EconomySettings
+
+    def _set():
+        obj = EconomySettings.load()
+        for name, value in fields.items():
+            setattr(obj, name, value)
+        obj.save()
+
+    await sync_to_async(_set)()
+
+
+async def test_start_without_signup_bonus(app):
+    await set_economy(signup_bonus=0)
+    first = await start_user(app, 12)
+    assert "هدیه‌ی شروع" not in first.replies[0]["text"] and "رایگان" in first.replies[0]["text"]
+    user = await get_user(12)
+    assert user.coins == 0 and user.started_bot
+
+
+async def test_start_gives_signup_bonus_once_when_enabled(app):
+    await set_economy(signup_bonus=40)
     first = await start_user(app, 11)
     assert "هدیه‌ی شروع" in first.replies[0]["text"]
     user = await get_user(11)
-    assert user.coins == settings.SIGNUP_BONUS and user.started_bot
+    assert user.coins == 40 and user.started_bot
     again = await start_user(app, 11)
     assert "خوش برگشتی" in again.replies[0]["text"]
-    assert (await get_user(11)).coins == settings.SIGNUP_BONUS
+    assert (await get_user(11)).coins == 40
     assert await sync_to_async(CoinTransaction.objects.filter(type=TxType.SIGNUP_BONUS).count)() == 1
 
 
@@ -175,12 +203,21 @@ async def test_start_with_referral_link_records_referrer_but_not_self(app):
     assert not await sync_to_async(CoinTransaction.objects.filter(type=TxType.REFERRAL).exists)()
 
 
+async def test_daily_is_off_by_default(app):
+    await start_user(app, 32)
+    update, context = make_update(app, 32, text="/daily")
+    await private.daily(update, context)
+    assert update.replies[0]["text"] == texts.DAILY_DISABLED
+    assert (await get_user(32)).coins == START_COINS
+
+
 async def test_daily_only_in_private_and_once_a_day(app):
+    await set_economy(daily_enabled=True)
     await start_user(app, 31)
     update, context = make_update(app, 31, text="/daily")
     await private.daily(update, context)
     assert "جایزه‌ی روزانه" in update.replies[0]["text"]
-    assert (await get_user(31)).coins == settings.SIGNUP_BONUS + settings.DAILY_BASE
+    assert (await get_user(31)).coins == START_COINS + settings.DAILY_BASE
 
     again, context = make_update(app, 31, text="/daily")
     await private.daily(again, context)
@@ -189,7 +226,7 @@ async def test_daily_only_in_private_and_once_a_day(app):
     in_group, context = make_update(app, 31, chat_id=GROUP_ID, chat_type="supergroup", text="/daily")
     await private.daily(in_group, context)
     assert "پیوی" in in_group.replies[0]["text"]
-    assert (await get_user(31)).coins == settings.SIGNUP_BONUS + settings.DAILY_BASE
+    assert (await get_user(31)).coins == START_COINS + settings.DAILY_BASE
 
 
 async def test_me_history_and_invite(app):
@@ -206,7 +243,7 @@ async def test_banned_user_is_ignored(app):
     update, context = make_update(app, 51, text="/daily")
     await private.daily(update, context)
     assert update.replies[0]["text"].startswith("⛔️")
-    assert (await get_user(51)).coins == settings.SIGNUP_BONUS
+    assert (await get_user(51)).coins == START_COINS
 
 
 # ====================================================================== ساخت بازی در گروه
@@ -253,7 +290,7 @@ async def test_game_menu_flow_creates_lobby_and_only_creator_can_use_it(app):
     )
     assert match.lobby_message_id == menu_id  # همان پیام منو به لابی تبدیل شد
     # سازنده خودکار عضو شده و ورودی‌اش کسر شده
-    assert (await get_user(61)).coins == settings.SIGNUP_BONUS - 250
+    assert (await get_user(61)).coins == START_COINS - 250
     manager = app.bot_data["manager"]
     assert manager.active[GROUP_ID].match_id == match.pk
 
@@ -262,7 +299,7 @@ async def test_game_menu_flow_creates_lobby_and_only_creator_can_use_it(app):
     assert "وارد شدی" in joined.answers[0][0]
     twice = await click(app, 62, f"j:{match.pk}", menu_id, group.join_callback)
     assert "قبلاً" in twice.answers[0][0]
-    assert (await get_user(62)).coins == settings.SIGNUP_BONUS - 250
+    assert (await get_user(62)).coins == START_COINS - 250
 
     # تا وقتی مسابقه فعال است منوی جدید باز نمی‌شود
     blocked, _ = await open_game_menu(app, 62)
@@ -284,7 +321,7 @@ async def test_join_requires_private_start_and_enough_coins(app):
     await sync_to_async(TelegramUser.objects.filter(tg_id=73).update)(coins=10)
     await sync_to_async(CoinTransaction.objects.filter(user__tg_id=73).count)()
     poor = await click(app, 73, f"j:{match.pk}", menu_id, group.join_callback)
-    assert poor.answers[0][1] is True and "/daily" in poor.answers[0][0]
+    assert poor.answers[0][1] is True and "سکه" in poor.answers[0][0] and "رایگان" in poor.answers[0][0]
     assert await sync_to_async(match.players.count)() == 1
 
 
@@ -305,7 +342,7 @@ async def test_cancel_only_by_creator_or_admin(app):
     update, context = make_update(app, 82, chat_id=GROUP_ID, chat_type="supergroup", text="/cancel")
     await group.cancel(update, context)
     assert (await sync_to_async(Match.objects.get)()).status == MatchStatus.CANCELLED
-    assert (await get_user(81)).coins == settings.SIGNUP_BONUS  # ورودی برگشت
+    assert (await get_user(81)).coins == START_COINS  # ورودی برگشت
 
 
 async def test_group_can_restrict_game_creation_to_admins(app):
@@ -387,19 +424,19 @@ async def test_grant_is_superadmin_only_and_logged_in_ledger(app):
     await start_user(app, 121)
     nobody, context = make_update(app, 121, text="/grant 121 500")
     await admin_handlers.grant(nobody, context)
-    assert nobody.replies == [] and (await get_user(121)).coins == settings.SIGNUP_BONUS
+    assert nobody.replies == [] and (await get_user(121)).coins == START_COINS
 
     boss, context = make_update(app, settings.SUPERADMIN_IDS[0], text="/grant 121 500")
     await admin_handlers.grant(boss, context)
     assert "داده شد" in boss.replies[0]["text"]
-    assert (await get_user(121)).coins == settings.SIGNUP_BONUS + 500
+    assert (await get_user(121)).coins == START_COINS + 500
     tx = await sync_to_async(CoinTransaction.objects.get)(type=TxType.ADMIN_GRANT)
     assert tx.amount == 500
     assert any("از طرف مدیریت" in m["text"] for m in app.bot.sent if m["chat_id"] == 121)
 
     # همان update دوباره تحویل شود: سکه‌ی تکراری داده نمی‌شود
     await admin_handlers.grant(boss, context)
-    assert (await get_user(121)).coins == settings.SIGNUP_BONUS + 500
+    assert (await get_user(121)).coins == START_COINS + 500
 
 
 async def test_ban_unban_and_stats(app):
@@ -430,7 +467,7 @@ async def test_shop_buy_and_equip(app):
     bought = await click(app, 141, f"shop:b:{item.pk}", 1, shop_handlers.shop_callback)
     assert "خریدی" in bought.answers[0][0]
     user = await get_user(141)
-    assert user.coins == settings.SIGNUP_BONUS - item.price
+    assert user.coins == START_COINS - item.price
     owned = await sync_to_async(UserItem.objects.get)(user=user, item=item)
     assert owned.equipped
 
@@ -463,8 +500,14 @@ async def test_start_shows_a_coloured_menu_and_its_buttons_work(app):
     first = await start_user(app, 201)
     menu = buttons_of(first.replies[0]["reply_markup"])
     by_data = {b.callback_data: b for b in menu if b.callback_data}
-    assert {"pm:daily", "pm:me", "pm:arcade", "pm:shop", "pm:invite", "pm:rules", "pm:help"} <= set(by_data)
-    assert style_of(by_data["pm:daily"]) == "success"
+    assert {"pm:me", "pm:arcade", "pm:shop", "pm:invite", "pm:rules", "pm:help"} <= set(by_data)
+    # جایزه‌ی روزانه پیش‌فرض خاموش است و دکمه‌اش نشان داده نمی‌شود
+    assert "pm:daily" not in by_data
+    assert all(style_of(b) for b in menu), "همه‌ی دکمه‌های منوی پیوی رنگی‌اند"
+    await set_economy(daily_enabled=True)
+    again = await start_user(app, 201)
+    daily = {b.callback_data: b for b in buttons_of(again.replies[0]["reply_markup"]) if b.callback_data}
+    assert style_of(daily["pm:daily"]) == "success"
     add_button = next(b for b in menu if b.url)
     assert "startgroup" in add_button.url and style_of(add_button) == "primary"
 
@@ -686,7 +729,7 @@ async def test_cosmetic_item_can_be_bought_with_telegram_stars(app):
 
     assert await sync_to_async(StarsPurchase.objects.count)() == 1
     user = await get_user(311)
-    assert user.coins == settings.SIGNUP_BONUS  # استار هیچ‌وقت به سکه تبدیل نمی‌شود
+    assert user.coins == START_COINS  # استار هیچ‌وقت به سکه تبدیل نمی‌شود
     assert await precheck(invoice["payload"], 25) is False  # حالا دیگر مال اوست
 
 

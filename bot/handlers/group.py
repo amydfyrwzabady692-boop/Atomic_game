@@ -189,8 +189,11 @@ async def top_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user:
 def rules_home():
     keyboard = InlineKeyboardMarkup(
         [
-            [ui.button(texts.RULES_JOIN_BTN, "rules:join"), ui.button(texts.RULES_SCORE_BTN, "rules:score")],
-            [ui.button(texts.RULES_TYPES_BTN, "rules:types")],
+            [
+                ui.button(texts.RULES_JOIN_BTN, "rules:join", style=ui.SUCCESS),
+                ui.button(texts.RULES_SCORE_BTN, "rules:score", style=ui.SUCCESS),
+            ],
+            [ui.button(texts.RULES_TYPES_BTN, "rules:types", style=ui.SUCCESS)],
             [
                 ui.button(texts.RULES_TEXT_GAMES_BTN, "rules:t", style=ui.PRIMARY),
                 ui.button(texts.RULES_ARCADE_BTN, "rules:a", style=ui.SUCCESS),
