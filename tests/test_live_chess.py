@@ -424,7 +424,7 @@ def test_grid_page_and_api(client, group, make_user):
         max_players=2,
         join_deadline=timezone.now(),
     )
-    board.start(match.pk, board.new_state("connect4", red.pk, yellow.pk, time.time()))
+    board.start(match.pk, board.new_state("connect4", [red.pk, yellow.pk], time.time()))
     page = client.get(f"/arcade/board/{match.token}/").content.decode()
     assert 'id="grid"' in page and "grid.js" in page
     status, data = post(client, "board/state", red, match_token=match.token)

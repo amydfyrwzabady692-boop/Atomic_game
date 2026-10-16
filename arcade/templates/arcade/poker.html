@@ -1,0 +1,81 @@
+{% load static %}<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b3d2e">
+<title>پوکر</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E🃏%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="{% static 'arcade/board/chess.css' %}?v={{ version }}">
+<link rel="stylesheet" href="{% static 'arcade/board/poker.css' %}?v={{ version }}">
+<link rel="preload" href="/arcade/font/regular.ttf" as="font" type="font/ttf" crossorigin>
+</head>
+<body>
+<main id="game" class="hidden">
+  <header id="table-head">
+    <h1>🃏 پوکر</h1>
+    <span id="hand-info"></span>
+  </header>
+
+  <div id="seats"></div>
+
+  <section id="felt" aria-label="میز">
+    <div id="board-cards"></div>
+    <div id="pot">پات: <b id="pot-amount">۰</b></div>
+    <div id="street"></div>
+  </section>
+
+  <section id="me" class="hidden">
+    <div id="my-cards"></div>
+    <div id="my-hand"></div>
+  </section>
+
+  <p id="status" aria-live="polite"></p>
+
+  <section id="controls" class="hidden">
+    <div class="row">
+      <button id="fold-btn" class="btn danger" type="button">فولد</button>
+      <button id="check-btn" class="btn go" type="button">چک</button>
+      <button id="call-btn" class="btn go" type="button">کال</button>
+    </div>
+    <div class="row" id="raise-row">
+      <input id="raise-range" type="range" min="0" max="0" step="1" aria-label="مقدار رِیز">
+      <button id="raise-btn" class="btn violet" type="button">رِیز</button>
+    </div>
+    <div class="row">
+      <button id="allin-btn" class="btn danger" type="button">آل‌این</button>
+    </div>
+  </section>
+
+  <div id="actions"><button id="resign-btn" class="btn violet" type="button">🚪 ترک میز</button></div>
+</main>
+
+<section id="loading" class="overlay">
+  <div class="spinner"></div>
+  <p id="loading-text">در حال آماده‌سازی میز پوکر…</p>
+</section>
+
+<section id="result" class="overlay hidden">
+  <div class="card">
+    <div class="result-icon" id="result-icon">🏆</div>
+    <h1 id="result-title"></h1>
+    <p class="muted" id="result-reason"></p>
+    <button id="result-close" class="btn go" type="button">برگشت</button>
+    <button id="result-view" class="btn violet" type="button">دیدن میز</button>
+  </div>
+</section>
+
+<div id="toast" class="hidden" role="alert"></div>
+
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>
+window.BOARD_BOOT = {
+  token: "{{ token|escapejs }}",
+  apiBase: "{% url 'arcade:app' %}api/",
+  devAuth: {{ dev_auth|yesno:"true,false" }},
+  version: "{{ version }}"
+};
+</script>
+<script src="{% static 'arcade/board/poker.js' %}?v={{ version }}"></script>
+</body>
+</html>

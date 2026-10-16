@@ -31,7 +31,12 @@ PIECE_CODES = {f"{color}{kind}" for color in "wb" for kind in "kqrbnp"}
 
 def render_page(request, token: str, practice: bool = False):
     match = None if practice else board.live_match(token)
-    template = "arcade/board.html" if match is None or match.game_type == "chess" else "arcade/grid.html"
+    if match is None or match.game_type == "chess":
+        template = "arcade/board.html"
+    elif match.game_type == "poker":
+        template = "arcade/poker.html"
+    else:
+        template = "arcade/grid.html"
     return render(
         request,
         template,
@@ -146,12 +151,21 @@ def move(request, user, payload):
 @rate_limited("board_move", 30, 10)
 @authenticated
 def action(request, user, payload):
-    """تسلیم یا پیشنهاد/قبول مساوی."""
+    """تسلیم، پیشنهاد/قبول مساوی، یا حرکت پوکر (فولد/چک/کال/رِیز/آل‌این)."""
+    from games.poker import live as poker
+
     match = _match(payload)
     if match.status != MatchStatus.RUNNING:
         raise ArcadeError("match_not_running", 409)
     kind = payload.get("action")
-    if kind == "resign":
+    if kind in poker.ACTIONS:
+        if match.game_type != "poker":
+            raise ArcadeError("bad_action", 400)
+        amount = payload.get("amount", 0)
+        amount = _int(amount) if kind == "raise" else 0
+        now = time.time()
+        change = lambda s: poker.act(s, user.pk, kind, amount, now)  # noqa: E731
+    elif kind == "resign":
         change = lambda s: board.rules_for(s).resign(s, user.pk)  # noqa: E731
     elif kind == "draw":
         change = lambda s: board.rules_for(s).offer_draw(s, user.pk)  # noqa: E731

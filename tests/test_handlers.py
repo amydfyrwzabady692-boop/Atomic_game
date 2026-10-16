@@ -601,13 +601,13 @@ async def test_game_menu_shows_every_game_on_one_screen(app):
     buttons = buttons_of(menu.replies[0]["reply_markup"])
     games = [b for b in buttons if (b.callback_data or "").startswith("n:g:")]
     arcade = [b for b in games if b.callback_data.startswith("n:g:arcade_")]
-    assert len(games) == 26 and len(arcade) == 14
+    assert len(games) == 27 and len(arcade) == 14
     assert {style_of(b) for b in arcade} == {"success"}
     assert {style_of(b) for b in games if b not in arcade} == {"primary"}
     labels = " ".join(b.text for b in games)
     for title in ("هیزم‌شکن", "موش‌زن", "مار کلاسیک", "شطرنج", "دوز چهارتایی", "کوییز"):
         assert title in labels
-    assert "۱۲ بازی گروهی" in menu.replies[0]["text"] and "۱۴ بازی آرکید" in menu.replies[0]["text"]
+    assert "۱۳ بازی گروهی" in menu.replies[0]["text"] and "۱۴ بازی آرکید" in menu.replies[0]["text"]
     # دکمه‌ی عنوان بخش آرکید فقط توضیح می‌دهد و منو را عوض نمی‌کند
     header = await click(app, 251, "n:h", menu_id)
     assert header.answers[0] == (texts.ARCADE_HEADER_NOTE, True) and header.edits == []
@@ -624,7 +624,7 @@ async def test_arcade_games_are_not_offered_until_the_mini_app_is_set_up(app, se
     menu, menu_id = await open_game_menu(app, 261)
     data = [b.callback_data for b in buttons_of(menu.replies[0]["reply_markup"])]
     assert not any((d or "").startswith("n:g:arcade_") for d in data) and "n:h" not in data
-    assert "راه‌اندازی مینی‌اپ" in menu.replies[0]["text"] and "۱۲ بازی گروهی" in menu.replies[0]["text"]
+    assert "راه‌اندازی مینی‌اپ" in menu.replies[0]["text"] and "۱۳ بازی گروهی" in menu.replies[0]["text"]
     stale = await click(app, 261, "n:g:arcade_timber", menu_id)
     assert stale.answers[0] == (texts.MENU_EXPIRED, True)
 

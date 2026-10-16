@@ -11,19 +11,37 @@ from django.db import transaction
 from games import gridlive
 from games.chess import live
 from games.models import Match
+from games.poker import live as poker
 
-LIVE_GAMES = ("chess", "tictactoe", "connect4")
+LIVE_GAMES = ("chess", "tictactoe", "connect4", "poker")
 
 
 def rules_for(state: dict):
-    """ماژول قوانین بازیِ این وضعیت (شطرنج یا بازی‌های خانه‌ای)."""
-    return live if state.get("game", "chess") == "chess" else gridlive
-
-
-def new_state(game: str, first_id: int, second_id: int, now: float) -> dict:
+    """ماژول قوانین بازیِ این وضعیت (شطرنج، پوکر یا بازی‌های خانه‌ای)."""
+    game = state.get("game", "chess")
     if game == "chess":
-        return live.new_state(first_id, second_id, now)
-    return gridlive.new_state(game, first_id, second_id, now)
+        return live
+    if game == "poker":
+        return poker
+    return gridlive
+
+
+def new_state(game: str, user_ids: list[int], now: float, seed: str = "") -> dict:
+    """وضعیت تازه؛ ``user_ids`` به ترتیب نشستن (شطرنج: سفید، سیاه). پوکر ۲ تا ۸ نفر می‌گیرد."""
+    if game == "chess":
+        return live.new_state(user_ids[0], user_ids[1], now)
+    if game == "poker":
+        return poker.new_state(list(user_ids), now, seed=seed)
+    return gridlive.new_state(game, user_ids[0], user_ids[1], now)
+
+
+def standings(state: dict) -> list[tuple[int, int]]:
+    """(کاربر، امتیاز) برای تقسیم جایزه: پوکر بر اساس ژتون، بقیه برنده ۱ و بازنده ۰."""
+    rules = rules_for(state)
+    if hasattr(rules, "standings"):
+        return rules.standings(state)
+    winner = (state.get("over") or {}).get("winner")
+    return [(uid, 1 if uid == winner else 0) for uid in rules.players(state).values()]
 
 
 def live_match(token: str) -> Match | None:

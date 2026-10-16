@@ -287,3 +287,63 @@ def arcade_keyboard(username: str, token: str, game_key: str = "") -> InlineKeyb
     if game_key:
         rows.append([ui.button(texts.RULES_BTN, f"rl:{game_key}", style=ui.PRIMARY)])
     return InlineKeyboardMarkup(rows)
+
+
+# ------------------------------------------------------------------ پوکر
+POKER_ACTIONS = {"fold": "فولد", "check": "چک", "call": "کال", "raise": "رِیز", "allin": "آل‌این", "leave": "ترک میز"}
+POKER_STREETS = {"preflop": "قبل از فلاپ", "flop": "فلاپ", "turn": "ترن", "river": "ریور"}
+
+
+def poker_text(state: dict, names: dict[int, str], live: bool = False) -> str:
+    """متن میز پوکر برای پیام گروه: کارت‌های وسط، پات، ژتون‌ها، نوبت و نتیجه‌ی دست قبل.
+    کارت‌های دست هیچ بازیکنی این‌جا نشان داده نمی‌شود (جز در رو کردن پایان دست)."""
+    from games.poker.cards import label
+
+    seats = state["seats"]
+    name = {i: escape(short_name(names.get(uid, ""))) for i, uid in enumerate(seats)}
+    lines = [
+        texts.POKER_HEADER.format(
+            hand=fa_num(state["hand"]), limit=fa_num(state["hand_limit"]), sb=fa_num(state["sb"]), bb=fa_num(state["bb"])
+        )
+    ]
+    board = " ".join(label(c) for c in state["board"]) or "—"
+    street = POKER_STREETS.get(state["street"], "")
+    pot = sum(state["contrib"])
+    lines.append(texts.POKER_BOARD.format(board=board, street=street, pot=fa_num(pot)))
+    for i in range(len(seats)):
+        marks = ""
+        if i == state["to_act"] and not state["over"]:
+            marks += "▶️ "
+        if i == state["dealer"]:
+            marks += "🔘 "
+        status = ""
+        if state["left"][i]:
+            status = texts.POKER_LEFT
+        elif state["folded"][i] and state["in_hand"][i]:
+            status = texts.POKER_FOLDED
+        elif state["allin"][i]:
+            status = texts.POKER_ALLIN
+        elif not state["in_hand"][i] and not state["over"]:
+            status = texts.POKER_OUT
+        bet = texts.POKER_BET.format(bet=fa_num(state["bet"][i])) if state["bet"][i] else ""
+        lines.append(texts.POKER_SEAT.format(marks=marks, name=name[i], chips=fa_num(state["chips"][i]), bet=bet, status=status))
+    last = state.get("last_action")
+    if last and not state["over"]:
+        amount = f" {fa_num(last['amount'])}" if last.get("amount") else ""
+        timeout = texts.POKER_TIMEOUT if last.get("timeout") else ""
+        lines.append(texts.POKER_LAST.format(name=name[last["seat"]], action=POKER_ACTIONS.get(last["kind"], ""), amount=amount, timeout=timeout))
+    result = state.get("result")
+    if result and state["phase"] in ("pause", "over"):
+        for seat, cards in sorted(result.get("reveal", {}).items()):
+            lines.append(texts.POKER_REVEAL.format(name=name[int(seat)], cards=" ".join(label(c) for c in cards)))
+        for w in result["winners"]:
+            hand = f" — {w['hand']}" if w.get("hand") else ""
+            lines.append(texts.POKER_WINNER.format(name=name[w["seat"]], amount=fa_num(w["amount"]), hand=hand))
+    if state["over"]:
+        lines.append(texts.POKER_OVER)
+    elif state["phase"] == "pause":
+        lines.append(texts.POKER_NEXT_HAND)
+    elif state["to_act"] is not None:
+        lines.append(texts.POKER_TURN.format(name=name[state["to_act"]], seconds=fa_num(state["move_seconds"])))
+        lines.append(texts.POKER_LIVE_HINT if live else texts.POKER_CHAT_HINT)
+    return "\n".join(lines)

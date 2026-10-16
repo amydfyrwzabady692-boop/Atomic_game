@@ -580,3 +580,38 @@ def _apply_currency_name() -> None:
 
 
 _apply_currency_name()
+
+# ------------------------------------------------------------------ پوکر
+POKER_HEADER = "🃏 <b>پوکر</b>  ·  دست {hand} از {limit}  ·  بلایند {sb}/{bb}\n" + DIVIDER
+POKER_BOARD = "🂠 کارت‌های وسط: <b>{board}</b>  <i>{street}</i>\n💰 پات: <b>{pot}</b>\n"
+POKER_SEAT = "{marks}{name}: {chips} ژتون{bet}{status}"
+POKER_BET = "  · شرط {bet}"
+POKER_FOLDED = "  <i>(فولد)</i>"
+POKER_ALLIN = "  <b>(آل‌این)</b>"
+POKER_LEFT = "  <i>(میز را ترک کرد)</i>"
+POKER_OUT = "  <i>(ژتون ندارد)</i>"
+POKER_LAST = "\n↩️ {name}: {action}{amount}{timeout}"
+POKER_TIMEOUT = " <i>(وقتش تمام شد)</i>"
+POKER_REVEAL = "🂡 {name}: {cards}"
+POKER_WINNER = "🏆 {name} <b>{amount}</b> ژتون برد{hand}"
+POKER_TURN = "\n⏳ نوبت <b>{name}</b> — {seconds} ثانیه"
+POKER_NEXT_HAND = "\n<i>دست بعد چند ثانیه‌ی دیگر شروع می‌شود…</i>"
+POKER_OVER = "\n🏁 <b>بازی تمام شد</b>؛ رتبه‌ها بر اساس ژتون نهایی است."
+POKER_LIVE_HINT = "<i>برای دیدن کارت‌هایت و بازی، صفحه‌ی پوکر را باز کن.</i>"
+POKER_CHAT_HINT = "<i>کارت‌هایت را با «👀 کارت‌های من» ببین (فقط خودت می‌بینی).</i>"
+POKER_MY_CARDS_BTN = "👀 کارت‌های من"
+POKER_MY_CARDS = "کارت‌های تو: {cards}\nوسط: {board}\n{best}"
+POKER_NO_CARDS = "در این دست کارتی نداری."
+POKER_PLAY_BTN = "🃏 باز کردن میز پوکر"
+POKER_FOLD_BTN = "فولد"
+POKER_CHECK_BTN = "چک"
+POKER_CALL_BTN = "کال {amount}"
+POKER_RAISE_BTN = "رِیز تا {amount}"
+POKER_ALLIN_BTN = "آل‌این {amount}"
+POKER_ERRORS = {
+    "not_your_turn": "الان نوبت تو نیست.",
+    "illegal_move": "این حرکت الان مجاز نیست.",
+    "game_over": "بازی تمام شده است.",
+    "timeout": "وقت این نوبت تمام شده بود.",
+    "not_a_player": "تو در این بازی نیستی.",
+}

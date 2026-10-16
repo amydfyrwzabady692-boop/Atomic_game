@@ -653,6 +653,9 @@ class MatchManager:
 
     def _live_view(self, active: ActiveMatch, state: dict) -> tuple[bytes | None, str]:
         """عکس صفحه و متن وضعیت برای پیام گروه (تماشاچی‌ها همین را می‌بینند)."""
+        if state.get("game") == "poker":
+            by_id = {p.user_id: p for p in active.players_by_tg.values()}
+            return None, render.poker_text(state, {uid: p.name for uid, p in by_id.items()}, live=True)
         if state.get("game", "chess") != "chess":
             return self._grid_view(active, state)
         by_id = {p.user_id: p for p in active.players_by_tg.values()}
@@ -693,7 +696,7 @@ class MatchManager:
     async def _start_live(self, active: ActiveMatch, match: Match, players: list[Player]) -> None:
         order = list(players)
         random.Random(match.seed).shuffle(order)
-        state = live_board.new_state(active.info.key, order[0].user_id, order[1].user_id, time.time())
+        state = live_board.new_state(active.info.key, [p.user_id for p in order], time.time(), seed=str(match.seed))
         await db(live_board.start)(match.pk, state)
         active.live_version = state["version"]
         image, caption = await asyncio.to_thread(self._live_view, active, state)
@@ -761,11 +764,9 @@ class MatchManager:
             self._cancel_all_jobs(active)
             self.active.pop(active.chat_id, None)
             await self._edit_live(active, state, final=True)
-            winner = state["over"]["winner"]
             now = time.time()
             standings = [
-                Standing(uid, 1 if uid == winner else 0, now if uid == winner else None)
-                for uid in live_board.rules_for(state).players(state).values()
+                Standing(uid, score, now if score > 0 else None) for uid, score in live_board.standings(state)
             ]
             await self._payout(active, standings)
 

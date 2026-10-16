@@ -1,0 +1,85 @@
+/* میز پوکر مینی‌اپ: نمد سبز، کارت‌های سفید و صندلی‌های بازیکن‌ها. روی chess.css سوار است. */
+:root { --felt: #0f5a3f; --felt2: #0a3d2b; --card-w: min(15vw, 64px); }
+html, body {
+  background:
+    radial-gradient(70% 45% at 50% 0%, rgba(52, 211, 153, .18), transparent 70%),
+    radial-gradient(120% 80% at 50% 0%, #10304a, var(--bg) 70%) fixed;
+}
+#game { gap: 10px; }
+#table-head { display: flex; align-items: baseline; justify-content: space-between; width: min(100%, 560px); }
+#table-head h1 { margin: 0; font-size: 20px; font-weight: 900; }
+#hand-info { color: var(--muted); font-size: 13px; }
+
+#seats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; width: min(100%, 560px); }
+.seat {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--stroke);
+  border-radius: 14px;
+  background: var(--panel);
+  min-width: 0;
+}
+.seat.turn { border-color: rgba(110, 231, 255, .8); box-shadow: 0 0 0 3px rgba(110, 231, 255, .15); }
+.seat.me { background: linear-gradient(180deg, rgba(52, 211, 153, .22), rgba(30, 34, 68, .78)); }
+.seat.folded, .seat.left, .seat.out { opacity: .45; }
+.seat .info { flex: 1 1 auto; min-width: 0; }
+.seat b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seat small { color: var(--muted); font-size: 12px; }
+.seat .chips { color: var(--gold); font-weight: 800; }
+.seat .bet { position: absolute; top: -9px; inset-inline-start: 10px; padding: 1px 8px; border-radius: 99px; background: var(--gold); color: #3a2600; font-size: 11px; font-weight: 900; }
+.seat .tag { font-size: 11px; color: #ffd3dc; }
+.seat .dealer { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: #fff; color: #111; font-size: 10px; font-weight: 900; margin-inline-start: 4px; }
+.seat .mini { display: flex; gap: 2px; direction: ltr; }
+.seat .mini .card-face { --card-w: 26px; font-size: 11px; }
+.seat .clock-bar { position: absolute; inset-inline: 10px; bottom: 3px; height: 3px; border-radius: 3px; background: var(--accent); transform-origin: right; }
+
+#felt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: min(100%, 560px);
+  padding: 18px 10px 14px;
+  border-radius: 999px / 160px;
+  background: radial-gradient(120% 100% at 50% 30%, var(--felt), var(--felt2));
+  border: 6px solid #4a2c17;
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, .45), 0 12px 30px rgba(0, 0, 0, .35);
+}
+#board-cards { display: flex; gap: 6px; min-height: calc(var(--card-w) * 1.4); direction: ltr; }
+#pot { font-size: 15px; color: #e7ffe9; }
+#pot b { color: var(--gold); }
+#street { font-size: 12px; color: rgba(231, 255, 233, .75); }
+
+.card-face {
+  display: inline-grid;
+  place-items: center;
+  width: var(--card-w);
+  height: calc(var(--card-w) * 1.4);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fff, #eef1f6);
+  color: #111;
+  font-weight: 900;
+  font-size: calc(var(--card-w) * .36);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, .35);
+  line-height: 1;
+}
+.card-face.red { color: #d61f3c; }
+.card-face.back { background: repeating-linear-gradient(45deg, #2b4bd8 0 6px, #1e36a6 6px 12px); border: 2px solid #fff; }
+.card-face.slot { background: rgba(255, 255, 255, .08); box-shadow: none; border: 1px dashed rgba(255, 255, 255, .25); }
+.card-face.win { outline: 3px solid var(--gold); }
+.card-face.deal { animation: deal .25s ease-out; }
+@keyframes deal { from { transform: translateY(-14px) scale(.9); opacity: 0; } }
+
+#me { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+#my-cards { display: flex; gap: 8px; direction: ltr; }
+#my-cards .card-face { --card-w: min(20vw, 76px); }
+#my-hand { color: var(--accent); font-weight: 800; font-size: 14px; min-height: 20px; }
+
+#controls { display: flex; flex-direction: column; gap: 8px; width: min(100%, 560px); }
+#controls .row { display: flex; gap: 8px; }
+#controls .btn { flex: 1 1 0; }
+#raise-range { flex: 2 1 0; accent-color: var(--accent2); }
+#actions { width: min(100%, 560px); }
