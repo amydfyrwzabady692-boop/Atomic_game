@@ -27,7 +27,7 @@ from leaderboard.queries import announce_weekly_champions
 
 from .concurrency import PerChatUpdateProcessor
 from .db import db
-from .handlers import admin, arcade, flow, group, group_settings, private, shop
+from .handlers import admin, arcade, flow, group, group_settings, private, shop, wallet
 from .runner import MatchManager
 from .tg import tg_call
 
@@ -39,6 +39,8 @@ GAME_SETTINGS_REFRESH_SECONDS = 15
 
 PRIVATE_COMMANDS = [
     ("start", "شروع"),
+    ("wallet", "کیف پول و شارژ"),
+    ("transfer", "انتقال سکه"),
     ("me", "پروفایل من"),
     ("invite", "دعوت دوستان"),
     ("shop", "فروشگاه"),
@@ -49,6 +51,7 @@ PRIVATE_COMMANDS = [
 ]
 GROUP_COMMANDS = [
     ("game", "ساخت مسابقه"),
+    ("transfer", "انتقال سکه (با ریپلای)"),
     ("top", "رتبه‌بندی گروه"),
     ("me", "پروفایل من"),
     ("rules", "قوانین"),
@@ -137,6 +140,10 @@ def register_handlers(application: Application) -> None:
     add(CommandHandler("shop", shop.shop))
     add(CommandHandler("arcade", arcade.arcade))
 
+    add(CommandHandler("wallet", wallet.wallet_cmd))
+    add(CommandHandler("transfer", wallet.transfer_cmd))
+    add(CommandHandler("pay", wallet.transfer_cmd))
+
     add(CommandHandler("game", flow.game))
     add(CommandHandler("cancel", group.cancel))
     add(CommandHandler("top", group.top))
@@ -154,6 +161,9 @@ def register_handlers(application: Application) -> None:
     add(CommandHandler("stats", admin.stats))
     add(CommandHandler("backup", admin.backup_cmd))
 
+    add(CallbackQueryHandler(wallet.wallet_callback, pattern=r"^wal:"))
+    add(CallbackQueryHandler(wallet.admin_topup_callback, pattern=r"^adm:top:"))
+    add(CallbackQueryHandler(wallet.admin_sell_callback, pattern=r"^adm:sell:"))
     add(CallbackQueryHandler(group.game_callback, pattern=r"^g:\d+:"))
     add(CallbackQueryHandler(group.join_callback, pattern=r"^j:\d+$"))
     add(CallbackQueryHandler(group.cancel_callback, pattern=r"^x:\d+$"))
@@ -167,6 +177,12 @@ def register_handlers(application: Application) -> None:
 
     add(ChatMemberHandler(group.my_chat_member, ChatMemberHandler.MY_CHAT_MEMBER))
     add(MessageHandler(filters.StatusUpdate.MIGRATE, group.migrated))
+    # پیام‌های متنی و فیش‌های ارسالی در پیوی برای شارژ، فروش و انتقال
+    add(
+        MessageHandler(
+            filters.UpdateType.MESSAGE & filters.ChatType.PRIVATE & ~filters.COMMAND, wallet.private_message
+        )
+    )
     # فقط پیام‌های تازه (نه ادیت‌شده)، متنی، غیر دستور، داخل گروه
     add(
         MessageHandler(

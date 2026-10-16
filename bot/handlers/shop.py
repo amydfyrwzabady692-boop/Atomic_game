@@ -24,6 +24,8 @@ def _btn(text: str, data: str, style: str = ""):
 
 def home_screen(user: TelegramUser):
     rows = [[_btn(label, f"shop:k:{kind}", ui.PRIMARY)] for kind, label in texts.SHOP_KIND_BTN.items()]
+    rows.append([_btn("➕ شارژ کیف پول (خرید سکه)", "wal:topup:menu", ui.SUCCESS)])
+    rows.append([_btn("💰 فروش سکه (حداقل ۱۰ سکه = ۱۰۰,۰۰۰ تومان)", "wal:sell:menu", ui.PRIMARY)])
     return texts.SHOP_HEADER.format(coins=fa_num(user.coins)), InlineKeyboardMarkup(rows)
 
 
