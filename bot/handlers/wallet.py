@@ -242,6 +242,12 @@ async def private_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if user.is_banned:
         return
 
+    if context.user_data.get("admin_flow"):
+        from . import admin
+        handled = await admin.admin_private_message(update, context, user)
+        if handled:
+            return
+
     flow = context.user_data.get("wallet_flow")
     if not flow:
         return

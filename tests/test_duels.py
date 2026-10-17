@@ -180,3 +180,26 @@ def test_admin_cancelled_duel_match_closes_the_duel(make_user):
     assert duel.status == Duel.Status.CANCELLED and duel.cancel_reason == "admin"
     a.refresh_from_db()
     assert a.coins == 500
+
+
+def test_duel_resign_finishes_cleanly_without_outer_join_error(make_user):
+    from games.engine import services
+
+    a, b = make_user(500), make_user(500)
+    duels.search(a, "chess", 100)
+    duel = duels.search(b, "chess", 100)
+    assert duel.status == Duel.Status.PLAYING
+    assert duel.match.group is None
+
+    # Player a resigns / تسلیم
+    services.resign_player(duel.match.pk, a.pk)
+    result = duels.finish_if_over(duel.pk)
+    assert result is not None
+    duel.refresh_from_db()
+    assert duel.status == Duel.Status.FINISHED
+    assert duel.match.status == MatchStatus.FINISHED
+    assert duel.winner_id == b.pk
+    b.refresh_from_db()
+    assert b.coins == 600  # 500 - 100 + 200 pot
+    assert find_mismatches() == []
+

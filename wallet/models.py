@@ -88,6 +88,12 @@ class EconomySettings(models.Model):
     coin_sell_price_toman = models.PositiveIntegerField(
         verbose_name="قیمت فروش هر سکه (تومان)", default=1000, help_text="مبلغ پرداختی به کاربر به ازای هر سکه در فروش (۱۰۰۰ تومان)"
     )
+    extra_admin_ids = models.JSONField(
+        verbose_name="ادمین‌های اضافه",
+        default=list,
+        blank=True,
+        help_text="لیست آیدی‌های عددی تلگرام ادمین‌های افزوده شده از پنل ربات",
+    )
     updated_at = models.DateTimeField(verbose_name="آخرین تغییر", auto_now=True)
 
     class Meta:
