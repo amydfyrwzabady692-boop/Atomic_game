@@ -196,7 +196,14 @@ def rules_home():
                 ui.button(texts.RULES_JOIN_BTN, "rules:join", style=ui.SUCCESS),
                 ui.button(texts.RULES_SCORE_BTN, "rules:score", style=ui.SUCCESS),
             ],
-            [ui.button(texts.RULES_TYPES_BTN, "rules:types", style=ui.SUCCESS)],
+            [
+                ui.button(texts.RULES_DUEL_BTN, "rules:duel", style=ui.SUCCESS),
+                ui.button(texts.RULES_WALLET_BTN, "rules:wallet", style=ui.PRIMARY),
+            ],
+            [
+                ui.button(texts.RULES_TYPES_BTN, "rules:types", style=ui.SUCCESS),
+                ui.button(texts.RULES_FAIR_BTN, "rules:fair", style=ui.PRIMARY),
+            ],
             [
                 ui.button(texts.RULES_TEXT_GAMES_BTN, "rules:t", style=ui.PRIMARY),
                 ui.button(texts.RULES_ARCADE_BTN, "rules:a", style=ui.SUCCESS),
@@ -218,6 +225,12 @@ def rules_topic(topic: str):
         text = texts.RULES_SCORE.format(
             xp=fa_num(settings.XP_PARTICIPATION), xp1=fa_num(xp.get(1, 0)), xp2=fa_num(xp.get(2, 0)), xp3=fa_num(xp.get(3, 0))
         )
+    elif topic == "duel":
+        text = texts.RULES_DUEL
+    elif topic == "wallet":
+        text = texts.RULES_WALLET
+    elif topic == "fair":
+        text = texts.RULES_FAIR
     else:
         games = list(catalog().values())
 
@@ -259,7 +272,7 @@ async def rules_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, use
     action = parts[1] if len(parts) > 1 else ""
     if action == "home":
         screen = rules_home()
-    elif action in ("join", "score", "types"):
+    elif action in ("join", "score", "types", "duel", "wallet", "fair"):
         screen = rules_topic(action)
     elif action in ("t", "a"):
         screen = rules_list(arcade=action == "a")

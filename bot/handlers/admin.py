@@ -197,7 +197,7 @@ async def admin_panel_screen(user: TelegramUser):
     holder_line = f"<b>{escape(eco.card_holder)}</b>" if eco.card_holder else "<i>ثبت نشده</i>"
 
     text = (
-        "👑 <b>پنل مدیریت ربات اتومیک گیم</b>\n"
+        "👑 <b>پنل مدیریت ربات وینزون بت (Winzon Bet)</b>\n"
         "━━━━━━━━━━━━━━\n"
         f"👤 مدیر: <b>{escape(user.display_name)}</b> (<code>{user.tg_id}</code>)\n\n"
         "💳 <b>اطلاعات کارت واریز:</b>\n"
