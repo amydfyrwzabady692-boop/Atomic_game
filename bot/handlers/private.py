@@ -34,14 +34,17 @@ def main_menu(context, daily: bool = False) -> InlineKeyboardMarkup:
             [ui.button(texts.MENU_DUEL_BTN, "pm:duel", style=ui.SUCCESS)],
             first_row,
             [
-                ui.button(texts.MENU_ARCADE_BTN, "pm:arcade", style=ui.SUCCESS),
+                ui.button(texts.MENU_WALLET_BTN, "pm:wallet", style=ui.SUCCESS),
                 ui.button(texts.MENU_SHOP_BTN, "pm:shop", style=ui.PRIMARY),
             ],
             [
-                ui.button(texts.MENU_INVITE_BTN, "pm:invite", style=ui.SUCCESS),
-                ui.button(texts.MENU_RULES_BTN, "pm:rules", style=ui.PRIMARY),
+                ui.button(texts.MENU_ARCADE_BTN, "pm:arcade", style=ui.SUCCESS),
+                ui.button(texts.MENU_INVITE_BTN, "pm:invite", style=ui.PRIMARY),
             ],
-            [ui.button(texts.MENU_HELP_BTN, "pm:help", style=ui.PRIMARY)],
+            [
+                ui.button(texts.MENU_RULES_BTN, "pm:rules", style=ui.PRIMARY),
+                ui.button(texts.MENU_HELP_BTN, "pm:help", style=ui.PRIMARY),
+            ],
         ]
     )
 
@@ -134,20 +137,41 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user
     from . import duel as duel_handlers
     from . import group as group_handlers
     from . import shop as shop_handlers
+    from . import wallet as wallet_handlers
 
     if update.effective_chat.type != ChatType.PRIVATE:
         return
+
+    sub = query.data.split(":", 1)[1] if ":" in query.data else ""
+    if sub == "back":
+        daily_on = await _daily_enabled()
+        text = texts.START_BACK.format(name=escape(user.display_name), coins=fa_num(user.coins))
+        try:
+            await tg_call(query.edit_message_text, text, parse_mode="HTML", reply_markup=main_menu(context, daily=daily_on))
+            return
+        except Exception:
+            pass
+    elif sub == "wallet":
+        text, markup = wallet_handlers.wallet_screen(user)
+        try:
+            await tg_call(query.edit_message_text, text, parse_mode="HTML", reply_markup=markup)
+            return
+        except Exception:
+            pass
+
     actions = {
         "daily": daily,
         "me": me,
+        "wallet": wallet_handlers.wallet_cmd,
         "invite": invite,
         "help": help_cmd,
         "shop": shop_handlers.shop,
         "arcade": arcade_handlers.arcade,
         "duel": duel_handlers.duel,
         "rules": group_handlers.rules,
+        "back": start,
     }
-    handler = actions.get(query.data.split(":", 1)[1])
+    handler = actions.get(sub)
     if handler is not None:
         await answer(query)  # این دکمه‌ها پیام تازه می‌فرستند؛ لازم نیست کاربر منتظر آن بماند
         await handler.__wrapped__(update, context, user)

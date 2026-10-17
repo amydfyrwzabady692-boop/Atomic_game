@@ -28,7 +28,7 @@ from leaderboard.queries import announce_weekly_champions
 from .concurrency import PerChatUpdateProcessor
 from .db import db
 from .duels import DuelRunner
-from .handlers import admin, arcade, duel, flow, group, group_settings, private, shop
+from .handlers import admin, arcade, duel, flow, group, group_settings, private, shop, wallet
 from .runner import MatchManager
 from .tg import tg_call
 
@@ -40,6 +40,8 @@ GAME_SETTINGS_REFRESH_SECONDS = 15
 
 PRIVATE_COMMANDS = [
     ("start", "شروع"),
+    ("wallet", "کیف پول و شارژ"),
+    ("transfer", "انتقال سکه به کاربر"),
     ("me", "پروفایل من"),
     ("duel", "حریف تصادفی"),
     ("invite", "دعوت دوستان"),
@@ -51,6 +53,7 @@ PRIVATE_COMMANDS = [
 ]
 GROUP_COMMANDS = [
     ("game", "ساخت مسابقه"),
+    ("transfer", "انتقال سکه به کاربر دیگر"),
     ("top", "رتبه‌بندی گروه"),
     ("me", "پروفایل من"),
     ("rules", "قوانین"),
@@ -139,6 +142,8 @@ def register_handlers(application: Application) -> None:
     add(CommandHandler("daily", private.daily))
     add(CommandHandler("invite", private.invite))
     add(CommandHandler("history", private.history))
+    add(CommandHandler("wallet", wallet.wallet_cmd))
+    add(CommandHandler(["transfer", "pay"], wallet.transfer_cmd))
     add(CommandHandler("shop", shop.shop))
     add(CommandHandler("arcade", arcade.arcade))
     add(CommandHandler("duel", duel.duel))
@@ -171,9 +176,19 @@ def register_handlers(application: Application) -> None:
     add(CallbackQueryHandler(group.rules_callback, pattern=r"^rules:"))
     add(CallbackQueryHandler(group.rules_alert_callback, pattern=r"^rl:"))
     add(CallbackQueryHandler(private.menu_callback, pattern=r"^pm:"))
+    add(CallbackQueryHandler(wallet.wallet_callback, pattern=r"^wal:"))
+    add(CallbackQueryHandler(wallet.admin_topup_callback, pattern=r"^adm:top:"))
+    add(CallbackQueryHandler(wallet.admin_sell_callback, pattern=r"^adm:sell:"))
 
     add(ChatMemberHandler(group.my_chat_member, ChatMemberHandler.MY_CHAT_MEMBER))
     add(MessageHandler(filters.StatusUpdate.MIGRATE, group.migrated))
+    # دریافت رسید یا ورودی‌های کیف پول در پیوی
+    add(
+        MessageHandler(
+            filters.ChatType.PRIVATE & (filters.TEXT | filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND,
+            wallet.private_message,
+        )
+    )
     # فقط پیام‌های تازه (نه ادیت‌شده)، متنی، غیر دستور، داخل گروه
     add(
         MessageHandler(
