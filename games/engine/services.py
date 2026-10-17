@@ -156,7 +156,7 @@ def start_match(match_id: int, play_seconds: int | None = None) -> Match:
 def finish_match(match_id: int, standings: list[Standing]) -> MatchResult | None:
     """رتبه‌بندی، تقسیم pot، XP و دستاوردها. فقط یک بار اثر می‌کند."""
     with transaction.atomic():
-        match = Match.objects.select_for_update().select_related("group").get(pk=match_id)
+        match = Match.objects.select_for_update().get(pk=match_id)
         if match.status != MatchStatus.RUNNING:
             return None
         entries = {e.user_id: e for e in match.players.select_related("user")}
