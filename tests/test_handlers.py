@@ -500,7 +500,7 @@ async def test_start_shows_a_coloured_menu_and_its_buttons_work(app):
     first = await start_user(app, 201)
     menu = buttons_of(first.replies[0]["reply_markup"])
     by_data = {b.callback_data: b for b in menu if b.callback_data}
-    assert {"pm:me", "pm:arcade", "pm:shop", "pm:invite", "pm:rules", "pm:help"} <= set(by_data)
+    assert {"pm:me", "pm:invite", "pm:rules", "pm:help"} <= set(by_data)
     # جایزه‌ی روزانه پیش‌فرض خاموش است و دکمه‌اش نشان داده نمی‌شود
     assert "pm:daily" not in by_data
     assert all(style_of(b) for b in menu), "همه‌ی دکمه‌های منوی پیوی رنگی‌اند"

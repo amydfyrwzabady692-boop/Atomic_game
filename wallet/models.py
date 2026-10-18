@@ -60,15 +60,15 @@ class EconomySettings(models.Model):
         verbose_name="هدیه‌ی ثبت‌نام", default=0, help_text="سکه‌ای که کاربر با اولین /start می‌گیرد. ۰ = خاموش."
     )
     daily_enabled = models.BooleanField(
-        verbose_name="جایزه‌ی روزانه فعال", default=False, help_text="جایزه‌ی روزانه و سکه‌ی نجات (موجودی صفر)."
+        verbose_name="جایزه‌ی روزانه فعال", default=True, help_text="جایزه‌ی روزانه و سکه‌ی نجات (موجودی صفر)."
     )
     referral_every = models.PositiveIntegerField(
         verbose_name="تعداد دعوت برای هر جایزه",
         default=10,
-        help_text="هر چند دوست دعوت‌شده (که اولین بازی سکه‌ای‌شان را انجام داده‌اند) یک جایزه می‌دهد.",
+        help_text="هر چند دوست دعوت‌شده یک جایزه می‌دهد.",
     )
     referral_reward = models.PositiveIntegerField(
-        verbose_name="جایزه‌ی دعوت (سکه)", default=3, help_text="سکه‌ی هر جایزه‌ی دعوت. ۰ = خاموش."
+        verbose_name="جایزه‌ی دعوت (سکه)", default=30, help_text="سکه‌ی هر جایزه‌ی دعوت (۳۰ سکه به ازای ۱۰ نفر). ۰ = خاموش."
     )
     coin_price_toman = models.PositiveIntegerField(
         verbose_name="قیمت هر سکه (تومان)", default=1000, help_text="قیمت پایه برای شارژ کیف پول (۱۰۰۰ تومان)"

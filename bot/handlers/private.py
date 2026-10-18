@@ -1,9 +1,12 @@
 """دستورات پیوی: /start /me /daily /invite /history /help"""
 
+import logging
 from html import escape
 
 from django.conf import settings
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 from telegram import InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.constants import ChatType
 from telegram.ext import ContextTypes
@@ -37,11 +40,10 @@ def main_menu(context, daily: bool = False) -> InlineKeyboardMarkup:
             first_row,
             [
                 ui.button(texts.MENU_WALLET_BTN, "pm:wallet", style=ui.SUCCESS),
-                ui.button(texts.MENU_SHOP_BTN, "pm:shop", style=ui.PRIMARY),
+                ui.button(texts.MENU_INVITE_BTN, "pm:invite", style=ui.PRIMARY),
             ],
             [
                 ui.button(texts.MENU_ARCADE_BTN, web_app=WebAppInfo(url=miniapp_url), style=ui.PRIMARY),
-                ui.button(texts.MENU_INVITE_BTN, "pm:invite", style=ui.PRIMARY),
             ],
             [
                 ui.button(texts.MENU_RULES_BTN, "pm:rules", style=ui.PRIMARY),
@@ -57,6 +59,8 @@ def _first_start(user: TelegramUser, payload: str):
     referrer = None
     fields = ["started_bot"]
     user.started_bot = True
+    ref_reward = 0
+    ref_count = 0
     if payload.startswith("ref_") and payload[4:].isdigit() and user.referred_by_id is None:
         candidate = TelegramUser.objects.filter(tg_id=int(payload[4:]), is_banned=False).first()
         # فقط کاربر تازه (بدون سابقه‌ی بازی) می‌تواند دعوت‌شده حساب شود
@@ -66,7 +70,9 @@ def _first_start(user: TelegramUser, payload: str):
     user.save(update_fields=fields)
     tx = economy.grant_signup_bonus(user)
     bonus = tx.amount if tx is not None and not tx.duplicate else 0
-    return referrer, bonus, economy.get_settings().daily_enabled
+    if referrer:
+        ref_reward, ref_count = economy.check_referral_reward_on_join(referrer)
+    return referrer, bonus, economy.get_settings().daily_enabled, ref_reward, ref_count
 
 
 @command()
@@ -76,11 +82,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Telegr
     payload = context.args[0] if context.args else ""
     name = escape(user.display_name)
     if not user.started_bot:
-        referrer, bonus, daily_on = await _first_start(user, payload)
+        referrer, bonus, daily_on, ref_reward, ref_count = await _first_start(user, payload)
         bonus_line = texts.START_BONUS.format(amount=fa_num(bonus)) if bonus else ""
         text = texts.START_NEW.format(name=name, bonus=bonus_line)
         if referrer:
             text += "\n\n" + texts.REFERRED_BY.format(name=escape(referrer.display_name))
+            if ref_reward > 0:
+                try:
+                    await context.bot.send_message(
+                        chat_id=referrer.tg_id,
+                        text=(
+                            f"🎉 <b>تبریک!</b> {fa_num(ref_count)} نفر با لینک شما وارد ربات شدند!\n"
+                            f"🎁 مبلغ <b>+{fa_num(ref_reward)}</b> {texts.COIN} پاداش دعوت به کیف پولت اضافه شد."
+                        ),
+                        parse_mode="HTML",
+                    )
+                except Exception as exc:
+                    logger.warning("failed to notify referrer %s: %s", referrer.tg_id, exc)
     else:
         daily_on = await _daily_enabled()
         text = texts.START_BACK.format(name=name, coins=fa_num(user.coins))
@@ -237,7 +255,10 @@ async def daily(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Telegr
         await reply(update, texts.DAILY_DISABLED)
         return
     if result.claimed:
-        text = texts.DAILY_OK.format(amount=fa_num(result.amount), streak=fa_num(result.streak))
+        if result.amount > 0:
+            text = texts.DAILY_OK.format(amount=fa_num(result.amount), streak=fa_num(result.streak))
+        else:
+            text = texts.DAILY_EMPTY.format(streak=fa_num(result.streak))
     else:
         left = int((result.next_at - timezone.now()).total_seconds())
         text = texts.DAILY_ALREADY.format(hours=fa_num(left // 3600), minutes=fa_num(left % 3600 // 60))
@@ -251,15 +272,15 @@ async def daily(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Telegr
 @db
 def _invite_counts(user: TelegramUser):
     qs = TelegramUser.objects.filter(referred_by=user)
-    return qs.count(), qs.filter(referral_rewarded=True).count(), economy.get_settings()
+    return qs.count(), economy.get_settings()
 
 
 @command(private=True)
 async def invite(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser):
-    count, rewarded, config = await _invite_counts(user)
+    count, config = await _invite_counts(user)
     link = render.start_link(render.bot_username(context), f"ref_{user.tg_id}")
     if config.referral_reward <= 0:
-        await reply(update, texts.INVITE_OFF.format(link=link, count=fa_num(count), rewarded=fa_num(rewarded)))
+        await reply(update, texts.INVITE_OFF.format(link=link, count=fa_num(count)))
         return
     every = max(1, config.referral_every)
     await reply(
@@ -268,10 +289,8 @@ async def invite(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Teleg
             link=link,
             every=fa_num(every),
             reward=fa_num(config.referral_reward),
-            hours=fa_num(settings.REFERRAL_MIN_ACCOUNT_AGE_HOURS),
             count=fa_num(count),
-            rewarded=fa_num(rewarded),
-            progress=fa_num(rewarded % every),
+            progress=fa_num(count % every),
         ),
     )
 

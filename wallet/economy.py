@@ -3,6 +3,7 @@
 مقدارها (و روشن/خاموش بودن هر کدام) از ``EconomySettings`` خوانده می‌شود که در پنل ادمین قابل تغییر است.
 """
 
+import random
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -26,8 +27,26 @@ class DailyResult:
     disabled: bool = False
 
 
-def daily_amount(streak: int) -> int:
-    return min(settings.DAILY_BASE + (max(streak, 1) - 1) * settings.DAILY_STEP, settings.DAILY_MAX)
+def roll_daily_reward() -> int:
+    """محاسبه‌ی تصادفی جایزه‌ی روزانه بر اساس احتمالات مشخص‌شده:
+    - ۲۰٪ احتمال: ۱ سکه
+    - ۱۰٪ احتمال: ۲ سکه
+    - ۱٪ احتمال: ۱۰ سکه
+    - ۶۹٪ احتمال: ۰ سکه (پوچ)
+    """
+    roll = random.randint(1, 100)
+    if roll <= 1:           # 1%
+        return 10
+    elif roll <= 11:        # 10% (2..11)
+        return 2
+    elif roll <= 31:        # 20% (12..31)
+        return 1
+    else:                   # 69% (32..100)
+        return 0
+
+
+def daily_amount(streak: int = 1) -> int:
+    return roll_daily_reward()
 
 
 @dataclass
@@ -71,11 +90,12 @@ def claim_daily(user: TelegramUser, now=None) -> DailyResult:
             result = DailyResult(False, streak=locked.daily_streak, next_at=_next_midnight(now))
         else:
             streak = locked.daily_streak + 1 if last == today - timedelta(days=1) else 1
-            amount = daily_amount(streak)
+            amount = roll_daily_reward()
             locked.daily_streak = streak
             locked.last_daily_at = now
             locked.save(update_fields=["daily_streak", "last_daily_at"])
-            apply_transaction(locked, amount, TxType.DAILY, f"daily:{locked.pk}:{today.isoformat()}")
+            if amount > 0:
+                apply_transaction(locked, amount, TxType.DAILY, f"daily:{locked.pk}:{today.isoformat()}")
             result = DailyResult(True, amount=amount, streak=streak, next_at=_next_midnight(now))
     user.refresh_from_db()
     if not result.claimed:
@@ -135,6 +155,27 @@ def try_reward_referral(invitee: TelegramUser, now=None) -> ReferralResult | Non
             apply_transaction(referrer, reward, TxType.REFERRAL, f"referral-batch:{referrer.pk}:{count // every}")
         referrer.refresh_from_db()
         return ReferralResult(referrer, count, every, reward, config.referral_reward)
+
+
+def check_referral_reward_on_join(referrer: TelegramUser) -> tuple[int, int]:
+    """بررسی و اعطای پاداش دعوت به محض عضویت کاربر جدید با لینک معرف.
+    به ازای هر ۱۰ نفر، ۳۰ سکه به معرف پرداخت می‌شود.
+    خروجی: (مقدار پاداش پرداخت‌شده در این ورود، تعداد کل دعوت‌شده‌ها)
+    """
+    config = get_settings()
+    every = max(1, config.referral_every)
+    reward = config.referral_reward
+    with transaction.atomic():
+        locked = TelegramUser.objects.select_for_update().get(pk=referrer.pk)
+        count = TelegramUser.objects.filter(referred_by=locked).count()
+        paid = 0
+        if reward > 0 and count > 0 and count % every == 0:
+            batch = count // every
+            key = f"referral-join:{locked.pk}:{batch}"
+            tx = apply_transaction(locked, reward, TxType.REFERRAL, key)
+            if not tx.duplicate:
+                paid = reward
+        return paid, count
 
 
 def admin_grant(user: TelegramUser, amount: int, admin_tg_id: int, nonce: str):
