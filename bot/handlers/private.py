@@ -4,7 +4,7 @@ from html import escape
 
 from django.conf import settings
 from django.utils import timezone
-from telegram import InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.constants import ChatType
 from telegram.ext import ContextTypes
 
@@ -28,17 +28,19 @@ def main_menu(context, daily: bool = False) -> InlineKeyboardMarkup:
     add_link = f"https://t.me/{render.bot_username(context)}?startgroup=true"
     profile = ui.button(texts.MENU_PROFILE_BTN, "pm:me", style=ui.PRIMARY)
     first_row = [ui.button(texts.MENU_DAILY_BTN, "pm:daily", style=ui.SUCCESS), profile] if daily else [profile]
+    miniapp_url = f"{settings.MINIAPP_BASE_URL.rstrip('/')}/arcade/"
     return InlineKeyboardMarkup(
         [
-            [ui.button(texts.MENU_ADD_BTN, url=add_link, style=ui.PRIMARY)],
+            [ui.button("🎮 ورود به بازی‌ها (مینی‌اپ)", web_app=WebAppInfo(url=miniapp_url), style=ui.SUCCESS)],
             [ui.button(texts.MENU_DUEL_BTN, "pm:duel", style=ui.SUCCESS)],
+            [ui.button(texts.MENU_ADD_BTN, url=add_link, style=ui.PRIMARY)],
             first_row,
             [
                 ui.button(texts.MENU_WALLET_BTN, "pm:wallet", style=ui.SUCCESS),
                 ui.button(texts.MENU_SHOP_BTN, "pm:shop", style=ui.PRIMARY),
             ],
             [
-                ui.button(texts.MENU_ARCADE_BTN, "pm:arcade", style=ui.SUCCESS),
+                ui.button(texts.MENU_ARCADE_BTN, web_app=WebAppInfo(url=miniapp_url), style=ui.PRIMARY),
                 ui.button(texts.MENU_INVITE_BTN, "pm:invite", style=ui.PRIMARY),
             ],
             [

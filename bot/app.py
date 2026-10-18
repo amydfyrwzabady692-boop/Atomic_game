@@ -6,7 +6,7 @@ from html import escape
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
-from telegram import BotCommand, BotCommandScopeAllGroupChats, BotCommandScopeAllPrivateChats, Update
+from telegram import BotCommand, BotCommandScopeAllGroupChats, BotCommandScopeAllPrivateChats, MenuButtonCommands, Update
 from telegram.ext import (
     AIORateLimiter,
     Application,
@@ -39,18 +39,7 @@ TEHRAN = ZoneInfo("Asia/Tehran")
 GAME_SETTINGS_REFRESH_SECONDS = 15
 
 PRIVATE_COMMANDS = [
-    ("start", "شروع"),
-    ("wallet", "کیف پول و شارژ"),
-    ("transfer", "انتقال سکه به کاربر"),
-    ("me", "پروفایل من"),
-    ("duel", "حریف تصادفی"),
-    ("invite", "دعوت دوستان"),
-    ("shop", "فروشگاه"),
-    ("arcade", "تمرین آزاد آرکید"),
-    ("history", "تراکنش‌های سکه"),
-    ("gtop", "برترین‌های کل ربات"),
-    ("admin", "پنل مدیریت ربات"),
-    ("help", "راهنما"),
+    ("start", "شروع مجدد 🔄"),
 ]
 GROUP_COMMANDS = [
     ("game", "ساخت مسابقه"),
@@ -108,6 +97,10 @@ async def post_init(application: Application) -> None:
         [BotCommand(c, d) for c, d in GROUP_COMMANDS],
         scope=BotCommandScopeAllGroupChats(),
     )
+    try:
+        await tg_call(application.bot.set_chat_menu_button, menu_button=MenuButtonCommands())
+    except Exception as exc:
+        logger.warning("failed to set chat menu button: %s", exc)
     await db(game_config.reload)()
     application.job_queue.run_repeating(
         game_settings_job, interval=GAME_SETTINGS_REFRESH_SECONDS, name="game_settings"
@@ -138,6 +131,7 @@ async def post_shutdown(application: Application) -> None:
 def register_handlers(application: Application) -> None:
     add = application.add_handler
     add(CommandHandler("start", private.start))
+    add(MessageHandler(filters.Regex(r"^(?:شروع مجدد|شروع)$") & filters.ChatType.PRIVATE, private.start))
     add(CommandHandler("help", private.help_cmd))
     add(CommandHandler("me", private.me))
     add(CommandHandler("daily", private.daily))

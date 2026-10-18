@@ -28,4 +28,5 @@ async def arcade(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Teleg
         if arcade_enabled(key)
     ]
     rows = [buttons[i : i + 2] for i in range(0, len(buttons), 2)]
+    rows.insert(0, [ui.button("🕹 ورود به مینی‌اپ کامل بازی‌ها", web_app=WebAppInfo(url=f"{base}/arcade/"), style=ui.SUCCESS)])
     await reply(update, texts.ARCADE_PRACTICE, InlineKeyboardMarkup(rows))
