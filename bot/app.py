@@ -166,6 +166,7 @@ def register_handlers(application: Application) -> None:
     add(CommandHandler("stats", admin.stats))
     add(CommandHandler("backup", admin.backup_cmd))
     add(CommandHandler("admin", admin.admin_cmd))
+    add(CommandHandler("support", private.support_cmd))
 
     add(CallbackQueryHandler(duel.duel_callback, pattern=r"^du:"))
     add(CallbackQueryHandler(group.game_callback, pattern=r"^g:\d+:"))
@@ -179,8 +180,9 @@ def register_handlers(application: Application) -> None:
     add(CallbackQueryHandler(group.rules_alert_callback, pattern=r"^rl:"))
     add(CallbackQueryHandler(private.menu_callback, pattern=r"^pm:"))
     add(CallbackQueryHandler(wallet.wallet_callback, pattern=r"^wal:"))
-    add(CallbackQueryHandler(wallet.admin_topup_callback, pattern=r"^adm:top:(?:app|rej):"))
-    add(CallbackQueryHandler(wallet.admin_sell_callback, pattern=r"^adm:sell:(?:pay|rej|receipt):"))
+    add(CallbackQueryHandler(wallet.admin_topup_callback, pattern=r"^adm:top:"))
+    add(CallbackQueryHandler(wallet.admin_sell_callback, pattern=r"^adm:sell:"))
+    add(CallbackQueryHandler(admin.admin_dm_callback, pattern=r"^adm:dm:"))
     add(CallbackQueryHandler(admin.admin_callback, pattern=r"^adm:"))
 
     add(ChatMemberHandler(group.my_chat_member, ChatMemberHandler.MY_CHAT_MEMBER))

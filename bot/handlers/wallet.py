@@ -1,5 +1,6 @@
 """دستورات و منوهای کیف پول: شارژ با ارسال رسید، کارمزد ۱۰٪، فروش سکه (حداقل ۱۰۰ سکه = ۱۰۰ هزار تومان)، و انتقال سکه بین کاربران."""
 
+import json
 import logging
 import re
 import uuid
@@ -14,6 +15,7 @@ from telegram.ext import ContextTypes
 
 from core import texts
 from core.models import TelegramUser
+from core.redis import get_redis
 from core.texts import fa_num
 from core.textutils import fa_date, parse_int
 from wallet.models import EconomySettings, SellRequest, TopUpRequest, TxType
@@ -28,6 +30,80 @@ from .common import answer, callback, command, get_all_admin_ids, is_superadmin,
 
 def _btn(text: str, data: str, style: str = ""):
     return ui.button(text, data, style=style)
+
+
+def _topup_alert_kb(req_pk: int, user_tg_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                _btn("✅ تایید و شارژ", f"adm:top:app:{req_pk}", ui.SUCCESS),
+                _btn("❌ رد رسید", f"adm:top:rej:{req_pk}", ui.DANGER),
+            ],
+            [
+                _btn("✉️ پیام به کاربر", f"adm:dm:{user_tg_id}", ui.PRIMARY),
+            ],
+        ]
+    )
+
+
+def _sell_alert_kb(req_pk: int, user_tg_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                _btn("✅ اعلام واریز (متنی)", f"adm:sell:pay:{req_pk}", ui.SUCCESS),
+                _btn("📸 ارسال رسید واریز", f"adm:sell:receipt:{req_pk}", ui.PRIMARY),
+            ],
+            [
+                _btn("❌ رد و برگشت سکه", f"adm:sell:rej:{req_pk}", ui.DANGER),
+                _btn("✉️ پیام به کاربر", f"adm:dm:{user_tg_id}", ui.PRIMARY),
+            ],
+        ]
+    )
+
+
+async def record_admin_alerts(alert_type: str, req_id: int, entries: list[dict]):
+    try:
+        key = f"adm_alerts:{alert_type}:{req_id}"
+        await get_redis().set(key, json.dumps(entries), ex=7 * 86400)
+    except Exception as exc:
+        logger.warning("failed to record admin alerts in redis: %s", exc)
+
+
+async def update_all_admin_alerts(context, alert_type: str, req_id: int, new_text: str, is_photo: bool = False):
+    try:
+        key = f"adm_alerts:{alert_type}:{req_id}"
+        raw = await get_redis().get(key)
+        if not raw:
+            return
+        entries = json.loads(raw)
+        for item in entries:
+            chat_id = item.get("chat_id")
+            msg_id = item.get("msg_id")
+            if not chat_id or not msg_id:
+                continue
+            try:
+                if is_photo:
+                    await tg_call(
+                        context.bot.edit_message_caption,
+                        chat_id=chat_id,
+                        message_id=msg_id,
+                        caption=new_text,
+                        parse_mode="HTML",
+                        reply_markup=None,
+                    )
+                else:
+                    await tg_call(
+                        context.bot.edit_message_text,
+                        chat_id=chat_id,
+                        message_id=msg_id,
+                        text=new_text,
+                        parse_mode="HTML",
+                        reply_markup=None,
+                    )
+            except Exception:
+                pass
+    except Exception as exc:
+        logger.warning("failed to update all admin alerts: %s", exc)
 
 
 # ------------------------------------------------------------------ صفحه‌های کیف پول
@@ -247,7 +323,15 @@ async def private_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     if context.user_data.get("admin_flow"):
         from . import admin
+
         handled = await admin.admin_private_message(update, context, user)
+        if handled:
+            return
+
+    if context.user_data.get("support_flow"):
+        from . import admin
+
+        handled = await admin.user_support_message(update, context, user)
         if handled:
             return
 
@@ -289,8 +373,11 @@ async def private_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
 
         # ارسال به سوپرادمین‌ها
+        uname = f"@{escape(user.username)}" if user.username else "<i>ندارد</i>"
+        user_mention = f"<a href=\"tg://user?id={user.tg_id}\">{escape(user.display_name)}</a>"
         admin_caption = texts.ADMIN_TOPUP_ALERT.format(
-            user=escape(user.display_name),
+            user=user_mention,
+            username=uname,
             tg_id=user.tg_id,
             coins=fa_num(coins),
             amount=fa_num(amount),
@@ -299,17 +386,11 @@ async def private_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             date=fa_date(timezone.localtime(req.created_at)),
             id=fa_num(req.pk),
         )
-        admin_kb = InlineKeyboardMarkup(
-            [
-                [
-                    _btn("✅ تایید و شارژ", f"adm:top:app:{req.pk}", ui.SUCCESS),
-                    _btn("❌ رد رسید", f"adm:top:rej:{req.pk}", ui.DANGER),
-                ]
-            ]
-        )
+        admin_kb = _topup_alert_kb(req.pk, user.tg_id)
+        sent_entries = []
         for admin_id in await get_all_admin_ids():
             try:
-                await tg_call(
+                sent = await tg_call(
                     context.bot.send_photo,
                     admin_id,
                     photo=photo_id,
@@ -317,8 +398,12 @@ async def private_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     parse_mode="HTML",
                     reply_markup=admin_kb,
                 )
+                if sent:
+                    sent_entries.append({"chat_id": admin_id, "msg_id": sent.message_id})
             except Exception as exc:
                 logger.warning("failed to send topup alert to admin %s: %s", admin_id, exc)
+        if sent_entries:
+            await record_admin_alerts("topup", req.pk, sent_entries)
         return
 
     # ۲. دریافت تعداد دلخواه شارژ
@@ -393,8 +478,11 @@ async def private_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
 
         # ارسال به سوپرادمین‌ها
+        uname = f"@{escape(user.username)}" if user.username else "<i>ندارد</i>"
+        user_mention = f"<a href=\"tg://user?id={user.tg_id}\">{escape(user.display_name)}</a>"
         admin_msg = texts.ADMIN_SELL_ALERT.format(
-            user=escape(user.display_name),
+            user=user_mention,
+            username=uname,
             tg_id=user.tg_id,
             coins=fa_num(coins),
             amount=fa_num(amount),
@@ -402,28 +490,23 @@ async def private_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             date=fa_date(timezone.localtime(req.created_at)),
             id=fa_num(req.pk),
         )
-        admin_kb = InlineKeyboardMarkup(
-            [
-                [
-                    _btn("✅ واریز شد (اعلام متنی)", f"adm:sell:pay:{req.pk}", ui.SUCCESS),
-                    _btn("📸 ارسال رسید واریز", f"adm:sell:receipt:{req.pk}", ui.PRIMARY),
-                ],
-                [
-                    _btn("❌ رد و برگشت سکه", f"adm:sell:rej:{req.pk}", ui.DANGER),
-                ],
-            ]
-        )
+        admin_kb = _sell_alert_kb(req.pk, user.tg_id)
+        sent_entries = []
         for admin_id in await get_all_admin_ids():
             try:
-                await tg_call(
+                sent = await tg_call(
                     context.bot.send_message,
                     admin_id,
                     admin_msg,
                     parse_mode="HTML",
                     reply_markup=admin_kb,
                 )
+                if sent:
+                    sent_entries.append({"chat_id": admin_id, "msg_id": sent.message_id})
             except Exception as exc:
                 logger.warning("failed to send sell alert to admin %s: %s", admin_id, exc)
+        if sent_entries:
+            await record_admin_alerts("sell", req.pk, sent_entries)
         return
 
     # ۵. دریافت مقصد انتقال در پیوی
@@ -626,17 +709,56 @@ async def admin_topup_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     if action == "app":
+        confirm_kb = InlineKeyboardMarkup(
+            [
+                [
+                    _btn("✅ بله، تایید نهایی و شارژ حساب", f"adm:top:capp:{req.pk}", ui.SUCCESS),
+                ],
+                [
+                    _btn("🔙 انصراف و بازگشت", f"adm:top:reset:{req.pk}", ui.PRIMARY),
+                ],
+            ]
+        )
+        await answer(query, "⚠️ جهت تایید نهایی و واریز سکه‌ها، دکمه تایید نهایی را بزنید.")
+        await tg_call(query.edit_message_reply_markup, reply_markup=confirm_kb)
+        return
+
+    if action == "rej":
+        confirm_kb = InlineKeyboardMarkup(
+            [
+                [
+                    _btn("❌ بله، رد قطعی رسید", f"adm:top:crej:{req.pk}", ui.DANGER),
+                ],
+                [
+                    _btn("🔙 انصراف و بازگشت", f"adm:top:reset:{req.pk}", ui.PRIMARY),
+                ],
+            ]
+        )
+        await answer(query, "⚠️ جهت رد رسید، دکمه رد قطعی را بزنید.")
+        await tg_call(query.edit_message_reply_markup, reply_markup=confirm_kb)
+        return
+
+    if action == "reset":
+        await answer(query, "عملیات لغو شد.")
+        await tg_call(query.edit_message_reply_markup, reply_markup=_topup_alert_kb(req.pk, req.user.tg_id))
+        return
+
+    if action == "capp":
         await db(apply_transaction)(req.user, req.coins, TxType.TOPUP, f"topup:{req.pk}")
         req.status = TopUpRequest.Status.APPROVED
         req.reviewed_at = timezone.now()
-        req.admin_note = f"Approved by {user.tg_id}"
+        req.admin_note = f"Approved by {user.tg_id} ({user.display_name})"
         await db(req.save)(update_fields=["status", "reviewed_at", "admin_note"])
         await answer(query, f"شارژ {req.coins} سکه تایید شد ✅")
-        await tg_call(
-            query.edit_message_caption,
-            caption=f"{query.message.caption_html}\n\n✅ <b>تایید شد</b> توسط {escape(user.display_name)}",
-            parse_mode="HTML",
-        )
+
+        base_caption = query.message.caption_html or ""
+        new_caption = f"{base_caption}\n\n✅ <b>تایید و شارژ شد</b> توسط {escape(user.display_name)}"
+        await update_all_admin_alerts(context, "topup", req.pk, new_caption, is_photo=True)
+        try:
+            await tg_call(query.edit_message_caption, caption=new_caption, parse_mode="HTML", reply_markup=None)
+        except Exception:
+            pass
+
         # اطلاع‌رسانی به کاربر
         try:
             await db(req.user.refresh_from_db)()
@@ -651,17 +773,23 @@ async def admin_topup_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             )
         except Exception:
             pass
-    elif action == "rej":
+        return
+
+    if action == "crej":
         req.status = TopUpRequest.Status.REJECTED
         req.reviewed_at = timezone.now()
-        req.admin_note = f"Rejected by {user.tg_id}"
+        req.admin_note = f"Rejected by {user.tg_id} ({user.display_name})"
         await db(req.save)(update_fields=["status", "reviewed_at", "admin_note"])
         await answer(query, "رسید رد شد ❌")
-        await tg_call(
-            query.edit_message_caption,
-            caption=f"{query.message.caption_html}\n\n❌ <b>رد شد</b> توسط {escape(user.display_name)}",
-            parse_mode="HTML",
-        )
+
+        base_caption = query.message.caption_html or ""
+        new_caption = f"{base_caption}\n\n❌ <b>رد شد</b> توسط {escape(user.display_name)}"
+        await update_all_admin_alerts(context, "topup", req.pk, new_caption, is_photo=True)
+        try:
+            await tg_call(query.edit_message_caption, caption=new_caption, parse_mode="HTML", reply_markup=None)
+        except Exception:
+            pass
+
         try:
             await tg_call(
                 context.bot.send_message,
@@ -671,6 +799,7 @@ async def admin_topup_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             )
         except Exception:
             pass
+        return
 
 
 @callback
@@ -708,16 +837,55 @@ async def admin_sell_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     if action == "pay":
+        confirm_kb = InlineKeyboardMarkup(
+            [
+                [
+                    _btn("✅ بله، تایید نهایی واریز وجه", f"adm:sell:cpay:{req.pk}", ui.SUCCESS),
+                ],
+                [
+                    _btn("🔙 انصراف و بازگشت", f"adm:sell:reset:{req.pk}", ui.PRIMARY),
+                ],
+            ]
+        )
+        await answer(query, "⚠️ جهت اعلام واریز، تایید نهایی را بزنید.")
+        await tg_call(query.edit_message_reply_markup, reply_markup=confirm_kb)
+        return
+
+    if action == "rej":
+        confirm_kb = InlineKeyboardMarkup(
+            [
+                [
+                    _btn("❌ بله، رد قطعی و برگشت سکه‌ها", f"adm:sell:crej:{req.pk}", ui.DANGER),
+                ],
+                [
+                    _btn("🔙 انصراف و بازگشت", f"adm:sell:reset:{req.pk}", ui.PRIMARY),
+                ],
+            ]
+        )
+        await answer(query, "⚠️ جهت رد درخواست تسویه، تایید نهایی را بزنید.")
+        await tg_call(query.edit_message_reply_markup, reply_markup=confirm_kb)
+        return
+
+    if action == "reset":
+        await answer(query, "عملیات لغو شد.")
+        await tg_call(query.edit_message_reply_markup, reply_markup=_sell_alert_kb(req.pk, req.user.tg_id))
+        return
+
+    if action == "cpay":
         req.status = SellRequest.Status.PAID
         req.reviewed_at = timezone.now()
-        req.admin_note = f"Paid by {user.tg_id}"
+        req.admin_note = f"Paid by {user.tg_id} ({user.display_name})"
         await db(req.save)(update_fields=["status", "reviewed_at", "admin_note"])
         await answer(query, f"واریز {req.amount_toman:,} تومان تایید شد ✅")
-        await tg_call(
-            query.edit_message_text,
-            text=f"{query.message.text_html}\n\n✅ <b>واریز شد</b> توسط {escape(user.display_name)}",
-            parse_mode="HTML",
-        )
+
+        base_text = query.message.text_html or ""
+        new_text = f"{base_text}\n\n✅ <b>واریز شد</b> توسط {escape(user.display_name)}"
+        await update_all_admin_alerts(context, "sell", req.pk, new_text, is_photo=False)
+        try:
+            await tg_call(query.edit_message_text, text=new_text, parse_mode="HTML", reply_markup=None)
+        except Exception:
+            pass
+
         try:
             await tg_call(
                 context.bot.send_message,
@@ -731,18 +899,24 @@ async def admin_sell_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
         except Exception:
             pass
-    elif action == "rej":
+        return
+
+    if action == "crej":
         await db(apply_transaction)(req.user, req.coins, TxType.REFUND, f"sell_refund:{req.pk}")
         req.status = SellRequest.Status.REJECTED
         req.reviewed_at = timezone.now()
-        req.admin_note = f"Rejected by {user.tg_id}"
+        req.admin_note = f"Rejected by {user.tg_id} ({user.display_name})"
         await db(req.save)(update_fields=["status", "reviewed_at", "admin_note"])
         await answer(query, f"رد شد و {req.coins} سکه برگشت داده شد.")
-        await tg_call(
-            query.edit_message_text,
-            text=f"{query.message.text_html}\n\n❌ <b>رد شد و سکه‌ها برگشت داده شد</b> توسط {escape(user.display_name)}",
-            parse_mode="HTML",
-        )
+
+        base_text = query.message.text_html or ""
+        new_text = f"{base_text}\n\n❌ <b>رد شد و سکه‌ها برگشت داده شد</b> توسط {escape(user.display_name)}"
+        await update_all_admin_alerts(context, "sell", req.pk, new_text, is_photo=False)
+        try:
+            await tg_call(query.edit_message_text, text=new_text, parse_mode="HTML", reply_markup=None)
+        except Exception:
+            pass
+
         try:
             await tg_call(
                 context.bot.send_message,
@@ -755,3 +929,4 @@ async def admin_sell_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
         except Exception:
             pass
+        return

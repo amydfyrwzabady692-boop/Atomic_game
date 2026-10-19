@@ -727,7 +727,8 @@ WALLET_TRANSFER_NO_COINS = "سکه‌ات برای این انتقال کافی 
 ADMIN_TOPUP_ALERT = (
     "🧾 <b>درخواست شارژ کیف پول جدید</b>\n" + DIVIDER + "\n"
     "👤 کاربر: {user}\n"
-    "🆔 آیدی عددی: <code>{tg_id}</code>\n"
+    "🔗 آیدی تلگرام: {username}\n"
+    "🆔 شناسه عددی: <code>{tg_id}</code>\n"
     + COIN + " تعداد سکه: <b>{coins}</b>\n"
     "💵 مبلغ خام: <b>{amount}</b> تومان\n"
     "📊 کارمزد شارژ (۱۰٪): <b>{fee}</b> تومان\n"
@@ -738,7 +739,8 @@ ADMIN_TOPUP_ALERT = (
 ADMIN_SELL_ALERT = (
     "💸 <b>درخواست فروش سکه (تسویه حساب)</b>\n" + DIVIDER + "\n"
     "👤 کاربر: {user}\n"
-    "🆔 آیدی عددی: <code>{tg_id}</code>\n"
+    "🔗 آیدی تلگرام: {username}\n"
+    "🆔 شناسه عددی: <code>{tg_id}</code>\n"
     + COIN + " سکه کسر شده: <b>{coins}</b>\n"
     "💵 <b>مبلغ قابل واریز: {amount} تومان</b>\n"
     "💳 اطلاعات کارت: <code>{card}</code>\n"

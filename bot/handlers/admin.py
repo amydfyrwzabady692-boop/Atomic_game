@@ -227,10 +227,11 @@ async def admin_panel_screen(user: TelegramUser):
             _btn("📊 آمار کلی ربات", "adm:stats:show", ui.PRIMARY),
         ],
         [
+            _btn("✉️ ارسال پیام به کاربر", "adm:msg:start", ui.PRIMARY),
             _btn("📢 ارسال پیام همگانی", "adm:bcast:prompt", ui.PRIMARY),
-            _btn("🔄 بروزرسانی", "adm:home"),
         ],
         [
+            _btn("🔄 بروزرسانی", "adm:home"),
             _btn("❌ بستن پنل", "adm:close"),
         ],
     ]
@@ -273,6 +274,19 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, use
             await tg_call(query.edit_message_text, "🔒 پنل مدیریت بسته شد.")
         except Exception:
             pass
+        return
+
+    if action == "msg" and sub == "start":
+        context.user_data["admin_flow"] = {"step": "ask_msg_target"}
+        await answer(query)
+        await show(
+            "✉️ <b>ارسال پیام / تیکت به کاربر</b>\n"
+            "━━━━━━━━━━━━━━\n"
+            "لطفاً شناسه عددی تلگرام یا آیدی کاربر را ارسال فرمایید:\n"
+            "(مثال: <code>123456789</code> یا <code>@username</code>)\n\n"
+            "<i>(جهت انصراف عبارت <code>لغو</code> را ارسال نمایید)</i>",
+            InlineKeyboardMarkup([[_btn("🔙 بازگشت به پنل", "adm:home")]]),
+        )
         return
 
     # تنظیم کارت
@@ -681,6 +695,19 @@ async def admin_private_message(update: Update, context: ContextTypes.DEFAULT_TY
         except Exception as exc:
             logger.warning("failed to send receipt photo to user %s: %s", req.user.tg_id, exc)
 
+        try:
+            from .wallet import update_all_admin_alerts
+
+            sync_text = (
+                f"💸 <b>درخواست فروش سکه #{fa_num(req.pk)}</b>\n"
+                f"👤 کاربر: <b>{escape(req.user.display_name)}</b>\n"
+                f"💵 مبلغ: <b>{fa_num(req.amount_toman)} تومان</b>\n\n"
+                f"✅ <b>واریز شد و فیش ارسال گردید</b> توسط {escape(user.display_name)}"
+            )
+            await update_all_admin_alerts(context, "sell", req.pk, sync_text, is_photo=False)
+        except Exception as exc:
+            logger.warning("failed to sync sell alert: %s", exc)
+
         await reply(
             update,
             f"✅ رسید واریزی با موفقیت برای کاربر ارسال شد و وضعیت درخواست #{fa_num(req.pk)} به «واریز شد» ثبت گردید.",
@@ -762,5 +789,192 @@ async def admin_private_message(update: Update, context: ContextTypes.DEFAULT_TY
         await broadcast(update, context, user)
         return True
 
+    if step == "ask_msg_target":
+        from ..users import find_user
+
+        target = await find_user(text)
+        if not target:
+            target_tg_id = parse_int(text)
+            if target_tg_id:
+                target = await db(TelegramUser.objects.filter(tg_id=target_tg_id).first)()
+        if not target:
+            await reply(update, "❌ کاربر یافت نشد. لطفاً شناسه عددی تلگرام یا آیدی کاربر را صحیح وارد کنید:")
+            return True
+
+        context.user_data["admin_flow"] = {
+            "step": "send_dm",
+            "target_tg_id": target.tg_id,
+            "target_name": target.display_name,
+        }
+        uname = f" (@{target.username})" if target.username else ""
+        await reply(
+            update,
+            f"👤 کاربر انتخاب شد: <b>{escape(target.display_name)}</b>{uname} (<code>{target.tg_id}</code>)\n\n"
+            f"📝 اکنون متن پیام (یا عکس همراه با متن) را ارسال فرمایید تا برای کاربر فرستاده شود:\n"
+            f"<i>(جهت انصراف عبارت <code>لغو</code> را ارسال نمایید)</i>",
+            InlineKeyboardMarkup([[_btn("❌ انصراف", "adm:home")]]),
+        )
+        return True
+
+    if step == "send_dm":
+        target_tg_id = flow.get("target_tg_id")
+        target_name = flow.get("target_name", str(target_tg_id))
+        msg_text = message.text or message.caption or ""
+        photo_id = message.photo[-1].file_id if message.photo else (message.document.file_id if message.document else None)
+
+        if not msg_text and not photo_id:
+            await reply(update, "❌ لطفاً متن پیام یا عکس را ارسال کنید (یا عبارت «لغو» برای انصراف).")
+            return True
+
+        user_content = (
+            f"📩 <b>پیام از طرف پشتیبانی و مدیریت ربات:</b>\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"{escape(msg_text)}\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"✍️ <i>جهت پاسخ دادن به مدیریت، روی دکمه زیر کلیک کنید:</i>"
+        )
+        reply_kb = InlineKeyboardMarkup([[ui.button("✍️ پاسخ به پشتیبانی", "pm:support", style=ui.PRIMARY)]])
+
+        delivered = False
+        try:
+            if photo_id:
+                await tg_call(
+                    context.bot.send_photo,
+                    chat_id=target_tg_id,
+                    photo=photo_id,
+                    caption=user_content,
+                    parse_mode="HTML",
+                    reply_markup=reply_kb,
+                )
+            else:
+                await tg_call(
+                    context.bot.send_message,
+                    chat_id=target_tg_id,
+                    text=user_content,
+                    parse_mode="HTML",
+                    reply_markup=reply_kb,
+                )
+            delivered = True
+        except Exception as exc:
+            logger.warning("failed to send dm to %s: %s", target_tg_id, exc)
+
+        context.user_data.pop("admin_flow", None)
+        if delivered:
+            await reply(
+                update,
+                f"✅ پیام شما با موفقیت برای <b>{escape(target_name)}</b> (<code>{target_tg_id}</code>) ارسال گردید.",
+                InlineKeyboardMarkup([[_btn("🔙 بازگشت به پنل", "adm:home")]]),
+            )
+        else:
+            await reply(
+                update,
+                f"❌ ارسال پیام به کاربر (<code>{target_tg_id}</code>) ناموفق بود. ممکن است کاربر ربات را بلاک کرده باشد.",
+                InlineKeyboardMarkup([[_btn("🔙 بازگشت به پنل", "adm:home")]]),
+            )
+        return True
+
     return False
+
+
+@callback
+async def admin_dm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser, query):
+    if not await is_superadmin(user.tg_id):
+        await answer(query, "دسترسی غیرمجاز است.", alert=True)
+        return
+
+    parts = query.data.split(":")
+    target_tg_id = int(parts[2])
+    target = await db(TelegramUser.objects.filter(tg_id=target_tg_id).first)()
+    target_name = target.display_name if target else str(target_tg_id)
+    target_uname = f" (@{target.username})" if (target and target.username) else ""
+
+    context.user_data["admin_flow"] = {
+        "step": "send_dm",
+        "target_tg_id": target_tg_id,
+        "target_name": target_name,
+    }
+    await answer(query)
+    await reply(
+        update,
+        f"✉️ <b>ارسال پیام به کاربر:</b>\n"
+        f"👤 <b>{escape(target_name)}</b>{target_uname} (<code>{target_tg_id}</code>)\n"
+        f"━━━━━━━━━━━━━━\n"
+        f"لطفاً متن پیام (یا عکس همراه با متن) را ارسال فرمایید تا بلافاصله برای کاربر ارسال شود:\n\n"
+        f"<i>(جهت انصراف عبارت <code>لغو</code> را ارسال نمایید)</i>",
+        InlineKeyboardMarkup([[_btn("❌ انصراف", "adm:home")]]),
+    )
+
+
+async def user_support_message(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser) -> bool:
+    flow = context.user_data.get("support_flow")
+    if not flow:
+        return False
+
+    message = update.effective_message
+    text = (message.text or message.caption or "").strip()
+    photo_id = message.photo[-1].file_id if message.photo else (message.document.file_id if message.document else None)
+
+    if text in ("/cancel", "لغو"):
+        context.user_data.pop("support_flow", None)
+        await reply(update, "عملیات ارسال پیام به پشتیبانی لغو شد.")
+        return True
+
+    if not text and not photo_id:
+        await reply(update, "لطفاً پیام متنی یا تصویر خود را ارسال فرمایید (یا عبارت «لغو» را ارسال کنید).")
+        return True
+
+    context.user_data.pop("support_flow", None)
+
+    uname = f"@{escape(user.username)}" if user.username else "<i>ندارد</i>"
+    admin_caption = (
+        "📨 <b>تیکت / پیام جدید از کاربر</b>\n"
+        "━━━━━━━━━━━━━━\n"
+        f"👤 کاربر: <a href=\"tg://user?id={user.tg_id}\">{escape(user.display_name)}</a>\n"
+        f"🔗 آیدی تلگرام: {uname}\n"
+        f"🆔 شناسه عددی: <code>{user.tg_id}</code>\n"
+        f"📅 تاریخ: {fa_date(timezone.localtime(timezone.now()))}\n"
+        "━━━━━━━━━━━━━━\n"
+        f"📝 <b>متن پیام:</b>\n"
+        f"{escape(text)}"
+    )
+
+    admin_kb = InlineKeyboardMarkup(
+        [
+            [
+                _btn("✍️ پاسخ به کاربر", f"adm:dm:{user.tg_id}", ui.PRIMARY),
+            ]
+        ]
+    )
+
+    from .common import get_all_admin_ids
+
+    for admin_id in await get_all_admin_ids():
+        try:
+            if photo_id:
+                await tg_call(
+                    context.bot.send_photo,
+                    chat_id=admin_id,
+                    photo=photo_id,
+                    caption=admin_caption,
+                    parse_mode="HTML",
+                    reply_markup=admin_kb,
+                )
+            else:
+                await tg_call(
+                    context.bot.send_message,
+                    chat_id=admin_id,
+                    text=admin_caption,
+                    parse_mode="HTML",
+                    reply_markup=admin_kb,
+                )
+        except Exception as exc:
+            logger.warning("failed to send support ticket to admin %s: %s", admin_id, exc)
+
+    await reply(
+        update,
+        "✅ <b>پیام شما به پشتیبانی ارسال شد.</b>\n"
+        "پیام شما برای تیم مدیریت ارسال گردید؛ به محض بررسی پاسخ آن در همین پیوی برای شما ارسال خواهد شد.",
+    )
+    return True
+
 

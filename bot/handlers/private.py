@@ -49,6 +49,9 @@ def main_menu(context, daily: bool = False) -> InlineKeyboardMarkup:
                 ui.button(texts.MENU_RULES_BTN, "pm:rules", style=ui.PRIMARY),
                 ui.button(texts.MENU_HELP_BTN, "pm:help", style=ui.PRIMARY),
             ],
+            [
+                ui.button("💬 پشتیبانی و تیکت", "pm:support", style=ui.PRIMARY),
+            ],
         ]
     )
 
@@ -175,6 +178,28 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user
         text, markup = wallet_handlers.wallet_screen(user)
         try:
             await tg_call(query.edit_message_text, text, parse_mode="HTML", reply_markup=markup)
+            return
+        except Exception:
+            pass
+    elif sub in ("support", "support:reply"):
+        context.user_data["support_flow"] = {"step": "awaiting_msg"}
+        await answer(query)
+        await reply(
+            update,
+            "💬 <b>ارتباط با پشتیبانی و مدیریت</b>\n"
+            "━━━━━━━━━━━━━━\n"
+            "لطفاً پیام، سوال یا مشکل خود را به صورت متنی (یا همراه با تصویر) ارسال نمایید تا به تیم مدیریت ارجاع داده شود.\n\n"
+            "<i>(جهت انصراف عبارت <code>لغو</code> را ارسال نمایید)</i>",
+            InlineKeyboardMarkup([[ui.button("❌ انصراف", "pm:support:cancel", style=ui.DANGER)]]),
+        )
+        return
+    elif sub == "support:cancel":
+        context.user_data.pop("support_flow", None)
+        await answer(query, "انصراف داده شد.")
+        daily_on = await _daily_enabled()
+        text = texts.START_BACK.format(name=escape(user.display_name), coins=fa_num(user.coins))
+        try:
+            await tg_call(query.edit_message_text, text, parse_mode="HTML", reply_markup=main_menu(context, daily=daily_on))
             return
         except Exception:
             pass
@@ -316,3 +341,16 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Tele
             date=fa_date(timezone.localtime(tx.created_at)),
         )
     await reply(update, text)
+
+
+@command(private=True)
+async def support_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser):
+    context.user_data["support_flow"] = {"step": "awaiting_msg"}
+    await reply(
+        update,
+        "💬 <b>ارتباط با پشتیبانی و مدیریت</b>\n"
+        "━━━━━━━━━━━━━━\n"
+        "لطفاً پیام، سوال یا مشکل خود را به صورت متنی (یا همراه با تصویر) ارسال فرمایید تا به تیم مدیریت ارجاع داده شود.\n\n"
+        "<i>(جهت انصراف عبارت <code>لغو</code> را ارسال نمایید)</i>",
+        InlineKeyboardMarkup([[ui.button("❌ انصراف", "pm:support:cancel", style=ui.DANGER)]]),
+    )
