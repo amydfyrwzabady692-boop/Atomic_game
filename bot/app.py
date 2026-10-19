@@ -101,6 +101,12 @@ async def post_init(application: Application) -> None:
         await tg_call(application.bot.set_chat_menu_button, menu_button=MenuButtonCommands())
     except Exception as exc:
         logger.warning("failed to set chat menu button: %s", exc)
+    try:
+        from .handlers.common import get_all_admin_ids
+
+        await get_all_admin_ids()
+    except Exception as exc:
+        logger.warning("failed to pre-cache admin IDs: %s", exc)
     await db(game_config.reload)()
     application.job_queue.run_repeating(
         game_settings_job, interval=GAME_SETTINGS_REFRESH_SECONDS, name="game_settings"

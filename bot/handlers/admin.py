@@ -246,7 +246,7 @@ async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Te
 
 @callback
 async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser, query):
-    if not is_superadmin(user.tg_id):
+    if not await is_superadmin(user.tg_id):
         await answer(query, "دسترسی غیرمجاز است.", alert=True)
         return
 
@@ -369,6 +369,8 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, use
             extra.remove(del_id)
             eco.extra_admin_ids = extra
             await db(eco.save)()
+            from .common import get_all_admin_ids
+            await get_all_admin_ids()
             await answer(query, f"ادمین {del_id} حذف شد.")
         query.data = "adm:admins:list"
         await admin_callback(update, context, user, query)
@@ -627,7 +629,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, use
 
 async def admin_private_message(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser) -> bool:
     flow = context.user_data.get("admin_flow")
-    if not flow or not is_superadmin(user.tg_id):
+    if not flow or not await is_superadmin(user.tg_id):
         return False
 
     step = flow.get("step")
@@ -746,6 +748,8 @@ async def admin_private_message(update: Update, context: ContextTypes.DEFAULT_TY
             extra.append(aid)
             eco.extra_admin_ids = extra
             await db(eco.save)()
+            from .common import get_all_admin_ids
+            await get_all_admin_ids()
             msg = f"✅ کاربر با شناسه <code>{aid}</code> به ادمین‌های ربات اضافه شد."
         else:
             msg = "این کاربر قبلاً ادمین بوده است."

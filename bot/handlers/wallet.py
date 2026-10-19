@@ -307,7 +307,7 @@ async def private_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 ]
             ]
         )
-        for admin_id in get_all_admin_ids():
+        for admin_id in await get_all_admin_ids():
             try:
                 await tg_call(
                     context.bot.send_photo,
@@ -413,7 +413,7 @@ async def private_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 ],
             ]
         )
-        for admin_id in get_all_admin_ids():
+        for admin_id in await get_all_admin_ids():
             try:
                 await tg_call(
                     context.bot.send_message,
@@ -609,7 +609,7 @@ async def transfer_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, user:
 
 @callback
 async def admin_topup_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser, query):
-    if not is_superadmin(user.tg_id):
+    if not await is_superadmin(user.tg_id):
         await answer(query, "دسترسی مجاز نیست.", alert=True)
         return
 
@@ -675,7 +675,7 @@ async def admin_topup_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
 @callback
 async def admin_sell_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser, query):
-    if not is_superadmin(user.tg_id):
+    if not await is_superadmin(user.tg_id):
         await answer(query, "دسترسی مجاز نیست.", alert=True)
         return
 

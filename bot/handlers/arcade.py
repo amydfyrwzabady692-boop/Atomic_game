@@ -18,7 +18,7 @@ async def arcade(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Teleg
     base = settings.MINIAPP_BASE_URL.rstrip("/")
     if not render.arcade_ready():
         text = texts.ARCADE_NOT_CONFIGURED
-        if is_superadmin(user.tg_id):
+        if await is_superadmin(user.tg_id):
             text += texts.ARCADE_SETUP_HINT.format(short=settings.MINIAPP_SHORT_NAME)
         await reply(update, text)
         return
