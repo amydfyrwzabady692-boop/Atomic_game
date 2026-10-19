@@ -174,7 +174,7 @@ def register_handlers(application: Application) -> None:
     add(CallbackQueryHandler(private.menu_callback, pattern=r"^pm:"))
     add(CallbackQueryHandler(wallet.wallet_callback, pattern=r"^wal:"))
     add(CallbackQueryHandler(wallet.admin_topup_callback, pattern=r"^adm:top:(?:app|rej):"))
-    add(CallbackQueryHandler(wallet.admin_sell_callback, pattern=r"^adm:sell:(?:pay|rej):"))
+    add(CallbackQueryHandler(wallet.admin_sell_callback, pattern=r"^adm:sell:(?:pay|rej|receipt):"))
     add(CallbackQueryHandler(admin.admin_callback, pattern=r"^adm:"))
 
     add(ChatMemberHandler(group.my_chat_member, ChatMemberHandler.MY_CHAT_MEMBER))

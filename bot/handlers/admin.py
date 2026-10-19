@@ -518,6 +518,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, use
         btn_rows = [
             [
                 _btn("✅ واریز شد", f"adm:sellreq:pay:{req.pk}", ui.SUCCESS),
+                _btn("📸 ارسال رسید", f"adm:sellreq:receipt:{req.pk}", ui.PRIMARY),
                 _btn("❌ رد و بازگشت سکه", f"adm:sellreq:rej:{req.pk}", ui.DANGER),
             ]
         ]
@@ -527,6 +528,26 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, use
 
         await answer(query)
         await show(text, InlineKeyboardMarkup(btn_rows))
+        return
+
+    # ارسال رسید برای تسویه
+    if action in ("sell", "sellreq") and sub == "receipt":
+        req_id = int(parts[3])
+        req = await db(lambda: SellRequest.objects.filter(pk=req_id).select_related("user").first())()
+        if not req or req.status != SellRequest.Status.PENDING:
+            await answer(query, "این درخواست قبلاً بررسی شده است.", alert=True)
+            return
+        context.user_data["admin_flow"] = {"step": "sell_receipt", "req_id": req.pk}
+        await answer(query)
+        await reply(
+            update,
+            f"📸 <b>ارسال رسید واریز برای درخواست #{fa_num(req.pk)}</b>\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"👤 کاربر: <b>{escape(req.user.display_name)}</b> (<code>{req.user.tg_id}</code>)\n"
+            f"💵 مبلغ: <b>{fa_num(req.amount_toman)} تومان</b>\n"
+            f"💳 کارت: <code>{escape(req.card_number)}</code>\n\n"
+            "لطفاً عکس فیش واریزی را ارسال کنید (یا برای انصراف بنویسید «لغو»):",
+        )
         return
 
     # تایید واریز / رد فروش
@@ -612,6 +633,58 @@ async def admin_private_message(update: Update, context: ContextTypes.DEFAULT_TY
     step = flow.get("step")
     message = update.effective_message
     text = (message.text or "").strip()
+
+    if text in ("/cancel", "لغو"):
+        context.user_data.pop("admin_flow", None)
+        await reply(update, "عملیات لغو شد.")
+        return True
+
+    if step == "sell_receipt":
+        req_id = flow.get("req_id")
+        if not message.photo and not message.document:
+            await reply(update, "❌ لطفاً عکس فیش/رسید واریز را ارسال کنید (یا عبارت «لغو» برای انصراف).")
+            return True
+        photo_id = message.photo[-1].file_id if message.photo else message.document.file_id
+        req = await db(lambda: SellRequest.objects.filter(pk=req_id).select_related("user").first())()
+        if not req:
+            context.user_data.pop("admin_flow", None)
+            await reply(update, "❌ درخواست یافت نشد.")
+            return True
+        if req.status != SellRequest.Status.PENDING:
+            context.user_data.pop("admin_flow", None)
+            await reply(update, f"این درخواست قبلاً {req.get_status_display()} شده است.")
+            return True
+
+        req.status = SellRequest.Status.PAID
+        req.reviewed_at = timezone.now()
+        req.admin_note = f"Paid with receipt by {user.tg_id}"
+        await db(req.save)(update_fields=["status", "reviewed_at", "admin_note"])
+        context.user_data.pop("admin_flow", None)
+
+        user_caption = (
+            f"🎉 <b>مبلغ فروش سکه واریز شد!</b>\n{texts.DIVIDER}\n"
+            f"شناسه درخواست: #{fa_num(req.pk)}\n"
+            f"💵 مبلغ واریزی: <b>{fa_num(req.amount_toman)}</b> تومان\n"
+            f"💳 شماره کارت: <code>{escape(req.card_number)}</code>\n\n"
+            f"📸 <b>رسید واریز بانکی توسط مدیریت ضمیمه گردید.</b> از همراهی‌تان سپاسگزاریم!"
+        )
+        try:
+            await tg_call(
+                context.bot.send_photo,
+                req.user.tg_id,
+                photo=photo_id,
+                caption=user_caption,
+                parse_mode="HTML",
+            )
+        except Exception as exc:
+            logger.warning("failed to send receipt photo to user %s: %s", req.user.tg_id, exc)
+
+        await reply(
+            update,
+            f"✅ رسید واریزی با موفقیت برای کاربر ارسال شد و وضعیت درخواست #{fa_num(req.pk)} به «واریز شد» ثبت گردید.",
+            InlineKeyboardMarkup([[_btn("🔙 بازگشت به پنل", "adm:home")]]),
+        )
+        return True
 
     if step == "set_card":
         parts = text.split(None, 1)

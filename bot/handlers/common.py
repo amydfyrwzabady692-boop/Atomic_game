@@ -24,19 +24,37 @@ def manager_of(context: ContextTypes.DEFAULT_TYPE) -> MatchManager:
     return context.application.bot_data["manager"]
 
 
-def is_superadmin(tg_id: int) -> bool:
-    if tg_id == 639344728:
-        return True
-    if tg_id in settings.SUPERADMIN_IDS:
-        return True
+def get_all_admin_ids() -> list[int]:
+    """لیست شناسه‌های عددی تمام ادمین‌های ربات (مالک، سوپرادمین‌ها و ادمین‌های اضافه‌شده)."""
+    ids: list[int] = [639344728]
+    for aid in getattr(settings, "SUPERADMIN_IDS", []):
+        try:
+            val = int(aid)
+            if val not in ids:
+                ids.append(val)
+        except (ValueError, TypeError):
+            pass
     try:
         from wallet.models import EconomySettings
         eco = EconomySettings.load()
-        if tg_id in (eco.extra_admin_ids or []):
-            return True
-    except Exception:
-        pass
-    return False
+        for aid in (eco.extra_admin_ids or []):
+            try:
+                val = int(aid)
+                if val not in ids:
+                    ids.append(val)
+            except (ValueError, TypeError):
+                pass
+    except Exception as exc:
+        logger.warning("failed to load extra_admin_ids: %s", exc)
+    return ids
+
+
+def is_superadmin(tg_id: int) -> bool:
+    try:
+        val = int(tg_id)
+    except (ValueError, TypeError):
+        return False
+    return val in get_all_admin_ids()
 
 
 async def reply(update: Update, text: str, reply_markup=None):

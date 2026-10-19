@@ -1,8 +1,11 @@
 """دستورات و منوهای کیف پول: شارژ با ارسال رسید، کارمزد ۱۰٪، فروش سکه (حداقل ۱۰۰ سکه = ۱۰۰ هزار تومان)، و انتقال سکه بین کاربران."""
 
+import logging
 import re
 import uuid
 from html import escape
+
+logger = logging.getLogger(__name__)
 from django.conf import settings
 from django.utils import timezone
 from telegram import InlineKeyboardMarkup, Update
@@ -20,7 +23,7 @@ from .. import ui
 from ..db import db
 from ..tg import tg_call
 from ..users import ensure_user, find_user
-from .common import answer, callback, command, is_superadmin, reply
+from .common import answer, callback, command, get_all_admin_ids, is_superadmin, reply
 
 
 def _btn(text: str, data: str, style: str = ""):
@@ -304,7 +307,7 @@ async def private_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 ]
             ]
         )
-        for admin_id in settings.SUPERADMIN_IDS:
+        for admin_id in get_all_admin_ids():
             try:
                 await tg_call(
                     context.bot.send_photo,
@@ -314,8 +317,8 @@ async def private_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     parse_mode="HTML",
                     reply_markup=admin_kb,
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("failed to send topup alert to admin %s: %s", admin_id, exc)
         return
 
     # ۲. دریافت تعداد دلخواه شارژ
@@ -402,12 +405,15 @@ async def private_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         admin_kb = InlineKeyboardMarkup(
             [
                 [
-                    _btn("✅ واریز شد", f"adm:sell:pay:{req.pk}", ui.SUCCESS),
+                    _btn("✅ واریز شد (اعلام متنی)", f"adm:sell:pay:{req.pk}", ui.SUCCESS),
+                    _btn("📸 ارسال رسید واریز", f"adm:sell:receipt:{req.pk}", ui.PRIMARY),
+                ],
+                [
                     _btn("❌ رد و برگشت سکه", f"adm:sell:rej:{req.pk}", ui.DANGER),
-                ]
+                ],
             ]
         )
-        for admin_id in settings.SUPERADMIN_IDS:
+        for admin_id in get_all_admin_ids():
             try:
                 await tg_call(
                     context.bot.send_message,
@@ -416,8 +422,8 @@ async def private_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     parse_mode="HTML",
                     reply_markup=admin_kb,
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("failed to send sell alert to admin %s: %s", admin_id, exc)
         return
 
     # ۵. دریافت مقصد انتقال در پیوی
@@ -683,6 +689,22 @@ async def admin_sell_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     if req.status != SellRequest.Status.PENDING:
         await answer(query, f"این درخواست قبلاً {req.get_status_display()} شده است.", alert=True)
+        return
+
+    if action == "receipt":
+        context.user_data["admin_flow"] = {"step": "sell_receipt", "req_id": req.pk}
+        await answer(query)
+        await reply(
+            update,
+            f"📸 <b>ارسال رسید واریز به کاربر (درخواست #{fa_num(req.pk)})</b>\n"
+            f"━━━━━━━━━━━━━━\n"
+            f"👤 کاربر: <b>{escape(req.user.display_name)}</b> (<code>{req.user.tg_id}</code>)\n"
+            f"💵 مبلغ واریزی: <b>{fa_num(req.amount_toman)} تومان</b>\n"
+            f"💳 شماره کارت: <code>{escape(req.card_number)}</code>\n"
+            f"👤 صاحب کارت: <b>{escape(req.card_holder or '—')}</b>\n\n"
+            "لطفاً عکس فیش/رسید واریز بانک را ارسال فرمایید تا بلافاصله برای کاربر فرستاده و درخواست تایید شود.\n"
+            "(جهت انصراف عبارت <code>لغو</code> را ارسال کنید)",
+        )
         return
 
     if action == "pay":
