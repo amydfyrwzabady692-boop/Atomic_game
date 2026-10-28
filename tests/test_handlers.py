@@ -203,7 +203,8 @@ async def test_start_with_referral_link_records_referrer_but_not_self(app):
     assert not await sync_to_async(CoinTransaction.objects.filter(type=TxType.REFERRAL).exists)()
 
 
-async def test_daily_is_off_by_default(app):
+async def test_daily_can_be_turned_off_from_the_panel(app):
+    await set_economy(daily_enabled=False)
     await start_user(app, 32)
     update, context = make_update(app, 32, text="/daily")
     await private.daily(update, context)
@@ -211,13 +212,15 @@ async def test_daily_is_off_by_default(app):
     assert (await get_user(32)).coins == START_COINS
 
 
-async def test_daily_only_in_private_and_once_a_day(app):
-    await set_economy(daily_enabled=True)
+async def test_daily_only_in_private_and_once_a_day(app, monkeypatch):
+    from wallet import economy
+
+    monkeypatch.setattr(economy, "roll_daily_reward", lambda: 2)
     await start_user(app, 31)
     update, context = make_update(app, 31, text="/daily")
     await private.daily(update, context)
-    assert "جایزه‌ی روزانه" in update.replies[0]["text"]
-    assert (await get_user(31)).coins == START_COINS + settings.DAILY_BASE
+    assert "گردونه" in update.replies[0]["text"] and "+۲" in update.replies[0]["text"]
+    assert (await get_user(31)).coins == START_COINS + 2
 
     again, context = make_update(app, 31, text="/daily")
     await private.daily(again, context)
@@ -226,7 +229,7 @@ async def test_daily_only_in_private_and_once_a_day(app):
     in_group, context = make_update(app, 31, chat_id=GROUP_ID, chat_type="supergroup", text="/daily")
     await private.daily(in_group, context)
     assert "پیوی" in in_group.replies[0]["text"]
-    assert (await get_user(31)).coins == START_COINS + settings.DAILY_BASE
+    assert (await get_user(31)).coins == START_COINS + 2
 
 
 async def test_me_history_and_invite(app):
@@ -497,13 +500,16 @@ async def test_commands_and_callbacks_are_rate_limited(app):
 
 # ====================================================================== دکمه‌های رنگی، منوی پیوی و قوانین
 async def test_start_shows_a_coloured_menu_and_its_buttons_work(app):
+    await set_economy(daily_enabled=False)
     first = await start_user(app, 201)
     menu = buttons_of(first.replies[0]["reply_markup"])
     by_data = {b.callback_data: b for b in menu if b.callback_data}
-    assert {"pm:me", "pm:invite", "pm:rules", "pm:help"} <= set(by_data)
-    # جایزه‌ی روزانه پیش‌فرض خاموش است و دکمه‌اش نشان داده نمی‌شود
+    assert {"pm:me", "pm:invite", "pm:rules", "pm:help", "pm:wallet", "pm:duel", "pm:support", "pm:gtop"} <= set(by_data)
+    # دکمه‌ی جایزه‌ی روزانه فقط وقتی روشن است دیده می‌شود
     assert "pm:daily" not in by_data
     assert all(style_of(b) for b in menu), "همه‌ی دکمه‌های منوی پیوی رنگی‌اند"
+    # مینی‌اپ با دکمه‌ی web_app (فقط وقتی آدرس HTTPS تنظیم شده) باز می‌شود
+    assert menu[0].web_app.url == "https://arcade.test/arcade/"
     await set_economy(daily_enabled=True)
     again = await start_user(app, 201)
     daily = {b.callback_data: b for b in buttons_of(again.replies[0]["reply_markup"]) if b.callback_data}
@@ -516,11 +522,13 @@ async def test_start_shows_a_coloured_menu_and_its_buttons_work(app):
         await private.menu_callback(update, context)
         return update
 
-    assert "جایزه‌ی روزانه" in (await press("pm:daily")).replies[0]["text"]
+    assert "گردونه" in (await press("pm:daily")).replies[0]["text"]
     assert "علی" in (await press("pm:me")).replies[0]["text"]
     assert "راهنما" in (await press("pm:help")).replies[0]["text"]
     assert "فروشگاه" in (await press("pm:shop")).replies[0]["text"]
-    assert "قوانین کلی" in (await press("pm:rules")).replies[0]["text"]
+    assert "قوانین" in (await press("pm:rules")).replies[0]["text"]
+    assert "تراکنش" in (await press("pm:history")).replies[0]["text"]
+    assert "برترین" in (await press("pm:gtop")).replies[0]["text"]
     assert (await press("pm:nonsense")).replies == []
     # همان دکمه‌ها در گروه کاری نمی‌کنند
     update, context = make_callback(app, 201, "pm:daily", 1)
@@ -533,11 +541,13 @@ async def test_rules_command_lists_games_and_shows_each_games_rules(app):
     update, context = make_update(app, 211, chat_id=GROUP_ID, chat_type="supergroup", text="/rules")
     await group.rules(update, context)
     home = update.replies[0]
-    assert "قوانین کلی" in home["text"] and texts.COINS_NOTE in home["text"]
+    assert "قوانین" in home["text"]
     assert [b.callback_data for b in buttons_of(home["reply_markup"])] == [
-        "rules:join", "rules:score", "rules:types", "rules:t", "rules:a"
+        "rules:join", "rules:score", "rules:duel", "rules:wallet", "rules:types", "rules:fair", "rules:t", "rules:a"
     ]
-    for topic, phrase in (("join", "زمان عضوگیری"), ("score", "امتیاز صفر یعنی باخت"), ("types", "شطرنج")):
+    for topic, phrase in (
+        ("join", "زمان عضوگیری"), ("score", "امتیاز صفر یعنی باخت"), ("types", "شطرنج"), ("wallet", "حداقل هر انتقال"),
+    ):  # fmt: skip
         page = await click(app, 211, f"rules:{topic}", 1, group.rules_callback)
         assert phrase in page.edits[-1]["text"] and "{" not in page.edits[-1]["text"]
 
@@ -646,7 +656,10 @@ async def test_practice_menu_lists_all_arcade_games_when_set_up(app):
     update, context = make_update(app, 271, text="/arcade")
     await arcade_handlers.arcade(update, context)
     buttons = buttons_of(update.replies[0]["reply_markup"])
-    assert len(buttons) == 14 and all(b.web_app.url.startswith("https://arcade.test/arcade/play/") for b in buttons)
+    # اول دکمه‌ی صفحه‌ی اصلی مینی‌اپ، بعد هر ۱۴ بازی
+    assert buttons[0].web_app.url == "https://arcade.test/arcade/"
+    games = buttons[1:]
+    assert len(games) == 14 and all(b.web_app.url.startswith("https://arcade.test/arcade/play/") for b in games)
 
 
 async def test_game_menu_warns_when_the_bot_cannot_read_group_messages(app):
@@ -741,12 +754,14 @@ def test_currency_name_can_be_changed(settings):
     settings.COIN_NAME, settings.COIN_EMOJI = "اعتبار", "💎"
     try:
         changed = importlib.reload(module)
-        assert "اعتبار" in changed.COINS_NOTE and "سکه" not in changed.RESULT_FOOTER + changed.COINS_NOTE
+        assert "اعتبار" in changed.WALLET_HEADER and "سکه" not in changed.RESULT_FOOTER + changed.WALLET_HEADER
         assert "💎" in changed.RESULT_FOOTER and "🪙" not in changed.FEE_BTN
+        # متن‌های پوکر و دوئل هم (که پایین فایل تعریف شده‌اند) عوض می‌شوند
+        assert "سکه" not in changed.DUEL_CHOOSE_STAKE and "💎" in changed.DUEL_STAKE_LINE
     finally:
         settings.COIN_NAME, settings.COIN_EMOJI = "سکه", "🪙"
         importlib.reload(module)
-    assert "سکه" in module.COINS_NOTE
+    assert "سکه" in module.WALLET_HEADER
 
 
 # ====================================================================== منوی بی‌استفاده، لغو بعد از شروع، لینک پشتیبان

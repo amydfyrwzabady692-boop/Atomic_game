@@ -288,13 +288,11 @@ def test_leaderboard_shows_equipped_decorations(group, make_user):
     assert top.user.pk == a.pk and top.badge and top.title
 
 
-def test_no_real_money_or_transfer_paths_exist():
-    """قانون غیرقابل‌تغییر: هیچ نوع تراکنشی برای خرید با پول، برداشت یا انتقال بین کاربران وجود ندارد."""
-    names = {choice.lower() for choice in TxType.values}
-    for forbidden in ("transfer", "withdraw", "deposit", "purchase", "payment", "cashout"):
-        assert not any(forbidden in name for name in names)
+def test_ledger_types_are_a_closed_known_set():
+    """هر نوع تراکنش ledger عمداً اضافه می‌شود؛ نوع تازه باید این‌جا (و در گزارش‌ها) دیده شود."""
     assert set(TxType.values) == {
         "DAILY", "REFERRAL", "ENTRY_FEE", "PRIZE", "REFUND", "ADMIN_GRANT", "SHOP", "ACHIEVEMENT", "SIGNUP_BONUS", "RESCUE",
+        "TOPUP", "SELL", "TRANSFER_OUT", "TRANSFER_IN",
     }
 
 
@@ -331,8 +329,13 @@ def test_admin_can_edit_economy_settings(staff_client):
     url = listing["Location"]
     assert staff_client.get(url).status_code == 200
     done = staff_client.post(
-        url, {"signup_bonus": "0", "daily_enabled": "", "referral_every": "5", "referral_reward": "7"}
-    )
+        url,
+        {
+            "signup_bonus": "0", "daily_enabled": "", "referral_every": "5", "referral_reward": "7",
+            "coin_price_toman": "1000", "topup_fee_percent": "10", "card_number": "", "card_holder": "",
+            "min_sell_coins": "100", "coin_sell_price_toman": "1000",
+        },
+    )  # fmt: skip
     assert done.status_code == 302
     config = EconomySettings.load()
     assert (config.signup_bonus, config.daily_enabled, config.referral_every, config.referral_reward) == (0, False, 5, 7)

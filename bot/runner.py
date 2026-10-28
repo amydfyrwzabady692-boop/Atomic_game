@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from html import escape
 
 from django.utils import timezone
-from telegram import InlineKeyboardMarkup, InputMediaPhoto
+from telegram import InlineKeyboardMarkup, InputMediaPhoto, WebAppInfo
 
 from arcade import board as live_board
 from arcade import services as arcade_services
@@ -59,6 +59,7 @@ class ActiveMatch:
     info: GameInfo
     creator_tg_id: int
     phase: str = "lobby"  # lobby | running | done
+    group_title: str = ""
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     lobby_message_id: int | None = None
     game: BaseGame | None = None
@@ -260,7 +261,9 @@ class MatchManager:
                 max_players=info.max_players,
                 options=options,
             )
-            active = ActiveMatch(match.pk, group.chat_id, info, creator.tg_id, token=match.token)
+            active = ActiveMatch(
+                match.pk, group.chat_id, info, creator.tg_id, group_title=group.title or "", token=match.token
+            )
             self.active[group.chat_id] = active
         finally:
             await redis.delete(lock_key)
@@ -496,16 +499,6 @@ class MatchManager:
         if result is None:
             return
         await self._announce_result(active, result)
-        for referral, invitee in result.referral_rewards:
-            message = render.referral_text(referral, invitee)
-            if not message:
-                continue
-            await tg_call(
-                self.bot.send_message,
-                referral.referrer.tg_id,
-                message,
-                parse_mode="HTML",
-            )
         logger.info(
             "match finished",
             extra={"match_id": active.match_id, "pot": result.match.pot, "players": len(result.players)},
@@ -549,6 +542,7 @@ class MatchManager:
         if active.board_message_id:
             await db(services.save_state)(match.pk, {"board_message_id": active.board_message_id})
         self._arm_arcade(active, remaining)
+        self.invite_players(active)
 
     def _arm_arcade(self, active: ActiveMatch, remaining: float) -> None:
         self._arm_watchdog(active)
@@ -608,6 +602,39 @@ class MatchManager:
                     self.bot.edit_message_reply_markup, chat_id=active.chat_id, message_id=active.board_message_id
                 )
             await self._payout(active, [Standing(s.user_id, s.score, s.reached_at) for s in standings])
+
+    # ================================================================ ورود مستقیم از پیوی
+    def invite_players(self, active: ActiveMatch) -> None:
+        """به هر بازیکن در پیوی یک دکمه‌ی web_app مستقیم برای همین مسابقه می‌فرستد (در پس‌زمینه).
+
+        دکمه‌ی web_app فقط در پیوی مجاز است و بر خلاف لینک ``t.me/...`` گروه به ساخت مینی‌اپ با نام کوتاه در
+        BotFather وابسته نیست؛ پس اگر دکمه‌ی گروه برای کسی باز نشد، این دکمه همیشه صفحه‌ی بازی را باز می‌کند.
+        """
+        if not render.arcade_ready() or not active.token or not active.players_by_tg:
+            return
+        self.application.create_task(self._send_invites(active, list(active.players_by_tg)))
+
+    async def _send_invites(self, active: ActiveMatch, tg_ids: list[int]) -> None:
+        button = ui.button(
+            texts.OPEN_GAME_BTN, web_app=WebAppInfo(url=render.game_page_url(active.token)), style=ui.SUCCESS
+        )
+        text = texts.MATCH_DM.format(
+            emoji=active.info.emoji,
+            title=active.info.title_fa,
+            group=escape(active.group_title or texts.MATCH_DM_GROUP),
+        )
+        for tg_id in tg_ids:
+            if active.phase != "running":
+                return
+            # یک بار تلاش کافی است: کسی که ربات را بلاک کرده همان دکمه‌ی گروه را دارد
+            await tg_call(
+                self.bot.send_message,
+                tg_id,
+                text,
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup([[button]]),
+                retries=1,
+            )
 
     # ================================================================ شطرنج زنده (مینی‌اپ)
     def _grid_view(self, active: ActiveMatch, state: dict) -> tuple[None, str]:
@@ -713,6 +740,7 @@ class MatchManager:
         if active.board_message_id:
             await db(live_board.remember)(match.pk, board_message_id=active.board_message_id)
         self._arm_live(active)
+        self.invite_players(active)
 
     def _arm_live(self, active: ActiveMatch) -> None:
         self._arm_watchdog(active)
@@ -793,7 +821,13 @@ class MatchManager:
             await db(services.cancel_match)(match.pk, "restart")
             return
         active = ActiveMatch(
-            match.pk, chat_id, info, match.creator.tg_id, lobby_message_id=match.lobby_message_id, token=match.token
+            match.pk,
+            chat_id,
+            info,
+            match.creator.tg_id,
+            group_title=match.group.title or "",
+            lobby_message_id=match.lobby_message_id,
+            token=match.token,
         )
         if match.status == MatchStatus.LOBBY:
             self.active[chat_id] = active

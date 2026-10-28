@@ -17,7 +17,8 @@ async def tg_call(func, *args, retries: int = 2, **kwargs):
     """متد bot را صدا می‌زند و خطاهای رایج را مدیریت می‌کند. در شکست ``None`` برمی‌گرداند.
 
     - ``RetryAfter``: صبر و تلاش دوباره
-    - ``BadRequest: message is not modified``: نادیده گرفته می‌شود
+    - ``BadRequest: message is not modified``: یعنی پیام همین حالا همان محتوا را دارد؛ موفق حساب می‌شود
+      (``True``) تا فراخواننده به‌خاطرش پیام تکراری نفرستد
     - خطای شبکه: یک بار تلاش دوباره
     """
     for attempt in range(retries + 1):
@@ -30,8 +31,9 @@ async def tg_call(func, *args, retries: int = 2, **kwargs):
                 return None
             await asyncio.sleep(delay)
         except BadRequest as exc:
-            if "not modified" not in str(exc).lower():
-                logger.warning("telegram bad request", extra={"method": func.__name__, "error": str(exc)})
+            if "not modified" in str(exc).lower():
+                return True
+            logger.warning("telegram bad request", extra={"method": func.__name__, "error": str(exc)})
             return None
         except Forbidden as exc:
             logger.info("telegram forbidden", extra={"method": func.__name__, "error": str(exc)})

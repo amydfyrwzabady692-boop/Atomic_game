@@ -154,12 +154,18 @@ def app(request, game_key: str | None = None):
     خود صفحه از ``start_param`` می‌فهمد مربوط به کدام مسابقه است."""
     if game_key is not None and get_simulator(game_key) is None:
         raise Http404
-    start_param = request.GET.get("tgWebAppStartParam", "")
+    # «startapp» هم پذیرفته می‌شود: اگر کسی آدرس مینی‌اپ را با همان پارامتر لینک در BotFather ثبت کرده باشد
+    start_param = (request.GET.get("tgWebAppStartParam") or request.GET.get("startapp") or "")[:32]
+    preload_key = game_key or ""
     if game_key is None and start_param:
         from . import board, board_views
 
-        if board.live_match(start_param[:32]) is not None:
-            return board_views.render_page(request, start_param[:32])
+        if board.live_match(start_param) is not None:
+            return board_views.render_page(request, start_param)
+        preload_key = _token_game_key(start_param)
+        if not preload_key:
+            # توکنی که مسابقه‌ی صفحه‌دار نیست (یا پاک شده): به‌جای صفحه‌ی خطا، صفحه‌ی اصلی مینی‌اپ
+            start_param = ""
     games = [game_meta(sim) for key, sim in all_simulators().items() if arcade_enabled(key)]
     if game_key is None and not start_param:
         # صفحه‌ی اصلی مینی‌اپ: بازی‌ها، حریف تصادفی، رتبه‌ها، فروشگاه و پروفایل
@@ -178,8 +184,8 @@ def app(request, game_key: str | None = None):
         "arcade/app.html",
         {
             "game_key": game_key or "",
-            "preload_key": game_key or _token_game_key(start_param),
-            "start_param": request.GET.get("tgWebAppStartParam", ""),
+            "preload_key": preload_key,
+            "start_param": start_param,
             "games": games,
             "version": asset_version(),
             "dev_auth": settings.DEBUG and getattr(settings, "ARCADE_DEV_AUTH", False),

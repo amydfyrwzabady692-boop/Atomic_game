@@ -13,7 +13,6 @@ from django.utils import timezone
 
 from core.models import TelegramGroup, TelegramUser
 from leaderboard.progress import award, check_progress_achievements, level_for_xp
-from wallet.economy import ReferralResult, try_reward_referral
 from wallet.models import TxType
 from wallet.services import InsufficientFunds, apply_transaction
 
@@ -46,8 +45,6 @@ class PlayerResult:
 class MatchResult:
     match: Match
     players: list[PlayerResult]
-    # (نتیجه‌ی دعوت، دعوت‌شده) برای پیام به دعوت‌کننده
-    referral_rewards: list[tuple[ReferralResult, TelegramUser]] = field(default_factory=list)
 
 
 def create_match(
@@ -160,18 +157,9 @@ def finish_match(match_id: int, standings: list[Standing]) -> MatchResult | None
         if match.status != MatchStatus.RUNNING:
             return None
         entries = {e.user_id: e for e in match.players.select_related("user")}
-        # همه‌ی کاربرانی که این تراکنش قفل می‌کند (بازیکن‌ها و دعوت‌کننده‌ی آن‌هایی که جایزه‌ی دعوتشان
-        # مانده) یک‌جا و به ترتیب شناسه قفل می‌شوند؛ دو مسابقه‌ی هم‌زمان با بازیکن مشترک به بن‌بست نمی‌خورند.
-        referrers = {
-            e.user.referred_by_id for e in entries.values() if e.user.referred_by_id and not e.user.referral_rewarded
-        }
-        list(
-            TelegramUser.objects.select_for_update()
-            .filter(pk__in=set(entries) | referrers)
-            .order_by("pk")
-            .values_list("pk", flat=True)
-        )
-        given ={s.user_id: s for s in standings if s.user_id in entries}
+        # همه‌ی بازیکن‌ها یک‌جا و به ترتیب شناسه قفل می‌شوند؛ دو مسابقه‌ی هم‌زمان با بازیکن مشترک به بن‌بست نمی‌خورند.
+        list(TelegramUser.objects.select_for_update().filter(pk__in=list(entries)).order_by("pk").values_list("pk", flat=True))
+        given = {s.user_id: s for s in standings if s.user_id in entries}
         full = [given.get(uid) or Standing(uid, 0, None) for uid in entries]
         groups = rank_standings(full)
         # جایزه فقط به کسانی می‌رسد که امتیاز گرفته‌اند؛ امتیاز صفر یعنی باخت و سهمی ندارد.
@@ -220,19 +208,15 @@ def finish_match(match_id: int, standings: list[Standing]) -> MatchResult | None
         match.finished_at = timezone.now()
         match.save(update_fields=["status", "finished_at"])
 
-        referral_rewards = []
         for r in [] if free else results:
             r.achievements = check_progress_achievements(r.user)
             if r.won:
                 extra = _special_win_achievement(match)
                 if extra and (a := award(r.user, extra)):
                     r.achievements.append(a)
-            referral = try_reward_referral(r.user)
-            if referral:
-                referral_rewards.append((referral, r.user))
         for r in results:
             r.user.refresh_from_db()
-    return MatchResult(match, results, referral_rewards)
+    return MatchResult(match, results)
 
 
 def _special_win_achievement(match: Match) -> str | None:

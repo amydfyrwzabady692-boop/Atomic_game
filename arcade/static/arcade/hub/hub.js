@@ -145,8 +145,8 @@
       : "هنوز رکوردی نداری؛ از تب بازی‌ها تمرین کن."));
     var invite = data.invite;
     if (invite.reward > 0) {
-      $("invite-text").textContent = "هر " + fa(invite.every) + " دوستی که با لینک تو بیایند و اولین بازی سکه‌ای‌شان را انجام دهند، " +
-        fa(invite.reward) + " سکه می‌گیری. دعوت موفق: " + fa(invite.rewarded) + " · تا جایزه‌ی بعدی: " + fa(invite.progress) + " از " + fa(invite.every);
+      $("invite-text").textContent = "به ازای هر " + fa(invite.every) + " دوستی که با لینک تو ربات را استارت کنند، " +
+        fa(invite.reward) + " سکه می‌گیری. دعوت‌شده‌ها: " + fa(invite.count) + " · تا جایزه‌ی بعدی: " + fa(invite.progress) + " از " + fa(invite.every);
       $("invite-bar").style.width = Math.round(invite.progress * 100 / invite.every) + "%";
     } else {
       $("invite-text").textContent = "جایزه‌ی دعوت فعلاً فعال نیست. دعوت‌شده‌ها: " + fa(invite.count);

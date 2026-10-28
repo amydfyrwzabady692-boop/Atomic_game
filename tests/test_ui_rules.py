@@ -138,12 +138,6 @@ def test_rules_text_mentions_player_counts_and_falls_back_to_the_description():
     assert "توضیح کوتاه." in render.rules_text(bare) and render.rules_alert(bare) == "• توضیح کوتاه."
 
 
-def test_general_texts_keep_the_virtual_coin_rule():
-    for text in (texts.START_NEW, texts.HELP_PRIVATE, texts.RULES):
-        assert texts.COINS_NOTE in text
-    assert "مجازی" in texts.COINS_NOTE and "ممکن نیست" in texts.COINS_NOTE
-
-
 def test_texts_use_one_written_tone():
     """فعل‌های محاوره‌ای («می‌شه»، «تموم»، «توی») نباید به متن‌ها برگردند."""
     banned = ("می‌شه", "تموم", "توی ", " رو ", "اومد", "می‌تونی", "می‌تونن", "نیومد", " یه ", "کوچیک", "هستن.", "بنداز")

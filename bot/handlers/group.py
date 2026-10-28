@@ -228,7 +228,7 @@ def rules_topic(topic: str):
     elif topic == "duel":
         text = texts.RULES_DUEL
     elif topic == "wallet":
-        text = texts.RULES_WALLET
+        text = texts.RULES_WALLET.format(min_transfer=fa_num(settings.TRANSFER_MIN_COINS))
     elif topic == "fair":
         text = texts.RULES_FAIR
     else:

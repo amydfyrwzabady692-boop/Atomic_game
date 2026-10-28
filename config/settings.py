@@ -97,8 +97,12 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 # ---------------------------------------------------------------- تلگرام
 BOT_TOKEN = env("BOT_TOKEN", default="")
 BOT_USERNAME = env("BOT_USERNAME", default="")  # بدون @؛ اگر خالی باشد از getMe خوانده می‌شود
+# مالک ربات همیشه سوپرادمین است؛ بقیه از SUPERADMIN_IDS و «ادمین‌های اضافه» پنل /admin می‌آیند
+OWNER_TG_ID = env.int("OWNER_TG_ID", default=639344728)
 _raw_admins = env.list("SUPERADMIN_IDS", default=[])
-SUPERADMIN_IDS = list(dict.fromkeys([639344728] + [int(x) for x in _raw_admins if str(x).isdigit()]))
+SUPERADMIN_IDS = list(dict.fromkeys([OWNER_TG_ID] + [int(x) for x in _raw_admins if str(x).strip().isdigit()]))
+# حداقل سکه‌ی هر انتقال بین کاربران (/transfer)
+TRANSFER_MIN_COINS = env.int("TRANSFER_MIN_COINS", default=10)
 # پشتیبان خودکار دیتابیس در پیوی ربات: هر چند دقیقه (۰ = خاموش) و برای چه کسانی (خالی = سوپرادمین‌ها)
 BACKUP_INTERVAL_MINUTES = env.int("BACKUP_INTERVAL_MINUTES", default=30)
 BACKUP_CHAT_IDS = [int(x) for x in env.list("BACKUP_CHAT_IDS", default=[])]

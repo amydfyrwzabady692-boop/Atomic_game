@@ -34,7 +34,7 @@ def test_me_top_and_history(client, make_user, economy_settings, settings):
     assert status == 200 and data["name"] == "رضا" and data["coins"] == 250 and data["level"] == 1
     assert data["invite"]["link"] == f"https://t.me/test_bot?start=ref_{user.tg_id}"
     assert (data["invite"]["every"], data["invite"]["reward"]) == (10, 3)
-    assert data["daily_enabled"] is False
+    assert data["daily_enabled"] is True  # گردونه‌ی روزانه پیش‌فرض روشن است
     status, data = post(client, "hub/top", user, period="all")
     assert status == 200 and data["rows"] == []
     status, data = post(client, "hub/history", user)
@@ -45,6 +45,7 @@ def test_me_top_and_history(client, make_user, economy_settings, settings):
 
 def test_daily_from_the_hub_follows_admin_settings(client, make_user, economy_settings):
     user = make_user()
+    economy_settings(daily_enabled=False)
     assert post(client, "hub/daily", user)[1]["error"] == "daily_disabled"
     economy_settings(daily_enabled=True)
     status, data = post(client, "hub/daily", user)

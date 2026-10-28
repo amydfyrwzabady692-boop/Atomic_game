@@ -196,9 +196,11 @@ def test_duel_resign_finishes_cleanly_without_outer_join_error(make_user):
     duel.refresh_from_db()
     assert duel.status == Duel.Status.FINISHED
     assert duel.match.status == MatchStatus.FINISHED
-    assert any(p.user_id == b.pk and p.won for p in result.players)
+    assert any(p.user.pk == b.pk and p.won for p in result.players)
     b.refresh_from_db()
-    assert b.coins == 600  # 500 - 100 + 200 pot
+    winner = next(p for p in result.players if p.user.pk == b.pk)
+    bonus = sum(a.reward_coins for a in winner.achievements)  # دستاورد «اولین برد» و … هم سکه می‌دهد
+    assert b.coins == 600 + bonus  # 500 - 100 + 200 pot
     assert find_mismatches() == []
 
 

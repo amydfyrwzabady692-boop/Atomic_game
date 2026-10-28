@@ -27,6 +27,18 @@ from wallet.models import CoinTransaction, TxType
 from .views import authenticated, error, rate_limited
 
 
+def bot_username() -> str:
+    """یوزرنیم ربات: از .env، وگرنه همانی که پروسه‌ی ربات موقع بالا آمدن در Redis گذاشته است."""
+    if settings.BOT_USERNAME:
+        return settings.BOT_USERNAME
+    try:
+        from core.redis import get_sync_redis
+
+        return get_sync_redis().get("bot:username") or ""
+    except Exception:
+        return ""
+
+
 def _ok(**data) -> JsonResponse:
     return JsonResponse({"ok": True, **data})
 
@@ -44,10 +56,10 @@ def _game(key: str) -> dict:
 def me(request, user, payload):
     stats = profile_stats(user)
     config = economy.get_settings()
-    invited = TelegramUser.objects.filter(referred_by=user)
-    rewarded = invited.filter(referral_rewarded=True).count()
+    # جایزه‌ی دعوت با استارت دوست پرداخت می‌شود؛ پیشرفت هم بر اساس همه‌ی دعوت‌شده‌هاست
+    invited = TelegramUser.objects.filter(referred_by=user).count()
     every = max(1, config.referral_every)
-    username = settings.BOT_USERNAME
+    username = bot_username()
     records = []
     for key, score in stats["records"]:
         info = get_info("arcade_" + key)
@@ -69,11 +81,11 @@ def me(request, user, payload):
         daily_enabled=config.daily_enabled,
         invite={
             "link": f"https://t.me/{username}?start=ref_{user.tg_id}" if username else "",
-            "count": invited.count(),
-            "rewarded": rewarded,
+            "count": invited,
+            "rewarded": invited,
             "every": every,
             "reward": config.referral_reward,
-            "progress": rewarded % every,
+            "progress": invited % every,
         },
     )
 

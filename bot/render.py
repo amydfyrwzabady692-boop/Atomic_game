@@ -71,7 +71,7 @@ def split_label(split: list[int]) -> str:
 
 
 def referral_text(referral, invitee) -> str:
-    """پیام به دعوت‌کننده بعد از اولین بازی سکه‌ای دوستش: جایزه یا پیشرفت تا جایزه‌ی بعدی.
+    """پیام به دعوت‌کننده وقتی دوستش با لینک او ربات را استارت کرد: جایزه یا پیشرفت تا جایزه‌ی بعدی.
     اگر جایزه‌ی دعوت در تنظیمات خاموش باشد متن خالی برمی‌گرداند (پیامی فرستاده نمی‌شود)."""
     name = escape(invitee.display_name)
     if referral.reward:
@@ -132,6 +132,11 @@ OPEN_PAYLOAD_PREFIX = "p_"
 def open_in_bot_link(username: str, token: str) -> str:
     """راه پشتیبان: پیوی ربات باز می‌شود و ربات دکمه‌ی web_app همین بازی را می‌فرستد."""
     return start_link(username, OPEN_PAYLOAD_PREFIX + token)
+
+
+def miniapp_home_url() -> str:
+    """صفحه‌ی اصلی مینی‌اپ (هاب) برای دکمه‌ی web_app منوی پیوی."""
+    return f"{settings.MINIAPP_BASE_URL.rstrip('/')}/arcade/"
 
 
 def game_page_url(token: str) -> str:

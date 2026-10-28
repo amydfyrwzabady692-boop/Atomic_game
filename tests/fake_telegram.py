@@ -62,7 +62,7 @@ class FakeBot:
 
     async def send_photo(self, chat_id, photo, **kwargs):
         message_id = next(self._ids)
-        self.sent.append({"chat_id": chat_id, "text": kwargs.get("caption") or "", "photo": photo, "message_id": message_id})
+        self.sent.append({"chat_id": chat_id, "text": kwargs.get("caption") or "", "photo": photo, "message_id": message_id, **kwargs})
         return SimpleNamespace(message_id=message_id)
 
     async def send_dice(self, chat_id, emoji=None, **kwargs):
@@ -77,6 +77,19 @@ class FakeBot:
     async def edit_message_media(self, chat_id=None, message_id=None, media=None, **kwargs):
         self.edits.append({"chat_id": chat_id, "message_id": message_id, "text": getattr(media, "caption", None), **kwargs})
         return True
+
+    async def edit_message_caption(self, chat_id=None, message_id=None, caption=None, **kwargs):
+        self.edits.append({"chat_id": chat_id, "message_id": message_id, "text": caption, **kwargs})
+        return True
+
+    async def send_document(self, chat_id, document, **kwargs):
+        message_id = next(self._ids)
+        self.sent.append({"chat_id": chat_id, "text": kwargs.get("caption") or "", "document": document, "message_id": message_id})
+        return SimpleNamespace(message_id=message_id)
+
+    async def copy_message(self, chat_id, from_chat_id, message_id, **kwargs):
+        self.sent.append({"chat_id": chat_id, "text": "", "copy_of": (from_chat_id, message_id)})
+        return SimpleNamespace(message_id=next(self._ids))
 
     async def edit_message_reply_markup(self, chat_id=None, message_id=None, **kwargs):
         self.edits.append({"chat_id": chat_id, "message_id": message_id, "text": None, **kwargs})

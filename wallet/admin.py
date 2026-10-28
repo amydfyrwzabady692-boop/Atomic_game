@@ -1,12 +1,11 @@
 from django.contrib import admin
 from django.shortcuts import redirect
 from django.urls import reverse
-from django.utils import timezone
 
 from core.admin_utils import ReadOnlyAdmin
 
+from . import services
 from .models import CoinTransaction, EconomySettings, SellRequest, TopUpRequest
-from .services import apply_transaction
 
 
 @admin.register(CoinTransaction)
@@ -53,19 +52,22 @@ class TopUpRequestAdmin(admin.ModelAdmin):
     readonly_fields = ("created_at", "reviewed_at")
     actions = ["approve_topup", "reject_topup"]
 
+    # تغییر وضعیت فقط با همان سرویس ربات (اتمیک و یک‌باره)، تا پنل و ربات هم‌زمان یک رسید را دوبار رسیدگی نکنند
     @admin.action(description="تایید درخواست‌های انتخاب‌شده و شارژ سکه")
     def approve_topup(self, request, queryset):
-        for req in queryset.filter(status=TopUpRequest.Status.PENDING):
-            apply_transaction(req.user, req.coins, "TOPUP", f"topup:{req.pk}")
-            req.status = TopUpRequest.Status.APPROVED
-            req.reviewed_at = timezone.now()
-            req.save(update_fields=["status", "reviewed_at"])
+        done = sum(
+            services.approve_topup(pk, 0, f"panel:{request.user}").changed
+            for pk in queryset.filter(status=TopUpRequest.Status.PENDING).values_list("pk", flat=True)
+        )
+        self.message_user(request, f"{done} رسید تایید و شارژ شد.")
 
     @admin.action(description="رد درخواست‌های انتخاب‌شده")
     def reject_topup(self, request, queryset):
-        queryset.filter(status=TopUpRequest.Status.PENDING).update(
-            status=TopUpRequest.Status.REJECTED, reviewed_at=timezone.now()
+        done = sum(
+            services.reject_topup(pk, 0, f"panel:{request.user}").changed
+            for pk in queryset.filter(status=TopUpRequest.Status.PENDING).values_list("pk", flat=True)
         )
+        self.message_user(request, f"{done} رسید رد شد.")
 
 
 @admin.register(SellRequest)
@@ -79,14 +81,16 @@ class SellRequestAdmin(admin.ModelAdmin):
 
     @admin.action(description="ثبت به عنوان واریزشده")
     def mark_paid(self, request, queryset):
-        queryset.filter(status=SellRequest.Status.PENDING).update(
-            status=SellRequest.Status.PAID, reviewed_at=timezone.now()
+        done = sum(
+            services.mark_sell_paid(pk, 0, f"panel:{request.user}").changed
+            for pk in queryset.filter(status=SellRequest.Status.PENDING).values_list("pk", flat=True)
         )
+        self.message_user(request, f"{done} درخواست واریزشده ثبت شد.")
 
     @admin.action(description="رد درخواست و برگشت سکه به کاربر")
     def reject_and_refund(self, request, queryset):
-        for req in queryset.filter(status=SellRequest.Status.PENDING):
-            apply_transaction(req.user, req.coins, "REFUND", f"sell_refund:{req.pk}")
-            req.status = SellRequest.Status.REJECTED
-            req.reviewed_at = timezone.now()
-            req.save(update_fields=["status", "reviewed_at"])
+        done = sum(
+            services.reject_sell(pk, 0, f"panel:{request.user}").changed
+            for pk in queryset.filter(status=SellRequest.Status.PENDING).values_list("pk", flat=True)
+        )
+        self.message_user(request, f"{done} درخواست رد و سکه‌ها برگشت داده شد.")

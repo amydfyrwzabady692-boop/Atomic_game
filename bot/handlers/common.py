@@ -1,6 +1,7 @@
 """دکوریتورهای مشترک handlerها: ثبت کاربر، بررسی مسدودی، نوع چت و rate limit."""
 
 import logging
+import time
 from functools import wraps
 
 from django.conf import settings
@@ -24,92 +25,59 @@ def manager_of(context: ContextTypes.DEFAULT_TYPE) -> MatchManager:
     return context.application.bot_data["manager"]
 
 
-_extra_admin_ids_cache: set[int] = set()
+# ------------------------------------------------------------------ مدیران ربات
+# ادمین‌های اضافه (پنل /admin) در دیتابیس‌اند؛ برای این‌که هر بررسی «ادمین است؟» یک کوئری نشود،
+# فهرست چند ثانیه در حافظه می‌ماند. افزودن/حذف از پنل کش را همان لحظه تازه می‌کند.
+EXTRA_ADMINS_TTL = 30.0
+_extra_admins: dict = {"ids": frozenset(), "at": float("-inf")}
 
 
-def _fetch_extra_admin_ids_sync() -> list[int]:
+def _fetch_extra_admin_ids() -> frozenset[int]:
+    from wallet.models import EconomySettings
+
+    ids = set()
+    for value in EconomySettings.load().extra_admin_ids or []:
+        try:
+            ids.add(int(value))
+        except (TypeError, ValueError):
+            continue
+    return frozenset(ids)
+
+
+async def refresh_admin_ids() -> frozenset[int]:
+    """فهرست ادمین‌های اضافه را از دیتابیس می‌خواند؛ اگر دیتابیس در دسترس نبود همان فهرست قبلی می‌ماند."""
+    from ..db import db
+
     try:
-        from wallet.models import EconomySettings
-
-        eco = EconomySettings.load()
-        res: list[int] = []
-        for aid in getattr(eco, "extra_admin_ids", []) or []:
-            try:
-                res.append(int(aid))
-            except (ValueError, TypeError):
-                pass
-        return res
+        _extra_admins["ids"] = await db(_fetch_extra_admin_ids)()
+        _extra_admins["at"] = time.monotonic()
     except Exception as exc:
-        logger.warning("failed to fetch extra_admin_ids sync: %s", exc)
-        return []
+        logger.warning("failed to load extra admin ids: %s", exc)
+    return _extra_admins["ids"]
+
+
+async def _extra_admin_ids() -> frozenset[int]:
+    if time.monotonic() - _extra_admins["at"] > EXTRA_ADMINS_TTL:
+        return await refresh_admin_ids()
+    return _extra_admins["ids"]
+
+
+def _static_admin_ids() -> list[int]:
+    ids = [settings.OWNER_TG_ID] if getattr(settings, "OWNER_TG_ID", None) else []
+    return list(dict.fromkeys(ids + [int(x) for x in settings.SUPERADMIN_IDS]))
 
 
 async def get_all_admin_ids() -> list[int]:
-    """لیست شناسه‌های عددی تمام ادمین‌های ربات (مالک، سوپرادمین‌ها و ادمین‌های اضافه‌شده)."""
-    global _extra_admin_ids_cache
-    ids: list[int] = [639344728]
-    for aid in getattr(settings, "SUPERADMIN_IDS", []):
-        try:
-            val = int(aid)
-            if val not in ids:
-                ids.append(val)
-        except (ValueError, TypeError):
-            pass
-    try:
-        from ..db import db
-
-        extra = await db(_fetch_extra_admin_ids_sync)()
-        _extra_admin_ids_cache = set(extra)
-        for val in extra:
-            if val not in ids:
-                ids.append(val)
-    except Exception as exc:
-        logger.warning("failed to load extra_admin_ids async: %s", exc)
-        for val in _extra_admin_ids_cache:
-            if val not in ids:
-                ids.append(val)
-    return ids
-
-
-def get_all_admin_ids_sync() -> list[int]:
-    """نسخه‌ی همگام بر اساس کش حافظه و تنظیمات."""
-    ids: list[int] = [639344728]
-    for aid in getattr(settings, "SUPERADMIN_IDS", []):
-        try:
-            val = int(aid)
-            if val not in ids:
-                ids.append(val)
-        except (ValueError, TypeError):
-            pass
-    for val in _extra_admin_ids_cache:
-        if val not in ids:
-            ids.append(val)
-    return ids
+    """شناسه‌ی همه‌ی مدیران ربات: مالک، سوپرادمین‌های .env و ادمین‌های اضافه‌شده از پنل."""
+    return list(dict.fromkeys(_static_admin_ids() + sorted(await _extra_admin_ids())))
 
 
 async def is_superadmin(tg_id: int) -> bool:
     try:
-        val = int(tg_id)
-    except (ValueError, TypeError):
+        value = int(tg_id)
+    except (TypeError, ValueError):
         return False
-    if val == 639344728:
-        return True
-    if val in getattr(settings, "SUPERADMIN_IDS", []):
-        return True
-    if val in _extra_admin_ids_cache:
-        return True
-    all_ids = await get_all_admin_ids()
-    return val in all_ids
-
-
-def is_superadmin_sync(tg_id: int) -> bool:
-    try:
-        val = int(tg_id)
-    except (ValueError, TypeError):
-        return False
-    if val == 639344728 or val in getattr(settings, "SUPERADMIN_IDS", []):
-        return True
-    return val in _extra_admin_ids_cache
+    return value in _static_admin_ids() or value in await _extra_admin_ids()
 
 
 async def reply(update: Update, text: str, reply_markup=None):

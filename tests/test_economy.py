@@ -17,8 +17,10 @@ TEHRAN = ZoneInfo("Asia/Tehran")
 
 
 @pytest.fixture
-def daily_on(economy_settings):
+def daily_on(economy_settings, monkeypatch):
+    """جایزه‌ی روزانه روشن و گردونه قطعی (همیشه ۲ سکه) تا عددها قابل بررسی باشند."""
     economy_settings(daily_enabled=True)
+    monkeypatch.setattr(economy, "roll_daily_reward", lambda: 2)
 
 
 def at(day, hour=12):
@@ -41,8 +43,10 @@ def test_signup_bonus_from_admin_settings_only_once(make_user, economy_settings)
     assert user.coins == 50
 
 
-def test_daily_and_rescue_are_off_by_default(make_user):
+def test_daily_is_on_by_default_and_can_be_turned_off(make_user, economy_settings):
     user = make_user()
+    assert economy.get_settings().daily_enabled is True
+    economy_settings(daily_enabled=False)
     result = economy.claim_daily(user, at(1))
     assert result.disabled and not result.claimed
     assert economy.claim_rescue(user, at(1)) == 0
@@ -50,16 +54,35 @@ def test_daily_and_rescue_are_off_by_default(make_user):
     assert user.coins == 0
 
 
-def test_daily_streak_grows_and_caps(make_user, daily_on):
+def test_daily_wheel_only_pays_the_advertised_amounts():
+    """گردونه: ۶۹٪ پوچ، ۲۰٪ یک، ۱۰٪ دو و ۱٪ ده سکه."""
+    import random
+
+    random.seed(7)
+    rolls = [economy.roll_daily_reward() for _ in range(20_000)]
+    assert set(rolls) <= {0, 1, 2, 10}
+    share = {value: rolls.count(value) / len(rolls) for value in (0, 1, 2, 10)}
+    assert 0.66 < share[0] < 0.72 and 0.18 < share[1] < 0.22 and 0.08 < share[2] < 0.12 and share[10] < 0.02
+
+
+def test_daily_streak_grows(make_user, daily_on):
     user = make_user()
     first = economy.claim_daily(user, at(1))
-    assert (first.claimed, first.amount, first.streak) == (True, 200, 1)
+    assert (first.claimed, first.amount, first.streak) == (True, 2, 1)
     second = economy.claim_daily(user, at(2))
-    assert (second.amount, second.streak) == (250, 2)
-    for day in range(3, 20):
-        last = economy.claim_daily(user, at(day))
-    assert last.amount == settings.DAILY_MAX
+    assert (second.amount, second.streak) == (2, 2)
+    user.refresh_from_db()
+    assert user.coins == 4 and user.daily_streak == 2
     assert find_mismatches() == []
+
+
+def test_empty_wheel_still_counts_the_day(make_user, daily_on, monkeypatch):
+    monkeypatch.setattr(economy, "roll_daily_reward", lambda: 0)
+    user = make_user()
+    result = economy.claim_daily(user, at(1))
+    assert (result.claimed, result.amount, result.streak) == (True, 0, 1)
+    assert not CoinTransaction.objects.filter(type=TxType.DAILY).exists()
+    assert economy.claim_daily(user, at(1, 20)).claimed is False
 
 
 def test_daily_cannot_be_claimed_twice_same_day(make_user, daily_on):
@@ -68,7 +91,7 @@ def test_daily_cannot_be_claimed_twice_same_day(make_user, daily_on):
     again = economy.claim_daily(user, at(1, 23))
     assert again.claimed is False and again.amount == 0
     user.refresh_from_db()
-    assert user.coins == 200
+    assert user.coins == 2
 
 
 def test_daily_streak_resets_after_missed_day(make_user, daily_on):
@@ -76,7 +99,7 @@ def test_daily_streak_resets_after_missed_day(make_user, daily_on):
     economy.claim_daily(user, at(1))
     economy.claim_daily(user, at(2))
     result = economy.claim_daily(user, at(4))
-    assert (result.streak, result.amount) == (1, 200)
+    assert (result.streak, result.amount) == (1, 2)
 
 
 def test_day_boundary_uses_tehran_time(make_user, daily_on):
@@ -101,7 +124,7 @@ def test_daily_gives_rescue_when_already_claimed_and_broke(make_user, daily_on):
     economy.claim_daily(user, at(1))
     from wallet.services import apply_transaction
 
-    apply_transaction(user, -200, TxType.ENTRY_FEE, "spend-all")
+    apply_transaction(user, -2, TxType.ENTRY_FEE, "spend-all")
     result = economy.claim_daily(user, at(1, 15))
     assert result.claimed is False and result.rescue == settings.RESCUE_AMOUNT
     assert find_mismatches() == []
@@ -117,62 +140,41 @@ def _play_one_match(group, users, fee=10):
     return services.finish_match(match.pk, [Standing(users[0].pk, 1, 1.0)])
 
 
-def _age(user, hours=None):
-    hours = settings.REFERRAL_MIN_ACCOUNT_AGE_HOURS + 1 if hours is None else hours
-    TelegramUser.objects.filter(pk=user.pk).update(created_at=user.created_at - timedelta(hours=hours))
-
-
-def test_referral_counts_after_first_paid_game_and_account_age(group, make_user, economy_settings):
-    economy_settings(referral_every=1, referral_reward=3)
+def test_referral_reward_every_n_friends_on_join(make_user, economy_settings):
+    """هر ۱۰ نفری که با لینک دعوت ربات را استارت کنند = ۳۰ سکه (مقادیر پیش‌فرض پنل ادمین)، هر دسته یک بار."""
     referrer = make_user()
-    invitee = make_user(coins=100, referred_by=referrer)
-    other = make_user(coins=100)
-    # حساب تازه است: هنوز دعوت حساب نمی‌شود
-    result = _play_one_match(group, [invitee, other])
-    assert result.referral_rewards == []
-    assert not CoinTransaction.objects.filter(type=TxType.REFERRAL).exists()
-
-    _age(invitee)
-    result = _play_one_match(group, [invitee, other])
-    [(referral, who)] = result.referral_rewards
-    assert (referral.referrer.pk, who.pk, referral.reward, referral.count) == (referrer.pk, invitee.pk, 3, 1)
-    referrer.refresh_from_db()
-    assert referrer.coins == 3
-    # فقط یک بار
-    _play_one_match(group, [invitee, other])
-    assert CoinTransaction.objects.filter(type=TxType.REFERRAL).count() == 1
-    assert find_mismatches() == []
-
-
-def test_referral_reward_every_n_friends(group, make_user, economy_settings):
-    """هر ۱۰ دعوت موفق = ۳ سکه (مقادیر پیش‌فرض پنل ادمین)."""
-    referrer = make_user()
-    other = make_user(coins=10_000)
     rewards = []
     for i in range(21):
-        invitee = make_user(coins=100, referred_by=referrer)
-        _age(invitee)
-        result = _play_one_match(group, [invitee, other])
-        [(referral, _)] = result.referral_rewards
-        rewards.append(referral.reward)
-        assert referral.count == i + 1 and referral.every == 10
+        make_user(referred_by=referrer)
+        result = economy.check_referral_reward_on_join(referrer)
+        rewards.append(result.reward)
+        assert result.count == i + 1 and result.every == 10 and result.next_reward == 30
     assert [i + 1 for i, r in enumerate(rewards) if r] == [10, 20]
-    assert set(rewards) == {0, 3}
+    assert set(rewards) == {0, 30}
+    # فراخوانی دوباره برای همان دسته چیزی نمی‌دهد
+    assert economy.check_referral_reward_on_join(referrer).reward == 0
     referrer.refresh_from_db()
-    assert referrer.coins == 6
+    assert referrer.coins == 60
     assert CoinTransaction.objects.filter(type=TxType.REFERRAL, user=referrer).count() == 2
     assert find_mismatches() == []
 
 
-def test_free_games_do_not_count_for_referral(group, make_user, economy_settings):
+def test_referral_reward_can_be_turned_off(make_user, economy_settings):
+    economy_settings(referral_every=1, referral_reward=0)
+    referrer = make_user()
+    make_user(referred_by=referrer)
+    assert economy.check_referral_reward_on_join(referrer).reward == 0
+    assert not CoinTransaction.objects.filter(type=TxType.REFERRAL).exists()
+
+
+def test_matches_never_pay_referral_again(group, make_user, economy_settings):
+    """جایزه‌ی دعوت فقط موقع استارت است؛ بازی کردن دعوت‌شده دوباره جایزه نمی‌دهد (قبلاً دوبار پرداخت می‌شد)."""
     economy_settings(referral_every=1, referral_reward=3)
     referrer = make_user()
-    invitee = make_user(referred_by=referrer)
-    _age(invitee)
-    result = _play_one_match(group, [invitee, make_user()], fee=0)
-    assert result.referral_rewards == []
-    invitee.refresh_from_db()
-    assert invitee.games_played == 0 and not invitee.referral_rewarded
+    invitee = make_user(coins=100, referred_by=referrer)
+    TelegramUser.objects.filter(pk=invitee.pk).update(created_at=invitee.created_at - timedelta(days=3))
+    _play_one_match(group, [invitee, make_user(coins=100)])
+    assert not CoinTransaction.objects.filter(type=TxType.REFERRAL).exists()
 
 
 def test_free_game_gives_no_coins_xp_or_stats(group, make_user):
@@ -185,14 +187,6 @@ def test_free_game_gives_no_coins_xp_or_stats(group, make_user):
     from leaderboard.queries import top_players
 
     assert top_players(group.pk) == []
-
-
-def test_referral_not_paid_before_any_game(make_user):
-    referrer = make_user()
-    invitee = make_user(referred_by=referrer)
-    old = invitee.created_at - timedelta(days=3)
-    TelegramUser.objects.filter(pk=invitee.pk).update(created_at=old)
-    assert economy.try_reward_referral(invitee) is None
 
 
 def test_level_formula_is_progressive():

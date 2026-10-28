@@ -1,4 +1,4 @@
-"""منابع سکه‌ی مجازی: هدیه‌ی ثبت‌نام، جایزه‌ی روزانه، سکه‌ی نجات، دعوت دوست و هدیه‌ی ادمین.
+"""منابع سکه: هدیه‌ی ثبت‌نام، جایزه‌ی روزانه (گردونه‌ی شانس)، سکه‌ی نجات، دعوت دوست و هدیه‌ی ادمین.
 
 مقدارها (و روشن/خاموش بودن هر کدام) از ``EconomySettings`` خوانده می‌شود که در پنل ادمین قابل تغییر است.
 """
@@ -125,57 +125,24 @@ def claim_rescue(user: TelegramUser, now=None) -> int:
     return settings.RESCUE_AMOUNT
 
 
-def try_reward_referral(invitee: TelegramUser, now=None) -> ReferralResult | None:
-    """دعوت وقتی «موفق» حساب می‌شود که دعوت‌شده حداقل یک بازی سکه‌ای کرده و حسابش قدیمی‌تر از حد باشد.
+def check_referral_reward_on_join(referrer: TelegramUser) -> ReferralResult:
+    """دعوت دوست: هر ``referral_every`` نفری که با لینک دعوت‌کننده ربات را استارت کنند، ``referral_reward``
+    سکه به او می‌رسد (هر دو از پنل ادمین؛ پیش‌فرض ۳۰ سکه برای هر ۱۰ نفر).
 
-    هر ``referral_every`` دعوت موفق، ``referral_reward`` سکه به دعوت‌کننده می‌دهد (هر دو از پنل ادمین).
-    کلید تراکنش شماره‌ی همان دسته است، پس هر دسته فقط یک بار پرداخت می‌شود. اگر دعوت تازه‌ای ثبت
-    نشد ``None`` برمی‌گرداند.
-    """
-    now = now or timezone.now()
-    with transaction.atomic():
-        locked = TelegramUser.objects.select_for_update().get(pk=invitee.pk)
-        if locked.referred_by_id is None or locked.referral_rewarded or locked.games_played < 1:
-            return None
-        if locked.is_banned:
-            return None
-        min_age = timedelta(hours=settings.REFERRAL_MIN_ACCOUNT_AGE_HOURS)
-        if now - locked.created_at < min_age:
-            return None
-        # قفل دعوت‌کننده تا شمارش دعوت‌های موفقش با دعوت هم‌زمان دیگری قاطی نشود
-        referrer = TelegramUser.objects.select_for_update().get(pk=locked.referred_by_id)
-        locked.referral_rewarded = True
-        locked.save(update_fields=["referral_rewarded"])
-        config = get_settings()
-        every = max(1, config.referral_every)
-        count = TelegramUser.objects.filter(referred_by_id=referrer.pk, referral_rewarded=True).count()
-        reward = 0
-        if config.referral_reward > 0 and count % every == 0:
-            reward = config.referral_reward
-            apply_transaction(referrer, reward, TxType.REFERRAL, f"referral-batch:{referrer.pk}:{count // every}")
-        referrer.refresh_from_db()
-        return ReferralResult(referrer, count, every, reward, config.referral_reward)
-
-
-def check_referral_reward_on_join(referrer: TelegramUser) -> tuple[int, int]:
-    """بررسی و اعطای پاداش دعوت به محض عضویت کاربر جدید با لینک معرف.
-    به ازای هر ۱۰ نفر، ۳۰ سکه به معرف پرداخت می‌شود.
-    خروجی: (مقدار پاداش پرداخت‌شده در این ورود، تعداد کل دعوت‌شده‌ها)
+    همین‌جا تنها محل پرداخت جایزه‌ی دعوت است؛ قبلاً همین دسته یک بار دیگر هم بعد از اولین بازی دعوت‌شده
+    پرداخت می‌شد. کلید تراکنش شماره‌ی همان دسته است، پس هر دسته فقط یک بار پرداخت می‌شود.
     """
     config = get_settings()
     every = max(1, config.referral_every)
-    reward = config.referral_reward
     with transaction.atomic():
         locked = TelegramUser.objects.select_for_update().get(pk=referrer.pk)
         count = TelegramUser.objects.filter(referred_by=locked).count()
         paid = 0
-        if reward > 0 and count > 0 and count % every == 0:
-            batch = count // every
-            key = f"referral-join:{locked.pk}:{batch}"
-            tx = apply_transaction(locked, reward, TxType.REFERRAL, key)
-            if not tx.duplicate:
-                paid = reward
-        return paid, count
+        if config.referral_reward > 0 and count > 0 and count % every == 0:
+            key = f"referral-join:{locked.pk}:{count // every}"
+            tx = apply_transaction(locked, config.referral_reward, TxType.REFERRAL, key)
+            paid = 0 if tx.duplicate else config.referral_reward
+    return ReferralResult(locked, count, every, paid, config.referral_reward)
 
 
 def admin_grant(user: TelegramUser, amount: int, admin_tg_id: int, nonce: str):

@@ -380,5 +380,10 @@ def test_group_match_link_preloads_the_game_files(client, group, make_user):
     page = client.get(f"/arcade/?tgWebAppStartParam={match.token}").content.decode()
     assert 'rel="preload"' in page and "/pins/core.js?v=" in page and "/pins/render.js?v=" in page
     assert 'preloadKey: "pins"' in page
+    # توکن ناشناخته (یا پاک‌شده) به‌جای صفحه‌ی خطا صفحه‌ی اصلی مینی‌اپ را باز می‌کند
     unknown = client.get("/arcade/?tgWebAppStartParam=nope").content.decode()
-    assert "core.js?v=" not in unknown and 'preloadKey: ""' in unknown
+    assert "core.js?v=" not in unknown and "hub.js" in unknown
+    # همان لینک از آدرس اصلی دامنه (اگر در BotFather دامنه‌ی خالی ثبت شده باشد) هم به مسابقه می‌رسد
+    root = client.get(f"/?tgWebAppStartParam={match.token}")
+    assert root.status_code == 302 and root["Location"].endswith(f"/arcade/?tgWebAppStartParam={match.token}")
+    assert "/pins/core.js?v=" in client.get(f"/arcade/?startapp={match.token}").content.decode()

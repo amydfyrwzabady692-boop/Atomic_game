@@ -10,6 +10,8 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("arcade/", include("arcade.urls")),
     path("healthz", lambda request: HttpResponse("ok")),
-    # آدرس اصلی دامنه صفحه‌ی جدایی ندارد: به فهرست بازی‌های آرکید می‌رود
-    path("", RedirectView.as_view(pattern_name="arcade:app", permanent=False)),
+    # آدرس اصلی دامنه صفحه‌ی جدایی ندارد: به مینی‌اپ می‌رود. پارامترهای آدرس (مثل tgWebAppStartParam که
+    # مسابقه‌ی لینک گروه را مشخص می‌کند) حتماً همراه می‌روند؛ وگرنه اگر در BotFather آدرس اصلی دامنه ثبت شده
+    # باشد، دکمه‌ی «ورود به بازی» گروه به‌جای مسابقه صفحه‌ی اصلی را باز می‌کرد.
+    path("", RedirectView.as_view(pattern_name="arcade:app", permanent=False, query_string=True)),
 ]

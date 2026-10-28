@@ -6,7 +6,13 @@ from html import escape
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
-from telegram import BotCommand, BotCommandScopeAllGroupChats, BotCommandScopeAllPrivateChats, MenuButtonCommands, Update
+from telegram import (
+    BotCommand,
+    BotCommandScopeAllGroupChats,
+    BotCommandScopeAllPrivateChats,
+    MenuButtonCommands,
+    Update,
+)
 from telegram.ext import (
     AIORateLimiter,
     Application,
@@ -21,10 +27,12 @@ from telegram.ext import (
 )
 
 from core import texts
+from core.redis import get_redis
 from core.texts import fa_num
 from games import config as game_config
 from leaderboard.queries import announce_weekly_champions
 
+from . import render
 from .concurrency import PerChatUpdateProcessor
 from .db import db
 from .duels import DuelRunner
@@ -83,6 +91,16 @@ async def post_init(application: Application) -> None:
     me = await application.bot.get_me()
     application.bot_data["username"] = me.username
     application.bot_data["bot_id"] = me.id
+    # سرویس web (مینی‌اپ) getMe نمی‌زند؛ یوزرنیم را از همین‌جا می‌خواند (لینک دعوت در صفحه‌ی «من»)
+    try:
+        await get_redis().set("bot:username", me.username)
+    except Exception as exc:
+        logger.warning("failed to share bot username: %s", exc)
+    if render.arcade_ready() and not (settings.MINIAPP_SHORT_NAME or "").strip() and not getattr(me, "has_main_web_app", True):
+        logger.warning(
+            "group game buttons will only open the bot chat: set MINIAPP_SHORT_NAME (BotFather /newapp) "
+            "or configure the bot's main Mini App in BotFather"
+        )
     # اگر Privacy Mode روشن باشد ربات فقط در گروه‌هایی که ادمین است پیام‌ها را می‌بیند
     application.bot_data["reads_all"] = bool(getattr(me, "can_read_all_group_messages", False))
     manager = MatchManager(application)
@@ -101,12 +119,9 @@ async def post_init(application: Application) -> None:
         await tg_call(application.bot.set_chat_menu_button, menu_button=MenuButtonCommands())
     except Exception as exc:
         logger.warning("failed to set chat menu button: %s", exc)
-    try:
-        from .handlers.common import get_all_admin_ids
+    from .handlers.common import refresh_admin_ids
 
-        await get_all_admin_ids()
-    except Exception as exc:
-        logger.warning("failed to pre-cache admin IDs: %s", exc)
+    await refresh_admin_ids()
     await db(game_config.reload)()
     application.job_queue.run_repeating(
         game_settings_job, interval=GAME_SETTINGS_REFRESH_SECONDS, name="game_settings"

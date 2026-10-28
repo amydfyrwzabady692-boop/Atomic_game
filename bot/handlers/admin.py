@@ -18,8 +18,8 @@ from games.catalog import catalog
 from games.models import Match, MatchPlayer, MatchStatus
 from leaderboard.queries import day_start
 from wallet import economy
-from wallet.models import EconomySettings, SellRequest, TopUpRequest, TxType
-from wallet.services import InsufficientFunds, apply_transaction
+from wallet.models import EconomySettings, SellRequest, TopUpRequest
+from wallet.services import InsufficientFunds
 
 from .. import ui
 from ..db import db
@@ -104,6 +104,20 @@ async def _run_broadcast(bot, admin_chat_id: int, targets: list[int], send) -> N
     await tg_call(bot.send_message, admin_chat_id, texts.BROADCAST_DONE.format(ok=fa_num(ok), failed=fa_num(failed)))
 
 
+async def _launch_broadcast(context, chat_id: int, send) -> int:
+    targets = await _broadcast_targets()
+    await tg_call(context.bot.send_message, chat_id, texts.BROADCAST_STARTED.format(count=fa_num(len(targets))))
+    context.application.create_task(_run_broadcast(context.bot, chat_id, targets, send))
+    return len(targets)
+
+
+def _copier(bot, from_chat_id: int, message_id: int):
+    async def send(tg_id):
+        return await tg_call(bot.copy_message, tg_id, from_chat_id, message_id, retries=1)
+
+    return send
+
+
 @command(superadmin=True)
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser):
     message = update.effective_message
@@ -113,19 +127,14 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Te
         await reply(update, texts.BROADCAST_USAGE)
         return
     bot = context.bot
-
     if source is not None:
-
-        async def send(tg_id):
-            return await tg_call(bot.copy_message, tg_id, source.chat_id, source.message_id, retries=1)
+        send = _copier(bot, source.chat_id, source.message_id)
     else:
 
         async def send(tg_id):
             return await tg_call(bot.send_message, tg_id, text, retries=1)
 
-    targets = await _broadcast_targets()
-    await reply(update, texts.BROADCAST_STARTED.format(count=fa_num(len(targets))))
-    context.application.create_task(_run_broadcast(bot, update.effective_chat.id, targets, send))
+    await _launch_broadcast(context, update.effective_chat.id, send)
 
 
 @db
@@ -183,57 +192,75 @@ async def backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, user):
         await reply(update, texts.BACKUP_FAILED)
 
 
+
+
+# ================================================================== پنل مدیریت ربات (/admin)
 def _btn(text: str, data: str, style: str = ""):
     return ui.button(text, data, style=style)
 
 
-async def admin_panel_screen(user: TelegramUser):
-    eco = await db(EconomySettings.load)()
-    topup_pending = await db(lambda: TopUpRequest.objects.filter(status=TopUpRequest.Status.PENDING).count())()
-    sell_pending = await db(lambda: SellRequest.objects.filter(status=SellRequest.Status.PENDING).count())()
-    admin_count = 1 + len(getattr(eco, "extra_admin_ids", []) or [])
+def _back_to_panel() -> list:
+    return [_btn(texts.ADMIN_BACK_TO_PANEL_BTN, "adm:home")]
 
-    card_line = f"<code>{escape(eco.card_number)}</code>" if eco.card_number else "<i>ثبت نشده</i>"
-    holder_line = f"<b>{escape(eco.card_holder)}</b>" if eco.card_holder else "<i>ثبت نشده</i>"
 
-    text = (
-        "👑 <b>پنل مدیریت ربات وینزون بت (Winzon Bet)</b>\n"
-        "━━━━━━━━━━━━━━\n"
-        f"👤 مدیر: <b>{escape(user.display_name)}</b> (<code>{user.tg_id}</code>)\n\n"
-        "💳 <b>اطلاعات کارت واریز:</b>\n"
-        f"شماره کارت: {card_line}\n"
-        f"به نام: {holder_line}\n\n"
-        "🪙 <b>نرخ و کارمزد سکه:</b>\n"
-        f"قیمت هر سکه: <b>{fa_num(eco.coin_price_toman)}</b> تومان\n"
-        f"کارمزد شارژ: <b>{fa_num(eco.topup_fee_percent)}٪</b>\n"
-        f"حداقل فروش: <b>{fa_num(eco.min_sell_coins)}</b> سکه\n\n"
-        "📊 <b>درخواست‌های در انتظار:</b>\n"
-        f"🧾 رسیدهای شارژ بررسی‌نشده: <b>{fa_num(topup_pending)}</b>\n"
-        f"💸 درخواست‌های فروش بررسی‌نشده: <b>{fa_num(sell_pending)}</b>\n"
-        f"👥 ادمین‌های ربات: <b>{fa_num(admin_count)}</b> نفر"
+@db
+def _panel_numbers() -> dict:
+    today = day_start()
+    pending_topups = TopUpRequest.objects.filter(status=TopUpRequest.Status.PENDING)
+    pending_sells = SellRequest.objects.filter(status=SellRequest.Status.PENDING)
+    approved = TopUpRequest.objects.filter(status=TopUpRequest.Status.APPROVED, reviewed_at__gte=today).aggregate(
+        n=Count("id"), coins=Sum("coins"), toman=Sum("total_toman")
     )
+    paid = SellRequest.objects.filter(status=SellRequest.Status.PAID, reviewed_at__gte=today).aggregate(
+        n=Count("id"), coins=Sum("coins"), toman=Sum("amount_toman")
+    )
+    return {
+        "eco": EconomySettings.load(),
+        "topups": pending_topups.count(),
+        "sells": pending_sells.count(),
+        "sells_toman": pending_sells.aggregate(s=Sum("amount_toman"))["s"] or 0,
+        "approved": approved,
+        "paid": paid,
+    }
 
+
+async def admin_panel_screen(user: TelegramUser):
+    from .common import get_all_admin_ids
+
+    data = await _panel_numbers()
+    eco = data["eco"]
+    text = texts.ADMIN_PANEL.format(
+        name=escape(user.display_name),
+        tg_id=user.tg_id,
+        card=f"<code>{escape(eco.card_number)}</code>" if eco.card_number else texts.ADMIN_NOT_SET,
+        holder=f"<b>{escape(eco.card_holder)}</b>" if eco.card_holder else texts.ADMIN_NOT_SET,
+        price=fa_num(eco.coin_price_toman),
+        fee=fa_num(eco.topup_fee_percent),
+        sell_price=fa_num(eco.coin_sell_price_toman),
+        min_sell=fa_num(eco.min_sell_coins),
+        daily=texts.ADMIN_ON if eco.daily_enabled else texts.ADMIN_OFF,
+        topups=fa_num(data["topups"]),
+        sells=fa_num(data["sells"]),
+        sells_toman=fa_num(data["sells_toman"]),
+        approved=fa_num(data["approved"]["n"] or 0),
+        approved_toman=fa_num(data["approved"]["toman"] or 0),
+        paid=fa_num(data["paid"]["n"] or 0),
+        paid_toman=fa_num(data["paid"]["toman"] or 0),
+        admins=fa_num(len(await get_all_admin_ids())),
+    )
     rows = [
         [
-            _btn(f"🧾 رسیدهای شارژ ({fa_num(topup_pending)})", "adm:topup:list:0", ui.SUCCESS if topup_pending else ui.PRIMARY),
-            _btn(f"💸 تسویه و فروش ({fa_num(sell_pending)})", "adm:sellreq:list:0", ui.DANGER if sell_pending else ui.PRIMARY),
+            _btn(texts.ADMIN_TOPUPS_BTN.format(n=fa_num(data["topups"])), "adm:topup:list:0", ui.SUCCESS if data["topups"] else ui.PRIMARY),
+            _btn(texts.ADMIN_SELLS_BTN.format(n=fa_num(data["sells"])), "adm:sellreq:list:0", ui.DANGER if data["sells"] else ui.PRIMARY),
         ],
+        [_btn(texts.ADMIN_SET_CARD_BTN, "adm:set:card", ui.PRIMARY), _btn(texts.ADMIN_SET_RATE_BTN, "adm:set:rate", ui.PRIMARY)],
         [
-            _btn("💳 تنظیم شماره کارت", "adm:set:card", ui.PRIMARY),
-            _btn("🪙 تنظیم نرخ و کارمزد", "adm:set:rate", ui.PRIMARY),
+            _btn(texts.ADMIN_DAILY_BTN.format(state=texts.ADMIN_ON if eco.daily_enabled else texts.ADMIN_OFF), "adm:daily:toggle", ui.SUCCESS if eco.daily_enabled else ui.DANGER),
+            _btn(texts.ADMIN_ADMINS_BTN, "adm:admins:list", ui.PRIMARY),
         ],
-        [
-            _btn("👥 مدیریت ادمین‌ها", "adm:admins:list", ui.PRIMARY),
-            _btn("📊 آمار کلی ربات", "adm:stats:show", ui.PRIMARY),
-        ],
-        [
-            _btn("✉️ ارسال پیام به کاربر", "adm:msg:start", ui.PRIMARY),
-            _btn("📢 ارسال پیام همگانی", "adm:bcast:prompt", ui.PRIMARY),
-        ],
-        [
-            _btn("🔄 بروزرسانی", "adm:home"),
-            _btn("❌ بستن پنل", "adm:close"),
-        ],
+        [_btn(texts.ADMIN_STATS_BTN, "adm:stats:show", ui.PRIMARY), _btn(texts.ADMIN_MSG_BTN, "adm:msg:start", ui.PRIMARY)],
+        [_btn(texts.ADMIN_BROADCAST_BTN, "adm:bcast:prompt", ui.PRIMARY)],
+        [_btn(texts.ADMIN_REFRESH_BTN, "adm:home"), _btn(texts.ADMIN_CLOSE_BTN, "adm:close", ui.DANGER)],
     ]
     return text, InlineKeyboardMarkup(rows)
 
@@ -241,740 +268,429 @@ async def admin_panel_screen(user: TelegramUser):
 @command(superadmin=True, private=True)
 async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser):
     context.user_data.pop("admin_flow", None)
-    text, keyboard = await admin_panel_screen(user)
-    await reply(update, text, keyboard)
+    await reply(update, *await admin_panel_screen(user))
+
+
+# ------------------------------------------------------------------ فهرست رسیدهای شارژ و درخواست‌های فروش
+@db
+def _pending(kind: str) -> list:
+    model = TopUpRequest if kind == "topup" else SellRequest
+    return list(model.objects.filter(status=model.Status.PENDING).select_related("user").order_by("created_at", "pk"))
+
+
+def _request_card(kind: str, req, index: int, total: int) -> str:
+    when = fa_date(timezone.localtime(req.created_at))
+    username = f"@{escape(req.user.username)}" if req.user.username else texts.NO_USERNAME
+    if kind == "topup":
+        return texts.ADMIN_TOPUP_ITEM.format(
+            n=fa_num(index + 1), total=fa_num(total), name=escape(req.user.display_name), username=username,
+            tg_id=req.user.tg_id, coins=fa_num(req.coins), amount=fa_num(req.amount_toman), fee=fa_num(req.fee_toman),
+            toman=fa_num(req.total_toman), date=when, id=fa_num(req.pk),
+        )  # fmt: skip
+    return texts.ADMIN_SELL_ITEM.format(
+        n=fa_num(index + 1), total=fa_num(total), name=escape(req.user.display_name), username=username,
+        tg_id=req.user.tg_id, coins=fa_num(req.coins), toman=fa_num(req.amount_toman), card=escape(req.card_number),
+        holder=escape(req.card_holder or "—"), date=when, id=fa_num(req.pk),
+    )  # fmt: skip
+
+
+async def show_request_list(update, context, user: TelegramUser, query, kind: str, index: int = 0, focus: int | None = None):
+    """یک درخواست در انتظار (رسید شارژ با عکسش، یا درخواست فروش) با دکمه‌های رسیدگی و قبلی/بعدی."""
+    from .wallet import sell_alert_keyboard, show_photo_or_text, topup_alert_keyboard
+
+    requests = await _pending(kind)
+    if not requests:
+        empty = texts.ADMIN_NO_TOPUPS if kind == "topup" else texts.ADMIN_NO_SELLS
+        await show_photo_or_text(update, context, query, empty, InlineKeyboardMarkup([_back_to_panel()]))
+        return
+    if focus is not None:
+        index = next((i for i, r in enumerate(requests) if r.pk == focus), index)
+    index = max(0, min(index, len(requests) - 1))
+    req = requests[index]
+    if kind == "topup":
+        rows = [list(row) for row in topup_alert_keyboard(req.pk, req.user.tg_id, ":p").inline_keyboard]
+    else:
+        rows = [list(row) for row in sell_alert_keyboard(req.pk, req.user.tg_id, ":p").inline_keyboard]
+    nav, prefix = [], "adm:topup:list:" if kind == "topup" else "adm:sellreq:list:"
+    if index > 0:
+        nav.append(_btn(texts.ADMIN_PREV_BTN, f"{prefix}{index - 1}"))
+    if index < len(requests) - 1:
+        nav.append(_btn(texts.ADMIN_NEXT_BTN, f"{prefix}{index + 1}"))
+    if nav:
+        rows.append(nav)
+    rows.append(_back_to_panel())
+    photo = req.receipt_photo_id if kind == "topup" and req.receipt_photo_id else None
+    await show_photo_or_text(update, context, query, _request_card(kind, req, index, len(requests)), InlineKeyboardMarkup(rows), photo)
+
+
+# ------------------------------------------------------------------ دکمه‌های پنل
+@db
+def _toggle_daily() -> bool:
+    eco = EconomySettings.load()
+    eco.daily_enabled = not eco.daily_enabled
+    eco.save(update_fields=["daily_enabled", "updated_at"])
+    return eco.daily_enabled
+
+
+@db
+def _set_extra_admins(add: int | None = None, remove: int | None = None) -> list[int]:
+    from django.db import transaction
+
+    with transaction.atomic():
+        eco = EconomySettings.objects.select_for_update().get(pk=EconomySettings.load().pk)
+        ids = [int(x) for x in eco.extra_admin_ids or [] if str(x).lstrip("-").isdigit()]
+        if add is not None and add not in ids:
+            ids.append(add)
+        if remove is not None and remove in ids:
+            ids.remove(remove)
+        eco.extra_admin_ids = ids
+        eco.save(update_fields=["extra_admin_ids", "updated_at"])
+    return ids
+
+
+def _admins_screen(extra: list[int]):
+    from django.conf import settings
+
+    text = texts.ADMIN_ADMINS_HEADER.format(owner=settings.OWNER_TG_ID)
+    if extra:
+        text += "\n".join(texts.ADMIN_ADMINS_LINE.format(n=fa_num(i), tg_id=aid) for i, aid in enumerate(extra, 1))
+    else:
+        text += texts.ADMIN_ADMINS_EMPTY
+    rows = [[_btn(texts.ADMIN_ADD_ADMIN_BTN, "adm:admin:add", ui.SUCCESS)]]
+    if extra:
+        rows.append([_btn(texts.ADMIN_DEL_ADMIN_BTN, "adm:admin:delselect", ui.DANGER)])
+    rows.append(_back_to_panel())
+    return text, InlineKeyboardMarkup(rows)
+
+
+@db
+def _extra_admin_list() -> list[int]:
+    return [int(x) for x in EconomySettings.load().extra_admin_ids or [] if str(x).lstrip("-").isdigit()]
+
+
+def _stats_text(data: dict) -> str:
+    info = catalog(include_disabled=True).get(data["top_game"]) if data["top_game"] else None
+    return texts.STATS.format(
+        users=fa_num(data["users"]),
+        dau=fa_num(data["dau"]),
+        groups=fa_num(data["groups"]),
+        matches=fa_num(data["matches"]),
+        matches_today=fa_num(data["matches_today"]),
+        top_game=f"{info.emoji} {info.title_fa}" if info else "—",
+        coins=fa_num(data["coins"]),
+    )
 
 
 @callback
 async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser, query):
-    if not await is_superadmin(user.tg_id):
-        await answer(query, "دسترسی غیرمجاز است.", alert=True)
-        return
+    from .common import refresh_admin_ids
+    from .wallet import show_photo_or_text
 
+    if not await is_superadmin(user.tg_id):
+        await answer(query, texts.ADMIN_ONLY, alert=True)
+        return
     parts = query.data.split(":")
     action = parts[1] if len(parts) > 1 else "home"
     sub = parts[2] if len(parts) > 2 else ""
+    arg = parts[3] if len(parts) > 3 else ""
 
     async def show(text, markup):
-        try:
-            await tg_call(query.edit_message_text, text, parse_mode="HTML", reply_markup=markup)
-        except Exception:
-            await reply(update, text, markup)
+        await show_photo_or_text(update, context, query, text, markup)
 
     if action == "home":
         context.user_data.pop("admin_flow", None)
-        text, markup = await admin_panel_screen(user)
-        await show(text, markup)
-        return
-
-    if action == "close":
+        await answer(query)
+        await show(*await admin_panel_screen(user))
+    elif action == "close":
         context.user_data.pop("admin_flow", None)
-        await answer(query, "پنل مدیریت بسته شد.")
-        try:
-            await tg_call(query.edit_message_text, "🔒 پنل مدیریت بسته شد.")
-        except Exception:
-            pass
-        return
-
-    if action == "msg" and sub == "start":
+        await answer(query, texts.ADMIN_PANEL_CLOSED)
+        await show(texts.ADMIN_PANEL_CLOSED_TEXT, None)
+    elif action == "msg" and sub == "start":
         context.user_data["admin_flow"] = {"step": "ask_msg_target"}
         await answer(query)
-        await show(
-            "✉️ <b>ارسال پیام / تیکت به کاربر</b>\n"
-            "━━━━━━━━━━━━━━\n"
-            "لطفاً شناسه عددی تلگرام یا آیدی کاربر را ارسال فرمایید:\n"
-            "(مثال: <code>123456789</code> یا <code>@username</code>)\n\n"
-            "<i>(جهت انصراف عبارت <code>لغو</code> را ارسال نمایید)</i>",
-            InlineKeyboardMarkup([[_btn("🔙 بازگشت به پنل", "adm:home")]]),
-        )
-        return
-
-    # تنظیم کارت
-    if action == "set" and sub == "card":
+        await show(texts.ADMIN_ASK_MSG_TARGET, InlineKeyboardMarkup([_back_to_panel()]))
+    elif action == "set" and sub == "card":
         eco = await db(EconomySettings.load)()
         context.user_data["admin_flow"] = {"step": "set_card"}
         await answer(query)
-        prompt = (
-            "💳 <b>تنظیم شماره کارت بانکی جهت شارژ کیف پول</b>\n"
-            "━━━━━━━━━━━━━━\n"
-            f"شماره کارت فعلی: <code>{escape(eco.card_number or 'ثبت نشده')}</code>\n"
-            f"نام صاحب کارت فعلی: <b>{escape(eco.card_holder or 'ثبت نشده')}</b>\n\n"
-            "لطفاً شماره کارت ۱۶ رقمی و نام صاحب کارت را در یک پیام بفرستید:\n"
-            "<i>مثال:</i>\n"
-            "<code>6219861997831192 امید فیروزآبادی</code>"
+        await show(
+            texts.ADMIN_ASK_CARD.format(card=escape(eco.card_number or "—"), holder=escape(eco.card_holder or "—")),
+            InlineKeyboardMarkup([[_btn(texts.WALLET_CANCEL_BTN, "adm:home", ui.DANGER)]]),
         )
-        kb = InlineKeyboardMarkup([[_btn("❌ انصراف", "adm:home")]])
-        await show(prompt, kb)
-        return
-
-    # تنظیم نرخ و کارمزد
-    if action == "set" and sub == "rate":
+    elif action == "set" and sub == "rate":
         eco = await db(EconomySettings.load)()
         context.user_data["admin_flow"] = {"step": "set_rate"}
         await answer(query)
-        prompt = (
-            "🪙 <b>تنظیم نرخ سکه و کارمزد</b>\n"
-            "━━━━━━━━━━━━━━\n"
-            f"نرخ خرید هر سکه: <b>{fa_num(eco.coin_price_toman)}</b> تومان\n"
-            f"درصد کارمزد شارژ: <b>{fa_num(eco.topup_fee_percent)}٪</b>\n"
-            f"حداقل فروش: <b>{fa_num(eco.min_sell_coins)}</b> سکه\n"
-            f"نرخ فروش هر سکه: <b>{fa_num(eco.coin_sell_price_toman)}</b> تومان\n\n"
-            "لطفاً مقادیر جدید را با فاصله به صورت زیر ارسال کنید:\n"
-            "<code>[نرخ_خرید] [درصد_کارمزد] [حداقل_فروش] [نرخ_فروش]</code>\n"
-            "<i>مثال:</i>\n"
-            "<code>1000 10 100 1000</code>"
+        await show(
+            texts.ADMIN_ASK_RATE.format(
+                price=fa_num(eco.coin_price_toman), fee=fa_num(eco.topup_fee_percent),
+                min_sell=fa_num(eco.min_sell_coins), sell_price=fa_num(eco.coin_sell_price_toman),
+            ),  # fmt: skip
+            InlineKeyboardMarkup([[_btn(texts.WALLET_CANCEL_BTN, "adm:home", ui.DANGER)]]),
         )
-        kb = InlineKeyboardMarkup([[_btn("❌ انصراف", "adm:home")]])
-        await show(prompt, kb)
-        return
-
-    # مدیریت ادمین‌ها
-    if action == "admins":
-        eco = await db(EconomySettings.load)()
-        extra = list(getattr(eco, "extra_admin_ids", []) or [])
-        text = (
-            "👥 <b>مدیریت ادمین‌های ربات</b>\n"
-            "━━━━━━━━━━━━━━\n"
-            "👑 <b>مالک اصلی:</b> <code>639344728</code>\n\n"
-        )
-        if extra:
-            text += "<b>ادمین‌های اضافه شده:</b>\n"
-            for i, aid in enumerate(extra, 1):
-                text += f"{i}. <code>{aid}</code>\n"
-        else:
-            text += "هیچ ادمین دیگری ثبت نشده است.\n"
-        rows = [
-            [_btn("➕ افزودن ادمین جدید", "adm:admin:add", ui.SUCCESS)],
-        ]
-        if extra:
-            rows.append([_btn("➖ حذف ادمین", "adm:admin:delselect", ui.DANGER)])
-        rows.append([_btn("🔙 بازگشت به پنل", "adm:home")])
-        await show(text, InlineKeyboardMarkup(rows))
-        return
-
-    if action == "admin" and sub == "add":
+    elif action == "daily" and sub == "toggle":
+        enabled = await _toggle_daily()
+        await answer(query, texts.ADMIN_DAILY_TOGGLED.format(state=texts.ADMIN_ON if enabled else texts.ADMIN_OFF))
+        await show(*await admin_panel_screen(user))
+    elif action == "admins":
+        await answer(query)
+        await show(*_admins_screen(await _extra_admin_list()))
+    elif action == "admin" and sub == "add":
         context.user_data["admin_flow"] = {"step": "add_admin"}
         await answer(query)
-        prompt = (
-            "➕ <b>افزودن ادمین جدید</b>\n"
-            "━━━━━━━━━━━━━━\n"
-            "لطفاً آیدی عددی تلگرام کاربر مورد نظر را ارسال فرمایید:\n"
-            "<i>(آیدی عددی را می‌توانید از @userinfobot دریافت کنید)</i>"
-        )
-        kb = InlineKeyboardMarkup([[_btn("❌ انصراف", "adm:admins")]])
-        await show(prompt, kb)
-        return
-
-    if action == "admin" and sub == "delselect":
-        eco = await db(EconomySettings.load)()
-        extra = list(getattr(eco, "extra_admin_ids", []) or [])
-        rows = []
-        for aid in extra:
-            rows.append([_btn(f"❌ حذف {aid}", f"adm:admin:del:{aid}", ui.DANGER)])
-        rows.append([_btn("🔙 بازگشت", "adm:admins")])
-        await show("روی ادمینی که می‌خواهید حذف شود کلیک کنید:", InlineKeyboardMarkup(rows))
-        return
-
-    if action == "admin" and sub == "del":
-        del_id = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else 0
-        eco = await db(EconomySettings.load)()
-        extra = list(getattr(eco, "extra_admin_ids", []) or [])
-        if del_id in extra:
-            extra.remove(del_id)
-            eco.extra_admin_ids = extra
-            await db(eco.save)()
-            from .common import get_all_admin_ids
-            await get_all_admin_ids()
-            await answer(query, f"ادمین {del_id} حذف شد.")
-        query.data = "adm:admins:list"
-        await admin_callback(update, context, user, query)
-        return
-
-    # رسیدهای شارژ
-    if action in ("topup", "top") and sub == "list":
-        idx = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else 0
-        reqs = await db(lambda: list(TopUpRequest.objects.filter(status=TopUpRequest.Status.PENDING).select_related("user").order_by("created_at")))()
-        if not reqs:
-            await answer(query)
-            await show(
-                "✅ <b>هیچ رسید شارژی در انتظار بررسی وجود ندارد.</b>",
-                InlineKeyboardMarkup([[_btn("🔙 بازگشت به پنل", "adm:home")]]),
-            )
-            return
-
-        idx = max(0, min(idx, len(reqs) - 1))
-        req = reqs[idx]
-
-        caption = (
-            f"🧾 <b>رسید شارژ کیف پول ({fa_num(idx + 1)} از {fa_num(len(reqs))})</b>\n"
-            "━━━━━━━━━━━━━━\n"
-            f"👤 کاربر: <b>{escape(req.user.display_name)}</b>\n"
-            f"🆔 آیدی عددی: <code>{req.user.tg_id}</code>\n"
-            f"🪙 تعداد سکه: <b>{fa_num(req.coins)}</b>\n"
-            f"💵 مبلغ خام: <b>{fa_num(req.amount_toman)}</b> تومان\n"
-            f"📊 کارمزد شارژ: <b>{fa_num(req.fee_toman)}</b> تومان\n"
-            f"💰 <b>مبلغ نهایی پرداختی: {fa_num(req.total_toman)} تومان</b>\n"
-            f"📅 تاریخ: {fa_date(timezone.localtime(req.created_at))}\n"
-            f"شناسه پیگیری: #{fa_num(req.pk)}"
-        )
-
-        nav_row = []
-        if idx > 0:
-            nav_row.append(_btn("⬅️ قبلی", f"adm:topup:list:{idx - 1}"))
-        if idx < len(reqs) - 1:
-            nav_row.append(_btn("بعدی ➡️", f"adm:topup:list:{idx + 1}"))
-
-        btn_rows = [
-            [
-                _btn("✅ تایید و شارژ", f"adm:topup:app:{req.pk}", ui.SUCCESS),
-                _btn("❌ رد رسید", f"adm:topup:rej:{req.pk}", ui.DANGER),
-            ]
-        ]
-        if nav_row:
-            btn_rows.append(nav_row)
-        btn_rows.append([_btn("🔙 بازگشت به پنل", "adm:home")])
-
+        await show(texts.ADMIN_ASK_NEW_ADMIN, InlineKeyboardMarkup([[_btn(texts.WALLET_CANCEL_BTN, "adm:admins:list", ui.DANGER)]]))
+    elif action == "admin" and sub == "delselect":
+        extra = await _extra_admin_list()
+        rows = [[_btn(texts.ADMIN_DEL_ONE_BTN.format(tg_id=aid), f"adm:admin:del:{aid}", ui.DANGER)] for aid in extra]
+        rows.append([_btn(texts.BACK_BTN, "adm:admins:list")])
         await answer(query)
-        if req.receipt_photo_id:
-            try:
-                await tg_call(query.message.delete)
-            except Exception:
-                pass
-            await tg_call(
-                context.bot.send_photo,
-                user.tg_id,
-                photo=req.receipt_photo_id,
-                caption=caption,
-                parse_mode="HTML",
-                reply_markup=InlineKeyboardMarkup(btn_rows),
-            )
-        else:
-            await show(caption, InlineKeyboardMarkup(btn_rows))
-        return
-
-    # تایید / رد رسید شارژ
-    if action in ("topup", "top") and sub in ("app", "rej"):
-        req_id = int(parts[3])
-        req = await db(lambda: TopUpRequest.objects.filter(pk=req_id).select_related("user").first())()
-        if not req or req.status != TopUpRequest.Status.PENDING:
-            await answer(query, "این درخواست قبلاً بررسی شده است.", alert=True)
-            return
-
-        if sub == "app":
-            await db(apply_transaction)(req.user, req.coins, TxType.TOPUP, f"topup:{req.pk}")
-            req.status = TopUpRequest.Status.APPROVED
-            req.reviewed_at = timezone.now()
-            req.admin_note = f"Approved by {user.tg_id}"
-            await db(req.save)(update_fields=["status", "reviewed_at", "admin_note"])
-            await answer(query, f"شارژ {req.coins} سکه تایید شد ✅")
-            try:
-                await db(req.user.refresh_from_db)()
-                await tg_call(
-                    context.bot.send_message,
-                    req.user.tg_id,
-                    texts.WALLET_TOPUP_APPROVED_USER.format(coins=fa_num(req.coins), balance=fa_num(req.user.coins)),
-                    parse_mode="HTML",
-                )
-            except Exception:
-                pass
-        else:
-            req.status = TopUpRequest.Status.REJECTED
-            req.reviewed_at = timezone.now()
-            req.admin_note = f"Rejected by {user.tg_id}"
-            await db(req.save)(update_fields=["status", "reviewed_at", "admin_note"])
-            await answer(query, "رسید شارژ رد شد ❌")
-            try:
-                await tg_call(
-                    context.bot.send_message,
-                    req.user.tg_id,
-                    texts.WALLET_TOPUP_REJECTED_USER.format(id=fa_num(req.pk)),
-                    parse_mode="HTML",
-                )
-            except Exception:
-                pass
-
-        query.data = "adm:topup:list:0"
-        await admin_callback(update, context, user, query)
-        return
-
-    # درخواست‌های فروش
-    if action in ("sell", "sellreq") and sub == "list":
-        idx = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else 0
-        reqs = await db(lambda: list(SellRequest.objects.filter(status=SellRequest.Status.PENDING).select_related("user").order_by("created_at")))()
-        if not reqs:
-            await answer(query)
-            await show(
-                "✅ <b>هیچ درخواست فروشی در انتظار واریز وجود ندارد.</b>",
-                InlineKeyboardMarkup([[_btn("🔙 بازگشت به پنل", "adm:home")]]),
-            )
-            return
-
-        idx = max(0, min(idx, len(reqs) - 1))
-        req = reqs[idx]
-
-        text = (
-            f"💸 <b>درخواست تسویه/فروش سکه ({fa_num(idx + 1)} از {fa_num(len(reqs))})</b>\n"
-            "━━━━━━━━━━━━━━\n"
-            f"👤 کاربر: <b>{escape(req.user.display_name)}</b>\n"
-            f"🆔 آیدی عددی: <code>{req.user.tg_id}</code>\n"
-            f"🪙 سکه کسر شده: <b>{fa_num(req.coins)}</b>\n"
-            f"💵 <b>مبلغ واریزی به کاربر: {fa_num(req.amount_toman)} تومان</b>\n\n"
-            f"💳 شماره کارت: <code>{escape(req.card_number)}</code>\n"
-            f"👤 دارنده کارت: <b>{escape(req.card_holder or '—')}</b>\n"
-            f"📅 تاریخ: {fa_date(timezone.localtime(req.created_at))}\n"
-            f"شناسه پیگیری: #{fa_num(req.pk)}"
-        )
-
-        nav_row = []
-        if idx > 0:
-            nav_row.append(_btn("⬅️ قبلی", f"adm:sellreq:list:{idx - 1}"))
-        if idx < len(reqs) - 1:
-            nav_row.append(_btn("بعدی ➡️", f"adm:sellreq:list:{idx + 1}"))
-
-        btn_rows = [
-            [
-                _btn("✅ واریز شد", f"adm:sellreq:pay:{req.pk}", ui.SUCCESS),
-                _btn("📸 ارسال رسید", f"adm:sellreq:receipt:{req.pk}", ui.PRIMARY),
-                _btn("❌ رد و بازگشت سکه", f"adm:sellreq:rej:{req.pk}", ui.DANGER),
-            ]
-        ]
-        if nav_row:
-            btn_rows.append(nav_row)
-        btn_rows.append([_btn("🔙 بازگشت به پنل", "adm:home")])
-
+        await show(texts.ADMIN_PICK_TO_DELETE, InlineKeyboardMarkup(rows))
+    elif action == "admin" and sub == "del":
+        target = parse_int(arg)
+        extra = await _set_extra_admins(remove=target) if target else await _extra_admin_list()
+        await refresh_admin_ids()
+        await answer(query, texts.ADMIN_REMOVED.format(tg_id=target or "—"))
+        await show(*_admins_screen(extra))
+    elif action in ("topup", "sellreq") and sub == "list":
         await answer(query)
-        await show(text, InlineKeyboardMarkup(btn_rows))
-        return
-
-    # ارسال رسید برای تسویه
-    if action in ("sell", "sellreq") and sub == "receipt":
-        req_id = int(parts[3])
-        req = await db(lambda: SellRequest.objects.filter(pk=req_id).select_related("user").first())()
-        if not req or req.status != SellRequest.Status.PENDING:
-            await answer(query, "این درخواست قبلاً بررسی شده است.", alert=True)
-            return
-        context.user_data["admin_flow"] = {"step": "sell_receipt", "req_id": req.pk}
+        await show_request_list(update, context, user, query, "topup" if action == "topup" else "sell", parse_int(arg) or 0)
+    elif action == "stats":
         await answer(query)
-        await reply(
-            update,
-            f"📸 <b>ارسال رسید واریز برای درخواست #{fa_num(req.pk)}</b>\n"
-            f"━━━━━━━━━━━━━━\n"
-            f"👤 کاربر: <b>{escape(req.user.display_name)}</b> (<code>{req.user.tg_id}</code>)\n"
-            f"💵 مبلغ: <b>{fa_num(req.amount_toman)} تومان</b>\n"
-            f"💳 کارت: <code>{escape(req.card_number)}</code>\n\n"
-            "لطفاً عکس فیش واریزی را ارسال کنید (یا برای انصراف بنویسید «لغو»):",
-        )
-        return
-
-    # تایید واریز / رد فروش
-    if action in ("sell", "sellreq") and sub in ("pay", "rej"):
-        req_id = int(parts[3])
-        req = await db(lambda: SellRequest.objects.filter(pk=req_id).select_related("user").first())()
-        if not req or req.status != SellRequest.Status.PENDING:
-            await answer(query, "این درخواست قبلاً بررسی شده است.", alert=True)
-            return
-
-        if sub == "pay":
-            req.status = SellRequest.Status.PAID
-            req.reviewed_at = timezone.now()
-            req.admin_note = f"Paid by {user.tg_id}"
-            await db(req.save)(update_fields=["status", "reviewed_at", "admin_note"])
-            await answer(query, f"واریز {req.amount_toman:,} تومان تایید شد ✅")
-            try:
-                await tg_call(
-                    context.bot.send_message,
-                    req.user.tg_id,
-                    texts.WALLET_SELL_PAID_USER.format(id=fa_num(req.pk), amount=fa_num(req.amount_toman), card=escape(req.card_number)),
-                    parse_mode="HTML",
-                )
-            except Exception:
-                pass
-        else:
-            await db(apply_transaction)(req.user, req.coins, TxType.REFUND, f"sell_refund:{req.pk}")
-            req.status = SellRequest.Status.REJECTED
-            req.reviewed_at = timezone.now()
-            req.admin_note = f"Rejected by {user.tg_id}"
-            await db(req.save)(update_fields=["status", "reviewed_at", "admin_note"])
-            await answer(query, f"درخواست رد و {req.coins} سکه برگشت داده شد.")
-            try:
-                await tg_call(
-                    context.bot.send_message,
-                    req.user.tg_id,
-                    texts.WALLET_SELL_REJECTED_USER.format(id=fa_num(req.pk), coins=fa_num(req.coins)),
-                    parse_mode="HTML",
-                )
-            except Exception:
-                pass
-
-        query.data = "adm:sellreq:list:0"
-        await admin_callback(update, context, user, query)
-        return
-
-    # آمار کلی
-    if action == "stats":
-        data = await _stats()
-        info = catalog(include_disabled=True).get(data["top_game"]) if data["top_game"] else None
-        st_text = texts.STATS.format(
-            users=fa_num(data["users"]),
-            dau=fa_num(data["dau"]),
-            groups=fa_num(data["groups"]),
-            matches=fa_num(data["matches"]),
-            matches_today=fa_num(data["matches_today"]),
-            top_game=f"{info.emoji} {info.title_fa}" if info else "—",
-            coins=fa_num(data["coins"]),
-        )
-        kb = InlineKeyboardMarkup([[_btn("🔙 بازگشت به پنل", "adm:home")]])
-        await show(st_text, kb)
-        return
-
-    # ارسال همگانی
-    if action == "bcast" and sub == "prompt":
+        await show(_stats_text(await _stats()), InlineKeyboardMarkup([_back_to_panel()]))
+    elif action == "bcast" and sub == "prompt":
         context.user_data["admin_flow"] = {"step": "broadcast"}
         await answer(query)
-        prompt = (
-            "📢 <b>ارسال پیام همگانی به اعضای ربات</b>\n"
-            "━━━━━━━━━━━━━━\n"
-            "متن پیام مورد نظرتان را بفرستید یا پیامی را فوروارد کنید تا برای همه کاربران ارسال شود."
-        )
-        kb = InlineKeyboardMarkup([[_btn("❌ انصراف", "adm:home")]])
-        await show(prompt, kb)
-        return
+        await show(texts.ADMIN_ASK_BROADCAST, InlineKeyboardMarkup([[_btn(texts.WALLET_CANCEL_BTN, "adm:home", ui.DANGER)]]))
+    elif action == "bcast" and sub == "go":
+        flow = context.user_data.pop("admin_flow", None) or {}
+        if flow.get("step") != "broadcast_ready":
+            await answer(query, texts.WALLET_EXPIRED, alert=True)
+            return
+        await answer(query)
+        await show(texts.ADMIN_BROADCAST_QUEUED, InlineKeyboardMarkup([_back_to_panel()]))
+        await _launch_broadcast(context, update.effective_chat.id, _copier(context.bot, flow["chat_id"], flow["message_id"]))
 
 
+# ------------------------------------------------------------------ پیام‌های پیوی مدیر (مرحله‌های پنل)
 async def admin_private_message(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser) -> bool:
+    from .common import refresh_admin_ids
+    from .wallet import notify_sell_paid, update_all_admin_alerts
+
     flow = context.user_data.get("admin_flow")
     if not flow or not await is_superadmin(user.tg_id):
         return False
-
     step = flow.get("step")
     message = update.effective_message
     text = (message.text or "").strip()
+    panel = InlineKeyboardMarkup([_back_to_panel()])
 
-    if text in ("/cancel", "لغو"):
+    if text in texts.CANCEL_WORDS:
         context.user_data.pop("admin_flow", None)
-        await reply(update, "عملیات لغو شد.")
+        await reply(update, texts.ADMIN_FLOW_CANCELLED, panel)
         return True
 
     if step == "sell_receipt":
-        req_id = flow.get("req_id")
-        if not message.photo and not message.document:
-            await reply(update, "❌ لطفاً عکس فیش/رسید واریز را ارسال کنید (یا عبارت «لغو» برای انصراف).")
+        file_id = message.photo[-1].file_id if message.photo else (message.document.file_id if message.document else None)
+        if not file_id:
+            await reply(update, texts.ADMIN_SEND_RECEIPT_PHOTO)
             return True
-        photo_id = message.photo[-1].file_id if message.photo else message.document.file_id
-        req = await db(lambda: SellRequest.objects.filter(pk=req_id).select_related("user").first())()
-        if not req:
-            context.user_data.pop("admin_flow", None)
-            await reply(update, "❌ درخواست یافت نشد.")
-            return True
-        if req.status != SellRequest.Status.PENDING:
-            context.user_data.pop("admin_flow", None)
-            await reply(update, f"این درخواست قبلاً {req.get_status_display()} شده است.")
-            return True
-
-        req.status = SellRequest.Status.PAID
-        req.reviewed_at = timezone.now()
-        req.admin_note = f"Paid with receipt by {user.tg_id}"
-        await db(req.save)(update_fields=["status", "reviewed_at", "admin_note"])
         context.user_data.pop("admin_flow", None)
-
-        user_caption = (
-            f"🎉 <b>مبلغ فروش سکه واریز شد!</b>\n{texts.DIVIDER}\n"
-            f"شناسه درخواست: #{fa_num(req.pk)}\n"
-            f"💵 مبلغ واریزی: <b>{fa_num(req.amount_toman)}</b> تومان\n"
-            f"💳 شماره کارت: <code>{escape(req.card_number)}</code>\n\n"
-            f"📸 <b>رسید واریز بانکی توسط مدیریت ضمیمه گردید.</b> از همراهی‌تان سپاسگزاریم!"
+        review = await db(services_mark_paid)(flow.get("req_id"), user.tg_id, user.display_name)
+        if review is None:
+            await reply(update, texts.ADMIN_REQUEST_GONE, panel)
+            return True
+        req = review.request
+        if not review.changed:
+            await reply(update, texts.ADMIN_ALREADY_REVIEWED.format(status=req.get_status_display()), panel)
+            return True
+        await notify_sell_paid(context, req, receipt_file_id=file_id)
+        summary = texts.ADMIN_SELL_SUMMARY.format(
+            id=fa_num(req.pk), name=escape(req.user.display_name), tg_id=req.user.tg_id, coins=fa_num(req.coins),
+            toman=fa_num(req.amount_toman),
+        )  # fmt: skip
+        await update_all_admin_alerts(
+            context, "sell", req.pk, summary + "\n\n" + texts.ADMIN_STATUS_PAID_RECEIPT.format(admin=escape(user.display_name))
         )
-        try:
-            await tg_call(
-                context.bot.send_photo,
-                req.user.tg_id,
-                photo=photo_id,
-                caption=user_caption,
-                parse_mode="HTML",
-            )
-        except Exception as exc:
-            logger.warning("failed to send receipt photo to user %s: %s", req.user.tg_id, exc)
-
-        try:
-            from .wallet import update_all_admin_alerts
-
-            sync_text = (
-                f"💸 <b>درخواست فروش سکه #{fa_num(req.pk)}</b>\n"
-                f"👤 کاربر: <b>{escape(req.user.display_name)}</b>\n"
-                f"💵 مبلغ: <b>{fa_num(req.amount_toman)} تومان</b>\n\n"
-                f"✅ <b>واریز شد و فیش ارسال گردید</b> توسط {escape(user.display_name)}"
-            )
-            await update_all_admin_alerts(context, "sell", req.pk, sync_text, is_photo=False)
-        except Exception as exc:
-            logger.warning("failed to sync sell alert: %s", exc)
-
-        await reply(
-            update,
-            f"✅ رسید واریزی با موفقیت برای کاربر ارسال شد و وضعیت درخواست #{fa_num(req.pk)} به «واریز شد» ثبت گردید.",
-            InlineKeyboardMarkup([[_btn("🔙 بازگشت به پنل", "adm:home")]]),
-        )
+        await reply(update, texts.ADMIN_RECEIPT_SENT.format(id=fa_num(req.pk)), panel)
         return True
 
     if step == "set_card":
-        parts = text.split(None, 1)
-        raw_card = parts[0].replace("-", "").replace(" ", "")
-        holder = parts[1].strip() if len(parts) > 1 else ""
-        if len(raw_card) < 16 or not raw_card[:16].isdigit():
-            await reply(update, "❌ شماره کارت باید حداقل ۱۶ رقم عددی باشد.\nمثال:\n<code>6219861997831192 امید فیروزآبادی</code>")
+        from wallet.services import WalletError, parse_bank_account
+
+        try:
+            number, holder = parse_bank_account(text)
+        except WalletError:
+            await reply(update, texts.ADMIN_BAD_CARD)
             return True
-        eco = await db(EconomySettings.load)()
-        eco.card_number = raw_card[:16]
-        eco.card_holder = holder[:128]
-        await db(eco.save)()
+        await db(_save_card)(number, holder)
         context.user_data.pop("admin_flow", None)
-        await reply(
-            update,
-            f"✅ <b>کارت واریز با موفقیت ذخیره شد:</b>\n"
-            f"شماره کارت: <code>{eco.card_number}</code>\n"
-            f"به نام: <b>{escape(eco.card_holder or '—')}</b>",
-            InlineKeyboardMarkup([[_btn("🔙 بازگشت به پنل ادمین", "adm:home")]]),
-        )
+        await reply(update, texts.ADMIN_CARD_SAVED.format(card=escape(number), holder=escape(holder)), panel)
         return True
 
     if step == "set_rate":
-        parts = [parse_int(p) for p in text.split()]
-        if len(parts) < 2 or parts[0] is None or parts[1] is None:
-            await reply(update, "❌ لطفاً حداقل دو عدد برای [نرخ هر سکه] و [درصد کارمزد] ارسال کنید.\nمثال:\n<code>1000 10 100 1000</code>")
+        values = [parse_int(p) for p in text.split()]
+        if len(values) < 2 or values[0] is None or values[1] is None or values[0] <= 0 or not 0 <= values[1] <= 100:
+            await reply(update, texts.ADMIN_BAD_RATE)
             return True
-        coin_price = max(1, parts[0])
-        fee_pct = max(0, min(100, parts[1]))
-        min_sell = parts[2] if len(parts) > 2 and parts[2] is not None and parts[2] > 0 else 100
-        sell_price = parts[3] if len(parts) > 3 and parts[3] is not None and parts[3] > 0 else coin_price
-
-        eco = await db(EconomySettings.load)()
-        eco.coin_price_toman = coin_price
-        eco.topup_fee_percent = fee_pct
-        eco.min_sell_coins = min_sell
-        eco.coin_sell_price_toman = sell_price
-        await db(eco.save)()
+        price, fee = values[0], values[1]
+        min_sell = values[2] if len(values) > 2 and values[2] and values[2] > 0 else None
+        sell_price = values[3] if len(values) > 3 and values[3] and values[3] > 0 else None
+        eco = await db(_save_rates)(price, fee, min_sell, sell_price)
         context.user_data.pop("admin_flow", None)
         await reply(
             update,
-            f"✅ <b>تنظیمات اقتصادی به‌روزرسانی شد:</b>\n"
-            f"نرخ خرید هر سکه: <b>{fa_num(coin_price)}</b> تومان\n"
-            f"کارمزد شارژ: <b>{fa_num(fee_pct)}٪</b>\n"
-            f"حداقل فروش: <b>{fa_num(min_sell)}</b> سکه\n"
-            f"نرخ فروش هر سکه: <b>{fa_num(sell_price)}</b> تومان",
-            InlineKeyboardMarkup([[_btn("🔙 بازگشت به پنل ادمین", "adm:home")]]),
+            texts.ADMIN_RATE_SAVED.format(
+                price=fa_num(eco.coin_price_toman), fee=fa_num(eco.topup_fee_percent),
+                min_sell=fa_num(eco.min_sell_coins), sell_price=fa_num(eco.coin_sell_price_toman),
+            ),  # fmt: skip
+            panel,
         )
         return True
 
     if step == "add_admin":
-        aid = parse_int(text)
-        if aid is None or aid <= 0:
-            await reply(update, "❌ لطفاً یک شناسه عددی تلگرام معتبر ارسال کنید.")
+        new_id = parse_int(text)
+        if new_id is None or new_id <= 0:
+            await reply(update, texts.ADMIN_BAD_ADMIN_ID)
             return True
-        eco = await db(EconomySettings.load)()
-        extra = list(getattr(eco, "extra_admin_ids", []) or [])
-        if aid not in extra:
-            extra.append(aid)
-            eco.extra_admin_ids = extra
-            await db(eco.save)()
-            from .common import get_all_admin_ids
-            await get_all_admin_ids()
-            msg = f"✅ کاربر با شناسه <code>{aid}</code> به ادمین‌های ربات اضافه شد."
-        else:
-            msg = "این کاربر قبلاً ادمین بوده است."
+        await db(_set_extra_admins)(add=new_id)
+        await refresh_admin_ids()
         context.user_data.pop("admin_flow", None)
-        await reply(update, msg, InlineKeyboardMarkup([[_btn("🔙 مدیریت ادمین‌ها", "adm:admins")]]))
+        await reply(
+            update,
+            texts.ADMIN_ADDED.format(tg_id=new_id),
+            InlineKeyboardMarkup([[_btn(texts.ADMIN_ADMINS_BTN, "adm:admins:list", ui.PRIMARY)]]),
+        )
         return True
 
     if step == "broadcast":
-        context.user_data.pop("admin_flow", None)
-        await broadcast(update, context, user)
+        # پیام همگانی هر نوعی می‌تواند باشد (متن، عکس، فوروارد)؛ قبل از ارسال به همه یک بار تأیید می‌شود
+        context.user_data["admin_flow"] = {"step": "broadcast_ready", "chat_id": message.chat_id, "message_id": message.message_id}
+        count = len(await _broadcast_targets())
+        await reply(
+            update,
+            texts.ADMIN_BROADCAST_CONFIRM.format(count=fa_num(count)),
+            InlineKeyboardMarkup(
+                [[_btn(texts.ADMIN_BROADCAST_GO_BTN, "adm:bcast:go", ui.SUCCESS), _btn(texts.WALLET_CANCEL_BTN, "adm:home", ui.DANGER)]]
+            ),
+        )
         return True
 
     if step == "ask_msg_target":
-        from ..users import find_user
-
-        target = await find_user(text)
-        if not target:
-            target_tg_id = parse_int(text)
-            if target_tg_id:
-                target = await db(TelegramUser.objects.filter(tg_id=target_tg_id).first)()
-        if not target:
-            await reply(update, "❌ کاربر یافت نشد. لطفاً شناسه عددی تلگرام یا آیدی کاربر را صحیح وارد کنید:")
+        target = await find_user(text) if text else None
+        if target is None:
+            await reply(update, texts.ADMIN_TARGET_NOT_FOUND)
             return True
-
-        context.user_data["admin_flow"] = {
-            "step": "send_dm",
-            "target_tg_id": target.tg_id,
-            "target_name": target.display_name,
-        }
-        uname = f" (@{target.username})" if target.username else ""
+        context.user_data["admin_flow"] = {"step": "send_dm", "target_tg_id": target.tg_id, "target_name": target.display_name}
+        username = f" (@{escape(target.username)})" if target.username else ""
         await reply(
             update,
-            f"👤 کاربر انتخاب شد: <b>{escape(target.display_name)}</b>{uname} (<code>{target.tg_id}</code>)\n\n"
-            f"📝 اکنون متن پیام (یا عکس همراه با متن) را ارسال فرمایید تا برای کاربر فرستاده شود:\n"
-            f"<i>(جهت انصراف عبارت <code>لغو</code> را ارسال نمایید)</i>",
-            InlineKeyboardMarkup([[_btn("❌ انصراف", "adm:home")]]),
+            texts.ADMIN_ASK_DM_TEXT.format(name=escape(target.display_name), username=username, tg_id=target.tg_id),
+            InlineKeyboardMarkup([[_btn(texts.WALLET_CANCEL_BTN, "adm:home", ui.DANGER)]]),
         )
         return True
 
     if step == "send_dm":
-        target_tg_id = flow.get("target_tg_id")
-        target_name = flow.get("target_name", str(target_tg_id))
-        msg_text = message.text or message.caption or ""
-        photo_id = message.photo[-1].file_id if message.photo else (message.document.file_id if message.document else None)
-
-        if not msg_text and not photo_id:
-            await reply(update, "❌ لطفاً متن پیام یا عکس را ارسال کنید (یا عبارت «لغو» برای انصراف).")
+        body = message.text or message.caption or ""
+        file_id = message.photo[-1].file_id if message.photo else None
+        if not body and not file_id:
+            await reply(update, texts.ADMIN_SEND_DM_CONTENT)
             return True
-
-        user_content = (
-            f"📩 <b>پیام از طرف پشتیبانی و مدیریت ربات:</b>\n"
-            f"━━━━━━━━━━━━━━\n"
-            f"{escape(msg_text)}\n"
-            f"━━━━━━━━━━━━━━\n"
-            f"✍️ <i>جهت پاسخ دادن به مدیریت، روی دکمه زیر کلیک کنید:</i>"
-        )
-        reply_kb = InlineKeyboardMarkup([[ui.button("✍️ پاسخ به پشتیبانی", "pm:support", style=ui.PRIMARY)]])
-
-        delivered = False
-        try:
-            if photo_id:
-                await tg_call(
-                    context.bot.send_photo,
-                    chat_id=target_tg_id,
-                    photo=photo_id,
-                    caption=user_content,
-                    parse_mode="HTML",
-                    reply_markup=reply_kb,
-                )
-            else:
-                await tg_call(
-                    context.bot.send_message,
-                    chat_id=target_tg_id,
-                    text=user_content,
-                    parse_mode="HTML",
-                    reply_markup=reply_kb,
-                )
-            delivered = True
-        except Exception as exc:
-            logger.warning("failed to send dm to %s: %s", target_tg_id, exc)
-
         context.user_data.pop("admin_flow", None)
-        if delivered:
-            await reply(
-                update,
-                f"✅ پیام شما با موفقیت برای <b>{escape(target_name)}</b> (<code>{target_tg_id}</code>) ارسال گردید.",
-                InlineKeyboardMarkup([[_btn("🔙 بازگشت به پنل", "adm:home")]]),
-            )
+        target_id = flow.get("target_tg_id")
+        content = texts.SUPPORT_FROM_ADMIN.format(text=escape(body))
+        keyboard = InlineKeyboardMarkup([[ui.button(texts.SUPPORT_REPLY_BTN, "pm:support", style=ui.PRIMARY)]])
+        if file_id:
+            sent = await tg_call(context.bot.send_photo, target_id, photo=file_id, caption=content, parse_mode="HTML", reply_markup=keyboard)
         else:
-            await reply(
-                update,
-                f"❌ ارسال پیام به کاربر (<code>{target_tg_id}</code>) ناموفق بود. ممکن است کاربر ربات را بلاک کرده باشد.",
-                InlineKeyboardMarkup([[_btn("🔙 بازگشت به پنل", "adm:home")]]),
-            )
+            sent = await tg_call(context.bot.send_message, target_id, content, parse_mode="HTML", reply_markup=keyboard)
+        name = escape(flow.get("target_name") or str(target_id))
+        done = texts.ADMIN_DM_SENT if sent is not None else texts.ADMIN_DM_FAILED
+        await reply(update, done.format(name=name, tg_id=target_id), panel)
         return True
-
     return False
 
 
+def services_mark_paid(req_id, admin_tg_id: int, admin_name: str):
+    """واریز با رسید؛ اگر درخواست پیدا نشد ``None``."""
+    from wallet.services import mark_sell_paid
+
+    if not SellRequest.objects.filter(pk=req_id).exists():
+        return None
+    return mark_sell_paid(int(req_id), admin_tg_id, admin_name, receipt=True)
+
+
+def _save_card(number: str, holder: str) -> None:
+    eco = EconomySettings.load()
+    eco.card_number, eco.card_holder = number[:32], holder[:128]
+    eco.save(update_fields=["card_number", "card_holder", "updated_at"])
+
+
+def _save_rates(price: int, fee: int, min_sell: int | None, sell_price: int | None) -> EconomySettings:
+    eco = EconomySettings.load()
+    eco.coin_price_toman, eco.topup_fee_percent = price, fee
+    if min_sell is not None:
+        eco.min_sell_coins = min_sell
+    if sell_price is not None:
+        eco.coin_sell_price_toman = sell_price
+    eco.save()
+    return eco
+
+
+# ------------------------------------------------------------------ پیام مدیر به کاربر و تیکت پشتیبانی
 @callback
 async def admin_dm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser, query):
     if not await is_superadmin(user.tg_id):
-        await answer(query, "دسترسی غیرمجاز است.", alert=True)
+        await answer(query, texts.ADMIN_ONLY, alert=True)
         return
-
-    parts = query.data.split(":")
-    target_tg_id = int(parts[2])
-    target = await db(TelegramUser.objects.filter(tg_id=target_tg_id).first)()
-    target_name = target.display_name if target else str(target_tg_id)
-    target_uname = f" (@{target.username})" if (target and target.username) else ""
-
-    context.user_data["admin_flow"] = {
-        "step": "send_dm",
-        "target_tg_id": target_tg_id,
-        "target_name": target_name,
-    }
+    target_id = parse_int(query.data.split(":")[2]) if query.data.count(":") >= 2 else None
+    if not target_id:
+        return
+    target = await db(TelegramUser.objects.filter(tg_id=target_id).first)()
+    name = target.display_name if target else str(target_id)
+    username = f" (@{escape(target.username)})" if target and target.username else ""
+    context.user_data["admin_flow"] = {"step": "send_dm", "target_tg_id": target_id, "target_name": name}
     await answer(query)
     await reply(
         update,
-        f"✉️ <b>ارسال پیام به کاربر:</b>\n"
-        f"👤 <b>{escape(target_name)}</b>{target_uname} (<code>{target_tg_id}</code>)\n"
-        f"━━━━━━━━━━━━━━\n"
-        f"لطفاً متن پیام (یا عکس همراه با متن) را ارسال فرمایید تا بلافاصله برای کاربر ارسال شود:\n\n"
-        f"<i>(جهت انصراف عبارت <code>لغو</code> را ارسال نمایید)</i>",
-        InlineKeyboardMarkup([[_btn("❌ انصراف", "adm:home")]]),
+        texts.ADMIN_ASK_DM_TEXT.format(name=escape(name), username=username, tg_id=target_id),
+        InlineKeyboardMarkup([[_btn(texts.WALLET_CANCEL_BTN, "adm:home", ui.DANGER)]]),
     )
 
 
 async def user_support_message(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser) -> bool:
-    flow = context.user_data.get("support_flow")
-    if not flow:
-        return False
-
-    message = update.effective_message
-    text = (message.text or message.caption or "").strip()
-    photo_id = message.photo[-1].file_id if message.photo else (message.document.file_id if message.document else None)
-
-    if text in ("/cancel", "لغو"):
-        context.user_data.pop("support_flow", None)
-        await reply(update, "عملیات ارسال پیام به پشتیبانی لغو شد.")
-        return True
-
-    if not text and not photo_id:
-        await reply(update, "لطفاً پیام متنی یا تصویر خود را ارسال فرمایید (یا عبارت «لغو» را ارسال کنید).")
-        return True
-
-    context.user_data.pop("support_flow", None)
-
-    uname = f"@{escape(user.username)}" if user.username else "<i>ندارد</i>"
-    admin_caption = (
-        "📨 <b>تیکت / پیام جدید از کاربر</b>\n"
-        "━━━━━━━━━━━━━━\n"
-        f"👤 کاربر: <a href=\"tg://user?id={user.tg_id}\">{escape(user.display_name)}</a>\n"
-        f"🔗 آیدی تلگرام: {uname}\n"
-        f"🆔 شناسه عددی: <code>{user.tg_id}</code>\n"
-        f"📅 تاریخ: {fa_date(timezone.localtime(timezone.now()))}\n"
-        "━━━━━━━━━━━━━━\n"
-        f"📝 <b>متن پیام:</b>\n"
-        f"{escape(text)}"
-    )
-
-    admin_kb = InlineKeyboardMarkup(
-        [
-            [
-                _btn("✍️ پاسخ به کاربر", f"adm:dm:{user.tg_id}", ui.PRIMARY),
-            ]
-        ]
-    )
-
     from .common import get_all_admin_ids
 
-    for admin_id in await get_all_admin_ids():
-        try:
-            if photo_id:
-                await tg_call(
-                    context.bot.send_photo,
-                    chat_id=admin_id,
-                    photo=photo_id,
-                    caption=admin_caption,
-                    parse_mode="HTML",
-                    reply_markup=admin_kb,
-                )
-            else:
-                await tg_call(
-                    context.bot.send_message,
-                    chat_id=admin_id,
-                    text=admin_caption,
-                    parse_mode="HTML",
-                    reply_markup=admin_kb,
-                )
-        except Exception as exc:
-            logger.warning("failed to send support ticket to admin %s: %s", admin_id, exc)
-
-    await reply(
-        update,
-        "✅ <b>پیام شما به پشتیبانی ارسال شد.</b>\n"
-        "پیام شما برای تیم مدیریت ارسال گردید؛ به محض بررسی پاسخ آن در همین پیوی برای شما ارسال خواهد شد.",
+    if not context.user_data.get("support_flow"):
+        return False
+    message = update.effective_message
+    body = (message.text or message.caption or "").strip()
+    file_id = message.photo[-1].file_id if message.photo else (message.document.file_id if message.document else None)
+    if body in texts.CANCEL_WORDS:
+        context.user_data.pop("support_flow", None)
+        await reply(update, texts.SUPPORT_CANCELLED)
+        return True
+    if not body and not file_id:
+        await reply(update, texts.SUPPORT_SEND_CONTENT)
+        return True
+    context.user_data.pop("support_flow", None)
+    username = f"@{escape(user.username)}" if user.username else texts.NO_USERNAME
+    ticket = texts.SUPPORT_TICKET.format(
+        mention=f'<a href="tg://user?id={user.tg_id}">{escape(user.display_name)}</a>',
+        username=username,
+        tg_id=user.tg_id,
+        date=fa_date(timezone.localtime(timezone.now())),
+        coins=fa_num(user.coins),
+        text=escape(body) or "—",
     )
+    keyboard = InlineKeyboardMarkup([[_btn(texts.SUPPORT_ANSWER_BTN, f"adm:dm:{user.tg_id}", ui.PRIMARY)]])
+    delivered = 0
+    for admin_id in await get_all_admin_ids():
+        if file_id and message.photo:
+            sent = await tg_call(context.bot.send_photo, admin_id, photo=file_id, caption=ticket, parse_mode="HTML", reply_markup=keyboard)
+        elif file_id:
+            sent = await tg_call(context.bot.send_document, admin_id, document=file_id, caption=ticket, parse_mode="HTML", reply_markup=keyboard)
+        else:
+            sent = await tg_call(context.bot.send_message, admin_id, ticket, parse_mode="HTML", reply_markup=keyboard)
+        delivered += sent is not None
+    await reply(update, texts.SUPPORT_SENT if delivered else texts.SUPPORT_FAILED)
     return True
-
-

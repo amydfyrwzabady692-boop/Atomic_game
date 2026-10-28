@@ -3,10 +3,7 @@
 import logging
 from html import escape
 
-from django.conf import settings
 from django.utils import timezone
-
-logger = logging.getLogger(__name__)
 from telegram import InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.constants import ChatType
 from telegram.ext import ContextTypes
@@ -23,47 +20,43 @@ from wallet.models import CoinTransaction, TxType
 
 from .. import render, ui
 from ..db import db
+from ..tg import tg_call
 from .common import answer, callback, command, reply
+
+logger = logging.getLogger(__name__)
 
 
 def main_menu(context, daily: bool = False) -> InlineKeyboardMarkup:
-    """منوی اصلی پیوی: هر دکمه همان کار دستور هم‌نامش را می‌کند. دکمه‌ی جایزه‌ی روزانه فقط اگر روشن باشد."""
+    """منوی اصلی پیوی: هر دکمه همان کار دستور هم‌نامش را می‌کند. دکمه‌ی جایزه‌ی روزانه فقط اگر روشن باشد.
+
+    دکمه‌ی مینی‌اپ (web_app) فقط وقتی آدرس HTTPS مینی‌اپ تنظیم شده باشد اضافه می‌شود؛ تلگرام پیامی که دکمه‌ی
+    web_app با آدرس نامعتبر داشته باشد را کامل رد می‌کند و آن‌وقت /start هیچ جوابی نمی‌داد.
+    """
     add_link = f"https://t.me/{render.bot_username(context)}?startgroup=true"
-    profile = ui.button(texts.MENU_PROFILE_BTN, "pm:me", style=ui.PRIMARY)
-    first_row = [ui.button(texts.MENU_DAILY_BTN, "pm:daily", style=ui.SUCCESS), profile] if daily else [profile]
-    miniapp_url = f"{settings.MINIAPP_BASE_URL.rstrip('/')}/arcade/"
-    return InlineKeyboardMarkup(
-        [
-            [ui.button("🎮 ورود به بازی‌ها (مینی‌اپ)", web_app=WebAppInfo(url=miniapp_url), style=ui.SUCCESS)],
-            [ui.button(texts.MENU_DUEL_BTN, "pm:duel", style=ui.SUCCESS)],
-            [ui.button(texts.MENU_ADD_BTN, url=add_link, style=ui.PRIMARY)],
-            first_row,
-            [
-                ui.button(texts.MENU_WALLET_BTN, "pm:wallet", style=ui.SUCCESS),
-                ui.button(texts.MENU_INVITE_BTN, "pm:invite", style=ui.PRIMARY),
-            ],
-            [
-                ui.button(texts.MENU_ARCADE_BTN, web_app=WebAppInfo(url=miniapp_url), style=ui.PRIMARY),
-            ],
-            [
-                ui.button(texts.MENU_RULES_BTN, "pm:rules", style=ui.PRIMARY),
-                ui.button(texts.MENU_HELP_BTN, "pm:help", style=ui.PRIMARY),
-            ],
-            [
-                ui.button("💬 پشتیبانی و تیکت", "pm:support", style=ui.PRIMARY),
-            ],
-        ]
-    )
+    rows = []
+    if render.arcade_ready():
+        rows.append([ui.button(texts.MENU_MINIAPP_BTN, web_app=WebAppInfo(url=render.miniapp_home_url()), style=ui.SUCCESS)])
+    rows += [
+        [ui.button(texts.MENU_DUEL_BTN, "pm:duel", style=ui.SUCCESS), ui.button(texts.MENU_WALLET_BTN, "pm:wallet", style=ui.SUCCESS)],
+        (
+            [ui.button(texts.MENU_DAILY_BTN, "pm:daily", style=ui.SUCCESS), ui.button(texts.MENU_PROFILE_BTN, "pm:me", style=ui.PRIMARY)]
+            if daily
+            else [ui.button(texts.MENU_PROFILE_BTN, "pm:me", style=ui.PRIMARY)]
+        ),
+        [ui.button(texts.MENU_INVITE_BTN, "pm:invite", style=ui.PRIMARY), ui.button(texts.MENU_TOP_BTN, "pm:gtop", style=ui.PRIMARY)],
+        [ui.button(texts.MENU_ADD_BTN, url=add_link, style=ui.PRIMARY)],
+        [ui.button(texts.MENU_RULES_BTN, "pm:rules", style=ui.PRIMARY), ui.button(texts.MENU_HELP_BTN, "pm:help", style=ui.PRIMARY)],
+        [ui.button(texts.MENU_SUPPORT_BTN, "pm:support", style=ui.PRIMARY)],
+    ]
+    return InlineKeyboardMarkup(rows)
 
 
 @db
 def _first_start(user: TelegramUser, payload: str):
-    """اولین /start در پیوی: فعال‌سازی، ثبت دعوت‌کننده و هدیه‌ی ثبت‌نام."""
+    """اولین /start در پیوی: فعال‌سازی، ثبت دعوت‌کننده، هدیه‌ی ثبت‌نام و جایزه‌ی دعوت (هر چند نفر یک بار)."""
     referrer = None
     fields = ["started_bot"]
     user.started_bot = True
-    ref_reward = 0
-    ref_count = 0
     if payload.startswith("ref_") and payload[4:].isdigit() and user.referred_by_id is None:
         candidate = TelegramUser.objects.filter(tg_id=int(payload[4:]), is_banned=False).first()
         # فقط کاربر تازه (بدون سابقه‌ی بازی) می‌تواند دعوت‌شده حساب شود
@@ -73,9 +66,8 @@ def _first_start(user: TelegramUser, payload: str):
     user.save(update_fields=fields)
     tx = economy.grant_signup_bonus(user)
     bonus = tx.amount if tx is not None and not tx.duplicate else 0
-    if referrer:
-        ref_reward, ref_count = economy.check_referral_reward_on_join(referrer)
-    return referrer, bonus, economy.get_settings().daily_enabled, ref_reward, ref_count
+    referral = economy.check_referral_reward_on_join(referrer) if referrer else None
+    return referrer, bonus, economy.get_settings().daily_enabled, referral
 
 
 @command()
@@ -85,23 +77,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Telegr
     payload = context.args[0] if context.args else ""
     name = escape(user.display_name)
     if not user.started_bot:
-        referrer, bonus, daily_on, ref_reward, ref_count = await _first_start(user, payload)
+        referrer, bonus, daily_on, referral = await _first_start(user, payload)
         bonus_line = texts.START_BONUS.format(amount=fa_num(bonus)) if bonus else ""
         text = texts.START_NEW.format(name=name, bonus=bonus_line)
         if referrer:
             text += "\n\n" + texts.REFERRED_BY.format(name=escape(referrer.display_name))
-            if ref_reward > 0:
-                try:
-                    await context.bot.send_message(
-                        chat_id=referrer.tg_id,
-                        text=(
-                            f"🎉 <b>تبریک!</b> {fa_num(ref_count)} نفر با لینک شما وارد ربات شدند!\n"
-                            f"🎁 مبلغ <b>+{fa_num(ref_reward)}</b> {texts.COIN} پاداش دعوت به کیف پولت اضافه شد."
-                        ),
-                        parse_mode="HTML",
-                    )
-                except Exception as exc:
-                    logger.warning("failed to notify referrer %s: %s", referrer.tg_id, exc)
+            notice = render.referral_text(referral, user) if referral else ""
+            if notice:
+                await tg_call(context.bot.send_message, referrer.tg_id, notice, parse_mode="HTML", retries=1)
     else:
         daily_on = await _daily_enabled()
         text = texts.START_BACK.format(name=name, coins=fa_num(user.coins))
@@ -124,7 +107,7 @@ def _open_match_token(token: str) -> str | None:
     """توکن مسابقه‌ی در جریانی که صفحه‌ی مینی‌اپ دارد (آرکید، شطرنج، دوز و …)؛ وگرنه ``None``."""
     from games.models import ACTIVE_STATUSES, Match
 
-    match = Match.objects.filter(token=token[:24], status__in=ACTIVE_STATUSES).only("game_type").first()
+    match = Match.objects.filter(token=token[:32], status__in=ACTIVE_STATUSES).only("game_type", "token", "state").first()
     if match is None:
         return None
     from arcade import board
@@ -135,8 +118,6 @@ def _open_match_token(token: str) -> str | None:
 
 
 async def _send_open_game(update: Update, token: str) -> None:
-    from telegram import WebAppInfo
-
     if not render.arcade_ready():
         await reply(update, texts.OPEN_GAME_NOT_CONFIGURED)
         return
@@ -166,55 +147,35 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user
         return
 
     sub = query.data.split(":", 1)[1] if ":" in query.data else ""
-    if sub == "back":
-        daily_on = await _daily_enabled()
-        text = texts.START_BACK.format(name=escape(user.display_name), coins=fa_num(user.coins))
-        try:
-            await tg_call(query.edit_message_text, text, parse_mode="HTML", reply_markup=main_menu(context, daily=daily_on))
-            return
-        except Exception:
-            pass
-    elif sub == "wallet":
-        text, markup = wallet_handlers.wallet_screen(user)
-        try:
-            await tg_call(query.edit_message_text, text, parse_mode="HTML", reply_markup=markup)
-            return
-        except Exception:
-            pass
-    elif sub in ("support", "support:reply"):
-        context.user_data["support_flow"] = {"step": "awaiting_msg"}
-        await answer(query)
-        await reply(
-            update,
-            "💬 <b>ارتباط با پشتیبانی و مدیریت</b>\n"
-            "━━━━━━━━━━━━━━\n"
-            "لطفاً پیام، سوال یا مشکل خود را به صورت متنی (یا همراه با تصویر) ارسال نمایید تا به تیم مدیریت ارجاع داده شود.\n\n"
-            "<i>(جهت انصراف عبارت <code>لغو</code> را ارسال نمایید)</i>",
-            InlineKeyboardMarkup([[ui.button("❌ انصراف", "pm:support:cancel", style=ui.DANGER)]]),
-        )
-        return
-    elif sub == "support:cancel":
+    # این صفحه‌ها همان پیام منو را عوض می‌کنند (پیام تازه نمی‌فرستند)
+    if sub in ("back", "support:cancel"):
         context.user_data.pop("support_flow", None)
-        await answer(query, "انصراف داده شد.")
-        daily_on = await _daily_enabled()
+        await answer(query, texts.SUPPORT_CANCELLED if sub == "support:cancel" else "")
         text = texts.START_BACK.format(name=escape(user.display_name), coins=fa_num(user.coins))
-        try:
-            await tg_call(query.edit_message_text, text, parse_mode="HTML", reply_markup=main_menu(context, daily=daily_on))
-            return
-        except Exception:
-            pass
+        await tg_call(query.edit_message_text, text, parse_mode="HTML", reply_markup=main_menu(context, daily=await _daily_enabled()))
+        return
+    if sub == "wallet":
+        context.user_data.pop("wallet_flow", None)
+        await answer(query)
+        text, markup = wallet_handlers.wallet_screen(user)
+        await tg_call(query.edit_message_text, text, parse_mode="HTML", reply_markup=markup)
+        return
+    if sub in ("support", "support:reply"):
+        await answer(query)
+        await support_cmd.__wrapped__(update, context, user)
+        return
 
     actions = {
         "daily": daily,
         "me": me,
-        "wallet": wallet_handlers.wallet_cmd,
         "invite": invite,
         "help": help_cmd,
+        "history": history,
         "shop": shop_handlers.shop,
         "arcade": arcade_handlers.arcade,
         "duel": duel_handlers.duel,
         "rules": group_handlers.rules,
-        "back": start,
+        "gtop": group_handlers.gtop,
     }
     handler = actions.get(sub)
     if handler is not None:
@@ -345,12 +306,10 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Tele
 
 @command(private=True)
 async def support_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser):
+    context.user_data.pop("wallet_flow", None)
     context.user_data["support_flow"] = {"step": "awaiting_msg"}
     await reply(
         update,
-        "💬 <b>ارتباط با پشتیبانی و مدیریت</b>\n"
-        "━━━━━━━━━━━━━━\n"
-        "لطفاً پیام، سوال یا مشکل خود را به صورت متنی (یا همراه با تصویر) ارسال فرمایید تا به تیم مدیریت ارجاع داده شود.\n\n"
-        "<i>(جهت انصراف عبارت <code>لغو</code> را ارسال نمایید)</i>",
-        InlineKeyboardMarkup([[ui.button("❌ انصراف", "pm:support:cancel", style=ui.DANGER)]]),
+        texts.SUPPORT_PROMPT,
+        InlineKeyboardMarkup([[ui.button(texts.WALLET_CANCEL_BTN, "pm:support:cancel", style=ui.DANGER)]]),
     )

@@ -1,5 +1,6 @@
 """مسابقه‌ی آرکید در لایه‌ی ربات: لابی ← پنجره‌ی بازی ← جدول زنده ← پرداخت."""
 
+import asyncio
 import random
 from datetime import timedelta
 
@@ -103,12 +104,19 @@ async def test_arcade_match_window_live_board_and_payout():
     assert match.status == MatchStatus.RUNNING
     remaining = (match.play_deadline - timezone.now()).total_seconds()
     assert 170 < remaining <= 180
-    board = app.bot.sent[-1]
+    board = [m for m in app.bot.sent if m["chat_id"] == CHAT_ID][-1]
     assert "مسابقه در جریان است" in board["text"]
     url = board["reply_markup"].inline_keyboard[0][0].url
     # در گروه دکمه‌ی web_app کار نمی‌کند؛ لینک مستقیم مینی‌اپ با توکن مسابقه
     assert url == f"https://t.me/test_bot/arcade?startapp={match.token}"
     assert app.job_queue.pending("arcade_end") and app.job_queue.pending("arcade_poll")
+    # هر بازیکن در پیوی هم دکمه‌ی web_app مستقیم همین مسابقه را می‌گیرد (به تنظیم BotFather وابسته نیست)
+    await asyncio.gather(*app.tasks)
+    for user in users:
+        [dm] = [m for m in app.bot.sent if m["chat_id"] == user.tg_id]
+        button = dm["reply_markup"].inline_keyboard[0][0]
+        assert button.web_app.url == f"https://arcade.test/arcade/?tgWebAppStartParam={match.token}"
+        assert "سیخ‌زن" in dm["text"]
 
     low = await play_attempt(users[1], match.token, 3000)
     await app.job_queue.fire("arcade_poll")
@@ -121,7 +129,7 @@ async def test_arcade_match_window_live_board_and_payout():
     await app.job_queue.fire("arcade_end")
     assert active.phase == "done" and CHAT_ID not in manager.active
     assert (await match_row(active.match_id)).status == MatchStatus.FINISHED
-    result = app.bot.sent[-1]["text"]
+    result = [m for m in app.bot.sent if m["chat_id"] == CHAT_ID][-1]["text"]
     assert "پایان سیخ‌زن" in result and "گیمر0" in result
     # ۳۰۰ سکه بین دو نفری که امتیاز گرفتند به نسبت ۶۰:۳۰ = ۲۰۰ / ۱۰۰؛ نفر سوم بازی نکرد و سهمی ندارد
     # نفر اول دستاوردهای «اولین بازی»، «اولین برد» و «آرکیدباز» را هم می‌گیرد
