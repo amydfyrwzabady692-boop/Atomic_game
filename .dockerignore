@@ -9,3 +9,4 @@ staticfiles
 .ruff_cache
 .claude
 node_modules
+backups
