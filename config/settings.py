@@ -120,6 +120,13 @@ BUTTON_STYLES = env.bool("BUTTON_STYLES", default=True)
 BOT_CONCURRENT_UPDATES = env.int("BOT_CONCURRENT_UPDATES", default=32)
 # چند thread برای کوئری‌های دیتابیس ربات (هر thread یک اتصال). ۰ یا ۱ = همه‌ی کوئری‌ها پشت سر هم در یک thread
 BOT_DB_THREADS = env.int("BOT_DB_THREADS", default=8)
+# سقف تلگرام: ۲۰ پیام در دقیقه در هر گروه. ویرایش‌ها (شمارش لابی، صفحه‌ی بازی) سهمیه‌ی جدا دارند
+GROUP_MESSAGES_PER_MINUTE = env.int("GROUP_MESSAGES_PER_MINUTE", default=20)
+GROUP_EDITS_PER_MINUTE = env.int("GROUP_EDITS_PER_MINUTE", default=40)
+# تعداد اتصال هم‌زمان به API تلگرام
+TELEGRAM_POOL_SIZE = env.int("TELEGRAM_POOL_SIZE", default=64)
+# فقط اگر سرور به api.telegram.org دسترسی ندارد (مثلاً سرور داخل ایران): http://host:port یا socks5://host:port
+TELEGRAM_PROXY = env("TELEGRAM_PROXY", default="")
 
 # ---------------------------------------------------------------- Mini App
 MINIAPP_SHORT_NAME = env("MINIAPP_SHORT_NAME", default="arcade")

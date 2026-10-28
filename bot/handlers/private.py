@@ -95,6 +95,38 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Telegr
     if payload == "join":
         text += "\n\n" + texts.START_JOIN_HINT
     await reply(update, text, main_menu(context, daily=daily_on))
+    match_id = payload[len(render.JOIN_PAYLOAD_PREFIX) :]
+    if payload.startswith(render.JOIN_PAYLOAD_PREFIX) and match_id.isdigit():
+        await _join_from_link(update, context, user, int(match_id))
+
+
+async def _join_from_link(update: Update, context, user: TelegramUser, match_id: int) -> None:
+    """کسی که در گروه «شرکت» را زد ولی ربات را استارت نکرده بود، بعد از استارت خودکار عضو همان مسابقه می‌شود."""
+    from games.engine.services import MatchError
+
+    from .common import manager_of
+    from .flow import error_text
+
+    manager = manager_of(context)
+    active = next((a for a in manager.active.values() if a.match_id == match_id), None)
+    if active is None or active.phase != "lobby":
+        await reply(update, texts.JOIN_LINK_CLOSED)
+        return
+    try:
+        await manager.join(active, await _fresh(user))
+    except MatchError as exc:
+        if exc.code == "already_joined":
+            await reply(update, texts.JOIN_LINK_ALREADY.format(title=escape(active.info.title_fa), group=escape(active.group_title)))
+            return
+        await reply(update, error_text(exc))
+        return
+    await reply(update, texts.JOIN_LINK_OK.format(title=escape(active.info.title_fa), group=escape(active.group_title)))
+
+
+@db
+def _fresh(user: TelegramUser) -> TelegramUser:
+    user.refresh_from_db()
+    return user
 
 
 @db

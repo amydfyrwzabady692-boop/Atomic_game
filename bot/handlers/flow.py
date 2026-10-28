@@ -324,4 +324,7 @@ async def new_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     try:
         await manager.join(active, user)
     except MatchError as exc:
+        if exc.code == "need_start":
+            await answer(query, url=render.start_link(render.bot_username(context), render.join_payload(active.match_id)))
+            return
         await answer(query, error_text(exc), alert=True)

@@ -112,6 +112,14 @@ def start_link(username: str, payload: str = "join") -> str:
     return f"https://t.me/{username}?start={payload}"
 
 
+JOIN_PAYLOAD_PREFIX = "join_"
+
+
+def join_payload(match_id: int) -> str:
+    """پارامتر /start که بعد از استارت، کاربر را خودکار عضو همین مسابقه می‌کند."""
+    return f"{JOIN_PAYLOAD_PREFIX}{match_id}"
+
+
 def miniapp_link(username: str, token: str) -> str:
     """لینک مستقیم مینی‌اپ برای دکمه‌های داخل گروه (دکمه‌ی web_app در گروه مجاز نیست).
 
@@ -189,7 +197,7 @@ def lobby_keyboard(match_id: int, username: str, game_key: str = "") -> InlineKe
     ]
     if game_key:
         rows.append([ui.button(texts.RULES_BTN, f"rl:{game_key}", style=ui.PRIMARY)])
-    rows.append([ui.button(texts.START_BOT_BTN, url=start_link(username), style=ui.PRIMARY)])
+    rows.append([ui.button(texts.START_BOT_BTN, url=start_link(username, join_payload(match_id)), style=ui.PRIMARY)])
     return InlineKeyboardMarkup(rows)
 
 

@@ -33,7 +33,11 @@ async def join_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user
     try:
         message = await manager.join(active, user)
     except MatchError as exc:
-        await answer(query, error_text(exc), alert=exc.code in ("need_start", "not_enough_coins", "banned"))
+        if exc.code == "need_start":
+            # یک لمس: پیوی ربات باز می‌شود و بعد از «Start» همان‌جا خودکار عضو همین مسابقه می‌شود
+            await answer(query, url=render.start_link(render.bot_username(context), render.join_payload(match_id)))
+            return
+        await answer(query, error_text(exc), alert=exc.code in ("not_enough_coins", "banned"))
         return
     await answer(query, message)
 

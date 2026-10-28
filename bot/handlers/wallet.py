@@ -164,6 +164,8 @@ async def wallet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, us
         return
     if update.effective_chat.type != ChatType.PRIVATE:
         return
+    # مرحله‌ی نیمه‌کاره‌ی پشتیبانی نباید پیام‌های کیف پول (عدد، کارت، آیدی) را به‌عنوان تیکت بفرستد
+    context.user_data.pop("support_flow", None)
     if action == "home":
         context.user_data.pop("wallet_flow", None)
         await _edit(query, *wallet_screen(user))
@@ -549,6 +551,7 @@ async def transfer_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, user:
         await ask_transfer(update, user, target, parse_int(args[1]))
         return
     if update.effective_chat.type == ChatType.PRIVATE:
+        context.user_data.pop("support_flow", None)
         context.user_data["wallet_flow"] = {"step": "transfer_target"}
         await reply(update, texts.WALLET_TRANSFER_ASK_TARGET, _cancel("wal:home"))
         return

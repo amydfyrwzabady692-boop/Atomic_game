@@ -14,7 +14,6 @@ from telegram import (
     Update,
 )
 from telegram.ext import (
-    AIORateLimiter,
     Application,
     ApplicationBuilder,
     CallbackQueryHandler,
@@ -37,6 +36,7 @@ from .concurrency import PerChatUpdateProcessor
 from .db import db
 from .duels import DuelRunner
 from .handlers import admin, arcade, duel, flow, group, group_settings, private, shop, wallet
+from .ratelimiter import GroupGameRateLimiter
 from .runner import MatchManager
 from .tg import tg_call
 
@@ -221,16 +221,29 @@ def register_handlers(application: Application) -> None:
 def build_application() -> Application:
     if not settings.BOT_TOKEN:
         raise RuntimeError("BOT_TOKEN تنظیم نشده است (فایل .env را ببینید).")
-    application = (
+    builder = (
         ApplicationBuilder()
         .token(settings.BOT_TOKEN)
-        .rate_limiter(AIORateLimiter(max_retries=2))
+        # ارسال پیام در گروه ۲۰ در دقیقه، ویرایش‌ها سهمیه‌ی جدا؛ flood یک گروه بقیه‌ی چت‌ها را معطل نمی‌کند
+        .rate_limiter(
+            GroupGameRateLimiter(
+                max_retries=2,
+                group_max_rate=settings.GROUP_MESSAGES_PER_MINUTE,
+                group_edit_max_rate=settings.GROUP_EDITS_PER_MINUTE,
+            )
+        )
         # چت‌های مختلف هم‌زمان پردازش می‌شوند تا کندی یک گروه بقیه را معطل نکند
         .concurrent_updates(PerChatUpdateProcessor(settings.BOT_CONCURRENT_UPDATES))
+        # اتصال‌های بیشتر به API تلگرام تا ارسال هم‌زمان چند گروه پشت هم صف نکشد
+        .connection_pool_size(settings.TELEGRAM_POOL_SIZE)
+        .pool_timeout(10)
         .post_init(post_init)
         .post_shutdown(post_shutdown)
-        .build()
     )
+    if settings.TELEGRAM_PROXY:
+        # سرور داخل ایران به api.telegram.org دسترسی ندارد؛ از پروکسی (http:// یا socks5://) رد می‌شود
+        builder = builder.proxy(settings.TELEGRAM_PROXY).get_updates_proxy(settings.TELEGRAM_PROXY)
+    application = builder.build()
     register_handlers(application)
     return application
 

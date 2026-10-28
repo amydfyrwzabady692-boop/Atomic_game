@@ -156,9 +156,13 @@ def callback(fn):
 _answered: set[str] = set()
 
 
-async def answer(query, text: str = "", alert: bool = False) -> None:
-    """به callback جواب می‌دهد (فقط یک بار برای هر کلیک)."""
+async def answer(query, text: str = "", alert: bool = False, url: str | None = None) -> None:
+    """به callback جواب می‌دهد (فقط یک بار برای هر کلیک). با ``url`` (مثل ``t.me/<bot>?start=…``) تلگرام همان
+    لینک را برای کاربر باز می‌کند؛ مثلاً پیوی ربات برای کسی که هنوز استارت نزده است."""
     if query.id in _answered:
         return
     _answered.add(query.id)
+    if url:
+        await tg_call(query.answer, url=url)
+        return
     await tg_call(query.answer, text[:200] if text else None, show_alert=alert)

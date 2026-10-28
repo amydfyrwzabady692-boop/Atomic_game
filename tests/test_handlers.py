@@ -106,10 +106,12 @@ def make_update(app, tg_id, chat_id=None, chat_type="private", text="", name="ع
 
 def make_callback(app, tg_id, data, message_id, chat_id=GROUP_ID, chat_type="supergroup"):
     """یک کلیک دکمه‌ی اینلاین. جواب‌ها در ``update.answers`` و ویرایش‌ها در ``update.edits``."""
-    answers, edits, deleted, replies = [], [], [], []
+    answers, edits, deleted, replies, urls = [], [], [], [], []
 
     async def answer(text=None, show_alert=False, **kwargs):
         answers.append((text, show_alert))
+        if kwargs.get("url"):
+            urls.append(kwargs["url"])
 
     async def reply_text(text, **kwargs):
         replies.append({"text": text, **kwargs})
@@ -139,7 +141,7 @@ def make_callback(app, tg_id, data, message_id, chat_id=GROUP_ID, chat_type="sup
         effective_message=query.message,
         callback_query=query,
     )
-    update.answers, update.edits, update.deleted, update.replies = answers, edits, deleted, replies
+    update.answers, update.edits, update.deleted, update.replies, update.urls = answers, edits, deleted, replies, urls
     context = SimpleNamespace(args=[], bot=app.bot, application=app, bot_data=app.bot_data)
     return update, context
 
@@ -317,15 +319,22 @@ async def test_join_requires_private_start_and_enough_coins(app):
         await click(app, 71, data, menu_id)
     match = await sync_to_async(Match.objects.get)()
 
+    # کسی که ربات را استارت نکرده، با همان کلیک به پیوی ربات می‌رود و بعد از Start خودکار عضو می‌شود
     newcomer = await click(app, 72, f"j:{match.pk}", menu_id, group.join_callback)
-    assert newcomer.answers[0][1] is True and "/start" in newcomer.answers[0][0]
+    assert newcomer.urls == [f"https://t.me/test_bot?start=join_{match.pk}"]
+    started = await start_user(app, 72, payload=f"join_{match.pk}")
+    assert "عضو مسابقه شدی" in started.replies[-1]["text"]
+    assert await sync_to_async(match.players.count)() == 2
+    again = await start_user(app, 72, payload=f"join_{match.pk}")
+    assert "قبلاً عضو" in again.replies[-1]["text"]
 
     await start_user(app, 73)
     await sync_to_async(TelegramUser.objects.filter(tg_id=73).update)(coins=10)
     await sync_to_async(CoinTransaction.objects.filter(user__tg_id=73).count)()
     poor = await click(app, 73, f"j:{match.pk}", menu_id, group.join_callback)
     assert poor.answers[0][1] is True and "سکه" in poor.answers[0][0] and "رایگان" in poor.answers[0][0]
-    assert await sync_to_async(match.players.count)() == 1
+    assert await sync_to_async(match.players.count)() == 2
+    await app.bot_data["manager"].edits.close()  # ویرایش‌های معوق لابی قبل از بسته شدن حلقه
 
 
 async def test_cancel_only_by_creator_or_admin(app):

@@ -34,9 +34,11 @@ services:
     environment:
       DATABASE_URL: postgres://gamebot:${POSTGRES_PASSWORD:-gamebot}@db:5432/gamebot
       REDIS_URL: redis://redis:6379/0
+    # gthread: هر worker چند درخواست هم‌زمان (نظرسنجی صفحه‌ی بازی‌ها و دوئل) را جواب می‌دهد
+    # (فرمان gunicorn باید در یک خط بماند؛ شکستن خط در sh -c یعنی فرمان جدا)
     command: >
       sh -c "python manage.py migrate --noinput &&
-             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3"
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers ${GUNICORN_WORKERS:-3} --threads ${GUNICORN_THREADS:-8} --worker-class gthread --timeout 30 --keep-alive 5 --max-requests 2000 --max-requests-jitter 200"
     ports:
       - "${WEB_PORT:-8120}:8000"
     healthcheck:
