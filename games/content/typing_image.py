@@ -41,10 +41,13 @@ def _candidates() -> list[str]:
 
 @lru_cache(maxsize=32)
 def load_font(size: int) -> ImageFont.FreeTypeFont:
+    # متن‌ها از قبل با arabic_reshaper و bidi چسبان و راست‌به‌چپ شده‌اند (shape)؛ اگر Pillow روی سرور
+    # libraqm داشته باشد، خودش هم دوباره ترتیب را برمی‌گرداند و نوشته‌ها برعکس و جدا از هم می‌شدند.
+    # موتور ساده‌ی BASIC همان چیزی را می‌کشد که داده‌ایم، روی هر سروری یکسان.
     for path in _candidates():
         if path and Path(path).is_file():
             try:
-                return ImageFont.truetype(path, size)
+                return ImageFont.truetype(path, size, layout_engine=ImageFont.Layout.BASIC)
             except OSError:
                 continue
     raise RuntimeError("فونت فارسی پیدا نشد؛ مسیر را با TYPING_FONT_PATH مشخص کنید.")

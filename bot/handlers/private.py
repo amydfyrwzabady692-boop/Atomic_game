@@ -21,6 +21,7 @@ from wallet.models import CoinTransaction, TxType
 from .. import render, ui
 from ..db import db
 from ..tg import tg_call
+from . import wallet as wallet_handlers
 from .common import answer, callback, command, reply
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Telegr
         return
     payload = context.args[0] if context.args else ""
     name = escape(user.display_name)
+    is_new = not user.started_bot
     if not user.started_bot:
         referrer, bonus, daily_on, referral = await _first_start(user, payload)
         bonus_line = texts.START_BONUS.format(amount=fa_num(bonus)) if bonus else ""
@@ -91,6 +93,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE, user: Telegr
     if payload.startswith(render.OPEN_PAYLOAD_PREFIX):
         # دکمه‌ی پشتیبان زیر صفحه‌ی بازی در گروه: صفحه‌ی بازی را با دکمه‌ی web_app همین‌جا باز می‌کنیم
         await _send_open_game(update, payload[len(render.OPEN_PAYLOAD_PREFIX) :])
+        return
+    if payload in wallet_handlers.SECTIONS:
+        # دکمه‌های کیف پول مینی‌اپ: همان بخش مستقیم باز می‌شود (کاربر تازه اول خوش‌آمد را هم می‌بیند)
+        if is_new:
+            await reply(update, text, main_menu(context, daily=daily_on))
+        await wallet_handlers.open_section(update, context, user, payload)
         return
     if payload == "join":
         text += "\n\n" + texts.START_JOIN_HINT
@@ -173,7 +181,6 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user
     from . import duel as duel_handlers
     from . import group as group_handlers
     from . import shop as shop_handlers
-    from . import wallet as wallet_handlers
 
     if update.effective_chat.type != ChatType.PRIVATE:
         return

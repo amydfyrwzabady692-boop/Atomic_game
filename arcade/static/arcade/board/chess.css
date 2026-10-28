@@ -288,3 +288,4 @@ body.practice .clock, body.practice #draw-btn { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .sq img, .sq.arrived img, .btn.offer, .clock.low, .card { animation: none; transition: none; }
 }
+.result-icon img.knight { display: block; margin: 0 auto; filter: drop-shadow(0 10px 18px rgba(0, 0, 0, .45)); }

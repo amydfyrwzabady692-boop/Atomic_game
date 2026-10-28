@@ -59,6 +59,20 @@ def test_long_title_is_shrunk_to_fit():
     assert data[:3] == JPEG
 
 
+def test_persian_text_is_drawn_exactly_as_shaped():
+    """متن از قبل چسبان و راست‌به‌چپ شده است؛ اگر Pillow با libraqm دوباره ترتیبش را برگرداند،
+    نوشته‌ی کارت‌ها و تصویر مسابقه‌ی تایپ برعکس و جداجدا می‌شد (روی سرورهایی که fribidi دارند)."""
+    from PIL import ImageFont
+
+    from games.content.typing_image import load_font, shape
+
+    font = load_font(30)
+    assert font.layout_engine == ImageFont.Layout.BASIC
+    word = shape("پایان")
+    # در موتور ساده، تصویر کل کلمه همان کنار هم گذاشتن تصویر حرف‌ها به همان ترتیب است
+    assert font.getlength(word) == pytest.approx(sum(font.getlength(ch) for ch in word), abs=2)
+
+
 def test_clean_name_drops_emoji_and_undrawable_characters():
     assert cards.clean_name("علی 🔥") == "علی"
     assert cards.clean_name("🔥🔥") == "بازیکن"

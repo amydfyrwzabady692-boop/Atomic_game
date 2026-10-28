@@ -142,10 +142,27 @@ def _sell_amount_error(user: TelegramUser, eco: EconomySettings, coins) -> str |
 
 
 # ------------------------------------------------------------------ دستورات و دکمه‌ها
+SECTIONS = ("wallet", "topup", "sell", "transfer")
+
+
+async def open_section(update: Update, context, user: TelegramUser, section: str) -> None:
+    """یک بخش کیف پول را با پیام تازه باز می‌کند (دکمه‌های کیف پول مینی‌اپ: /start topup و …)."""
+    context.user_data.pop("wallet_flow", None)
+    context.user_data.pop("support_flow", None)
+    if section == "transfer":
+        context.user_data["wallet_flow"] = {"step": "transfer_target"}
+        await reply(update, texts.WALLET_TRANSFER_ASK_TARGET, _cancel("wal:home"))
+        return
+    if section in ("topup", "sell"):
+        eco = await db(EconomySettings.load)()
+        await reply(update, *(topup_menu_screen(eco) if section == "topup" else sell_menu_screen(user, eco)))
+        return
+    await reply(update, *wallet_screen(user))
+
+
 @command(private=True)
 async def wallet_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser):
-    context.user_data.pop("wallet_flow", None)
-    await reply(update, *wallet_screen(user))
+    await open_section(update, context, user, "wallet")
 
 
 async def _edit(query, text: str, keyboard=None) -> None:

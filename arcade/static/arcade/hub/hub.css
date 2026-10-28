@@ -80,6 +80,7 @@ main { padding: 6px 14px calc(var(--safe-bottom) + 90px); max-width: 640px; marg
 .btn.danger { border: 0; background: linear-gradient(180deg, #ff9aa9, var(--danger) 60%, #e6375a); color: #3d0514; }
 .btn.violet { border-color: rgba(167, 139, 250, .55); background: linear-gradient(180deg, rgba(167, 139, 250, .3), rgba(167, 139, 250, .14)); }
 .btn.ghost { background: transparent; box-shadow: none; color: var(--muted); }
+.btn.line { background: rgba(110, 231, 255, .08); border-color: rgba(110, 231, 255, .45); color: #dff8ff; }
 .btn.wide { display: block; width: 100%; margin-top: 12px; padding: 14px; font-size: 16px; }
 .btn:disabled { opacity: .45; }
 .row { display: flex; gap: 8px; margin-top: 8px; }
@@ -104,23 +105,64 @@ main { padding: 6px 14px calc(var(--safe-bottom) + 90px); max-width: 640px; marg
 .banner span { display: block; font-size: 20px; font-weight: 900; }
 .banner small { opacity: .85; }
 
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+/* ---------------------------------------------------------------- برند و کیف پول */
+.brand { display: flex; align-items: baseline; gap: 8px; margin: 14px 2px 4px; }
+.brand-mark { font-size: 22px; }
+.brand b {
+  font-size: 22px;
+  font-weight: 900;
+  background: linear-gradient(90deg, var(--gold), #ffe9a8 45%, var(--accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.brand small { color: var(--muted); font-size: 12px; }
+.card.wallet {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(255, 200, 87, .35);
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgba(255, 200, 87, .22), transparent 55%),
+    linear-gradient(160deg, rgba(44, 50, 96, .92), rgba(24, 27, 58, .92));
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .28);
+}
+.wallet-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.wallet-top small { display: block; color: var(--muted); font-size: 12px; }
+.wallet-top b { display: block; margin-top: 2px; font-size: 26px; font-weight: 900; color: var(--gold); direction: ltr; text-align: right; unicode-bidi: plaintext; }
+.wallet-icon { font-size: 34px; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .35)); }
+.card.wallet .row { margin-top: 12px; }
+.card.wallet .btn { padding: 10px 6px; font-size: 14px; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; }
 .tile {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 12px 6px;
-  border-radius: 16px;
-  background: var(--panel);
+  gap: 8px;
+  padding: 12px 6px 10px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(44, 50, 96, .72), rgba(30, 34, 68, .78));
   border: 1px solid var(--stroke);
   color: var(--ink);
   text-decoration: none;
-  font-size: 13px;
-  font-weight: 700;
   text-align: center;
+  transition: transform .12s ease, border-color .12s ease;
 }
-.tile span { font-size: 30px; line-height: 1.2; }
+.tile:active { transform: scale(.96); border-color: rgba(110, 231, 255, .55); }
+.tile b { font-size: 13px; font-weight: 800; line-height: 1.5; }
+.tile .icon {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  font-size: 32px;
+  line-height: 1;
+  border-radius: 16px;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .35));
+}
+.tile .icon canvas { display: block; border-radius: 16px; }
+.tile .icon.chess { background: radial-gradient(circle at 35% 30%, #3b3f73, #1a1d3f 70%); border: 1px solid rgba(255, 255, 255, .18); }
+.tile .icon.chess img { width: 46px; height: 46px; }
 
 /* ---------------------------------------------------------------- حریف */
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -156,7 +198,7 @@ main { padding: 6px 14px calc(var(--safe-bottom) + 90px); max-width: 640px; marg
 .list li.me { border-color: var(--accent); }
 .list .rank { width: 30px; text-align: center; font-weight: 900; }
 .list .name { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.list .val { font-weight: 900; color: var(--gold); white-space: nowrap; }
+.list .val { font-weight: 900; color: var(--gold); white-space: nowrap; direction: ltr; unicode-bidi: isolate; }
 .list .val.minus { color: var(--danger); }
 .list .val.plus { color: var(--good); }
 .list small { display: block; color: var(--muted); font-size: 12px; }

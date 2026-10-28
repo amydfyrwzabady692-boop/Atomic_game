@@ -40,6 +40,18 @@
 <main>
   <!-- ------------------------------------------------------------ بازی‌ها -->
   <section class="tab" id="tab-games">
+    <div class="brand"><span class="brand-mark">🎰</span><b>وینزون بت</b><small>بازی کن، رقابت کن، ببر</small></div>
+    <div class="card wallet hidden" id="wallet-card">
+      <div class="wallet-top">
+        <div><small>موجودی کیف پول</small><b id="wallet-coins">—</b></div>
+        <span class="wallet-icon" aria-hidden="true">💳</span>
+      </div>
+      <div class="row">
+        <button class="btn go" type="button" data-start="topup">➕ شارژ</button>
+        <button class="btn violet" type="button" data-start="sell">💰 فروش</button>
+        <button class="btn line" type="button" data-start="transfer">🔄 انتقال</button>
+      </div>
+    </div>
     <div class="card daily hidden" id="daily-card">
       <div><b>🎁 جایزه‌ی روزانه</b><small id="daily-note">هر روز سر بزن</small></div>
       <button class="btn go" id="daily-btn" type="button">بگیر</button>
@@ -140,11 +152,15 @@
 
 {{ games|json_script:"games-data" }}
 <script src="{% static 'arcade/common/telegram-web-app.js' %}?v={{ version }}"></script>
+<script src="{% static 'arcade/common/art.js' %}?v={{ version }}"></script>
+<script src="{% static 'arcade/common/icons.js' %}?v={{ version }}"></script>
 <script>
 window.HUB_BOOT = {
   apiBase: "{% url 'arcade:app' %}api/",
   playBase: "{% url 'arcade:app' %}play/",
   chessPractice: "{% url 'arcade:chess_practice' %}",
+  pieceBase: "{% url 'arcade:app' %}piece/",
+  botUsername: "{{ bot_username|escapejs }}",
   devAuth: {{ dev_auth|yesno:"true,false" }},
   tab: "{{ tab|escapejs }}",
   games: JSON.parse(document.getElementById("games-data").textContent)

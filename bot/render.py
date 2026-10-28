@@ -160,6 +160,7 @@ def lobby_text(match, info: GameInfo, names: list[str], remaining: int, prize_no
         )
         if len(names) > LOBBY_NAMES_SHOWN:
             players += "\n" + texts.MORE_PLAYERS.format(n=fa_num(len(names) - LOBBY_NAMES_SHOWN))
+        players = f"<blockquote>{players}</blockquote>"
     else:
         players = texts.LOBBY_NO_PLAYERS
     total = 60
@@ -209,11 +210,11 @@ def cancelled_text(reason: str, refunded: bool) -> str:
 
 
 def result_text(result, info: GameInfo, prize_note: str = "") -> str:
-    lines = [texts.RESULT_HEADER.format(title=info.title_fa)]
     ranked = sorted(result.players, key=lambda p: p.rank)
+    rows = []
     for r in ranked[:RESULT_ROWS_SHOWN]:
         prize = texts.RESULT_PRIZE.format(prize=fa_num(r.prize)) if r.prize else ""
-        lines.append(
+        rows.append(
             texts.RESULT_LINE.format(
                 medal=texts.MEDALS.get(r.rank, texts.MEDAL_OTHER),
                 name=short_mention(r.user),
@@ -223,7 +224,8 @@ def result_text(result, info: GameInfo, prize_note: str = "") -> str:
             )
         )
     if len(ranked) > RESULT_ROWS_SHOWN:
-        lines.append(texts.MORE_PLAYERS.format(n=fa_num(len(ranked) - RESULT_ROWS_SHOWN)) + "\n")
+        rows.append(texts.MORE_PLAYERS.format(n=fa_num(len(ranked) - RESULT_ROWS_SHOWN)))
+    lines = [texts.RESULT_HEADER.format(title=info.title_fa), texts.RESULT_ROWS.format(rows="\n".join(rows))]
     lines.append(
         texts.RESULT_FOOTER.format(pot=fa_num(result.match.pot)) if result.match.pot else texts.RESULT_FREE
     )
@@ -268,7 +270,7 @@ def arcade_text(match, info: GameInfo, standings, remaining: int, attempts: int,
         variant=variant_suffix(info, match.options),
         pot=fa_num(match.pot),
         attempts=fa_num(attempts),
-        board="\n".join(rows),
+        board="\n".join(rows) or texts.LOBBY_NO_PLAYERS_SHORT,
         minutes=fa_num(minutes),
         seconds=texts.fa_digits(f"{seconds:02d}"),
         flash=f"\n\n{flash}" if flash else "",

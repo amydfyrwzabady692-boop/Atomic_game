@@ -138,6 +138,12 @@ def game_meta(sim) -> dict:
     }
 
 
+def _bot_username() -> str:
+    from .hub_views import bot_username
+
+    return bot_username()
+
+
 def _token_game_key(token: str) -> str:
     """بازیِ لینک مسابقه‌ی گروه، تا فایل‌هایش هم‌زمان با درخواست /info دانلود شوند (نه بعد از آن)."""
     if not token:
@@ -177,6 +183,7 @@ def app(request, game_key: str | None = None):
                 "version": asset_version(),
                 "tab": request.GET.get("tab", "")[:16],
                 "dev_auth": settings.DEBUG and getattr(settings, "ARCADE_DEV_AUTH", False),
+                "bot_username": _bot_username(),
             },
         )
     return render(

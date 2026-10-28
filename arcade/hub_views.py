@@ -15,6 +15,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from core.models import TelegramUser
+from core.textutils import fa_date
 from games import duels
 from games.catalog import get_info
 from games.models import Duel, MatchPlayer
@@ -127,7 +128,7 @@ def history(request, user, payload):
             {
                 "amount": tx.amount,
                 "type": labels.get(tx.type, tx.type),
-                "at": timezone.localtime(tx.created_at).strftime("%Y/%m/%d %H:%M"),
+                "at": fa_date(timezone.localtime(tx.created_at)),
             }
             for tx in rows
         ]

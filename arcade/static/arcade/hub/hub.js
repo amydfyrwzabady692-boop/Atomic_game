@@ -87,7 +87,73 @@
     if (stake === 0) return "🆓 بدون سکه";
     return money(stake) + " 🪙";
   }
-  function setCoins(coins) { if (coins !== undefined && coins !== null) $("me-coins").textContent = "🪙 " + money(coins); }
+  function setCoins(coins) {
+    if (coins === undefined || coins === null) return;
+    $("me-coins").textContent = "🪙 " + money(coins);
+    $("wallet-coins").textContent = money(coins) + " سکه";
+  }
+
+  // ------------------------------------------------------------------ کیف پول: میان‌بر به پیوی ربات
+  /* شارژ، فروش و انتقال سکه در پیوی ربات انجام می‌شود (رسید، شماره کارت و تأیید ادمین)؛ این دکمه‌ها
+     همان بخش را مستقیم در ربات باز می‌کنند. */
+  function openBot(payload) {
+    if (!BOOT.botUsername) return;
+    var url = "https://t.me/" + BOOT.botUsername + "?start=" + payload;
+    haptic("light");
+    if (tg && tg.openTelegramLink) { try { tg.openTelegramLink(url); return; } catch (e) { /* قدیمی */ } }
+    window.open(url, "_blank");
+  }
+  $("wallet-card").classList.toggle("hidden", !BOOT.botUsername);
+  document.querySelectorAll("#wallet-card [data-start]").forEach(function (b) {
+    b.addEventListener("click", function () { openBot(b.dataset.start); });
+  });
+
+  // ------------------------------------------------------------------ نماد تصویری بازی‌ها (همان نمادهای صفحه‌ی بازی)
+  var icons = (function () {
+    if (!window.ArcadeArt || !window.ArcadeIcons) return null;
+    try {
+      var sprites = {};
+      var env = {
+        res: Math.min(window.devicePixelRatio || 1, 2),
+        font: function (size, weight) { return (weight || 700) + " " + size + "px Vazirmatn, Tahoma, sans-serif"; },
+        roundRect: function (c, x, y, w, h, r) {
+          r = Math.min(r, w / 2, h / 2);
+          c.beginPath();
+          c.moveTo(x + r, y);
+          c.arcTo(x + w, y, x + w, y + h, r);
+          c.arcTo(x + w, y + h, x, y + h, r);
+          c.arcTo(x, y + h, x, y, r);
+          c.arcTo(x, y, x + w, y, r);
+          c.closePath();
+        },
+        sprite: function (key, w, h, paint, pad) {
+          if (sprites[key]) return sprites[key];
+          pad = pad || 0;
+          var cv = document.createElement("canvas");
+          cv.width = Math.max(1, Math.ceil((w + pad * 2) * env.res));
+          cv.height = Math.max(1, Math.ceil((h + pad * 2) * env.res));
+          var sc = cv.getContext("2d");
+          sc.scale(env.res, env.res);
+          sc.translate(pad, pad);
+          paint(sc, w, h);
+          sprites[key] = { canvas: cv, w: w, h: h, pad: pad, fw: w + pad * 2, fh: h + pad * 2 };
+          return sprites[key];
+        },
+        glow: function () {},
+        dropShadow: function () {},
+      };
+      env.art = window.ArcadeArt(env);
+      return window.ArcadeIcons(env);
+    } catch (e) { return null; }
+  })();
+  function iconFor(key, emoji) {
+    var holder = el("span", "icon");
+    var canvas = null;
+    try { canvas = icons && icons.has(key) ? icons.element(key, 58) : null; } catch (e) { canvas = null; }
+    if (canvas) holder.appendChild(canvas);
+    else holder.textContent = emoji;
+    return holder;
+  }
 
   // ------------------------------------------------------------------ تب‌ها
   function show(tab) {
@@ -202,14 +268,19 @@
     grid.textContent = "";
     var chess = el("a", "tile");
     chess.href = BOOT.chessPractice + location.search;
-    chess.appendChild(el("span", "", "♟"));
-    chess.appendChild(document.createTextNode("شطرنج با کامپیوتر"));
+    var knight = el("span", "icon chess");
+    var img = document.createElement("img");
+    img.src = BOOT.pieceBase + "wn.png";
+    img.alt = "";
+    knight.appendChild(img);
+    chess.appendChild(knight);
+    chess.appendChild(el("b", "", "شطرنج با کامپیوتر"));
     grid.appendChild(chess);
     BOOT.games.forEach(function (game) {
       var a = el("a", "tile");
       a.href = BOOT.playBase + game.key + "/" + location.search;
-      a.appendChild(el("span", "", game.emoji));
-      a.appendChild(document.createTextNode(game.title));
+      a.appendChild(iconFor(game.key, game.emoji));
+      a.appendChild(el("b", "", game.title));
       grid.appendChild(a);
     });
   }

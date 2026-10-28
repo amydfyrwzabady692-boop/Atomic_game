@@ -350,3 +350,21 @@ async def test_wallet_history_button_works(app):
     update, context = callback_update(app, 391, "pm:history")
     await private.menu_callback(update, context)
     assert "تراکنش" in update.replies[0]["text"] and "۷۰" in update.replies[0]["text"]
+
+
+async def test_mini_app_wallet_shortcuts_open_the_right_section(app):
+    async def start(tg_id, payload):
+        update, context = make_update(app, tg_id, text=f"/start {payload}")
+        context.user_data = user_data(app, tg_id)
+        await private.start(update, context)
+        return update
+
+    await start_user(app, 401)
+    await give(401, 150)
+    for payload, phrase in (("wallet", "کیف پول من"), ("topup", "شارژ کیف پول"), ("sell", "فروش سکه"), ("transfer", "آیدی عددی")):
+        update = await start(401, payload)
+        assert len(update.replies) == 1 and phrase in update.replies[0]["text"], payload
+    assert user_data(app, 401)["wallet_flow"] == {"step": "transfer_target"}
+    # کاربر تازه اول خوش‌آمد و منو را می‌بیند، بعد همان بخش
+    fresh = await start(402, "topup")
+    assert "خوش آمدی" in fresh.replies[0]["text"] and "شارژ کیف پول" in fresh.replies[1]["text"]
