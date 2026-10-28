@@ -290,7 +290,8 @@ async def private_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             return
         context.user_data["wallet_flow"] = {"step": "awaiting_sell_card", "coins": coins}
         await reply(update, _ask_card_text(coins, eco), _cancel("wal:sell:cancel"))
-    elif step == "awaiting_sell_card":
+    elif step in ("awaiting_sell_card", "confirm_sell"):
+        # در مرحله‌ی تأیید هم می‌شود شماره کارت درست‌شده را دوباره فرستاد
         await _receive_card(update, context, user, flow, text)
     elif step == "transfer_target":
         target = await find_user(text) if text else None
@@ -350,18 +351,20 @@ async def _receive_receipt(update: Update, context, user: TelegramUser, flow: di
         id=fa_num(req.pk),
     )
     keyboard = topup_alert_keyboard(req.pk, user.tg_id)
+    # رسیدی که به‌صورت فایل (نه عکس) فرستاده شده با sendPhoto نمی‌رود
+    as_document = message_is_document(update)
     sent = []
     for admin_id in await get_all_admin_ids():
-        message = await tg_call(
-            context.bot.send_photo, admin_id, photo=file_id, caption=caption, parse_mode="HTML", reply_markup=keyboard
-        )
-        if message is None and message_is_document(update):
-            # رسیدی که فایل (نه عکس) فرستاده شده با sendPhoto نمی‌رود
-            message = await tg_call(
+        if as_document:
+            alert = await tg_call(
                 context.bot.send_document, admin_id, document=file_id, caption=caption, parse_mode="HTML", reply_markup=keyboard
             )
-        if message is not None:
-            sent.append({"chat_id": admin_id, "msg_id": message.message_id, "photo": True})
+        else:
+            alert = await tg_call(
+                context.bot.send_photo, admin_id, photo=file_id, caption=caption, parse_mode="HTML", reply_markup=keyboard
+            )
+        if alert is not None:
+            sent.append({"chat_id": admin_id, "msg_id": alert.message_id, "photo": True})
     if sent:
         await record_admin_alerts("topup", req.pk, sent)
     else:
@@ -521,11 +524,6 @@ async def _transfer_button(update: Update, context, user: TelegramUser, query, t
         await answer(query, wallet_error_text(exc), alert=True)
         return
     await get_redis().delete(_transfer_key(token))
-    if tx_out.duplicate:
-        await answer(query, texts.WALLET_TRANSFER_ALREADY)
-        return
-    logger.info("coin transfer", extra={"from": user.tg_id, "to": target.tg_id, "amount": amount})
-    await answer(query, texts.WALLET_TRANSFER_DONE_ALERT)
     if update.effective_chat.type == ChatType.PRIVATE:
         done = texts.WALLET_TRANSFER_SUCCESS.format(
             amount=fa_num(amount), receiver=escape(target.display_name), balance=fa_num(user.coins)
@@ -534,6 +532,13 @@ async def _transfer_button(update: Update, context, user: TelegramUser, query, t
         done = texts.WALLET_TRANSFER_SUCCESS_GROUP.format(
             amount=fa_num(amount), sender=render.short_mention(user), receiver=render.short_mention(target)
         )
+    if tx_out.duplicate:
+        # همین انتقال قبلاً انجام شده (مثلاً ربات وسط کار ری‌استارت شد)؛ فقط پیام درست می‌شود، سکه‌ای جابه‌جا نمی‌شود
+        await answer(query, texts.WALLET_TRANSFER_ALREADY)
+        await _edit(query, done)
+        return
+    logger.info("coin transfer", extra={"from": user.tg_id, "to": target.tg_id, "amount": amount})
+    await answer(query, texts.WALLET_TRANSFER_DONE_ALERT)
     await _edit(query, done)
     if target.started_bot:
         await tg_call(
@@ -694,7 +699,12 @@ async def admin_topup_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await tg_call(query.edit_message_reply_markup, _confirm_keyboard(texts.ADMIN_REJECT_SURE_BTN, f"adm:top:crej:{req.pk}{suffix}", back, ui.DANGER))
     elif action == "reset":
         await answer(query)
-        await tg_call(query.edit_message_reply_markup, topup_alert_keyboard(req.pk, req.user.tg_id, suffix))
+        if panel:  # در پنل، همان درخواست با دکمه‌های قبلی/بعدی دوباره نشان داده می‌شود
+            from . import admin
+
+            await admin.show_request_list(update, context, user, query, "topup", focus=req.pk)
+        else:
+            await tg_call(query.edit_message_reply_markup, topup_alert_keyboard(req.pk, req.user.tg_id))
     elif action == "capp":
         review = await db(services.approve_topup)(req.pk, user.tg_id, user.display_name)
         if review.changed:
@@ -758,8 +768,12 @@ async def admin_sell_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         await tg_call(query.edit_message_reply_markup, _confirm_keyboard(texts.ADMIN_REFUND_SURE_BTN, f"adm:sell:crej:{req.pk}{suffix}", back, ui.DANGER))
     elif action == "reset":
         await answer(query)
-        if req.status == SellRequest.Status.PENDING:
-            await tg_call(query.edit_message_reply_markup, sell_alert_keyboard(req.pk, req.user.tg_id, suffix))
+        if panel:
+            from . import admin
+
+            await admin.show_request_list(update, context, user, query, "sell", focus=req.pk)
+        elif req.status == SellRequest.Status.PENDING:
+            await tg_call(query.edit_message_reply_markup, sell_alert_keyboard(req.pk, req.user.tg_id))
     elif action == "cpay":
         review = await db(services.mark_sell_paid)(req.pk, user.tg_id, user.display_name)
         if review.changed:

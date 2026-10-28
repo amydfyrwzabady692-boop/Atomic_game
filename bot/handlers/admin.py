@@ -1,4 +1,4 @@
-"""دستورات سوپرادمین: /grant /ban /unban /broadcast /stats"""
+"""دستورات مدیران ربات: /admin (پنل کیف پول و تنظیمات)، /grant /ban /unban /broadcast /stats /backup"""
 
 import asyncio
 import logging
