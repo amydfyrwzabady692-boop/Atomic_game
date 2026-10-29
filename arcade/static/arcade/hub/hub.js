@@ -354,7 +354,8 @@
       var games = $("duel-games");
       games.textContent = "";
       duel.games.forEach(function (g) {
-        games.appendChild(chip(g.emoji + " " + g.title, duel.game === g.key, function () { duel.game = g.key; drawDuel(); }));
+        var label = g.emoji + " " + g.title + (g.note ? " " + g.note : "");
+        games.appendChild(chip(label, duel.game === g.key, function () { duel.game = g.key; drawDuel(); }));
       });
       var stakes = $("duel-stakes");
       stakes.textContent = "";

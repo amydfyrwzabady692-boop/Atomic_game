@@ -135,6 +135,7 @@ def offer_draw(state: dict, user_id: int) -> bool:
 def view(state: dict, viewer_id: int | None, now: float) -> dict:
     spec = GAMES[state["game"]]
     side = side_of(state, viewer_id) if viewer_id is not None else None
+    left = max(0.0, state["deadline"] - now) if state["deadline"] else 0.0
     return {
         "game": state["game"],
         "cols": spec["cols"],
@@ -147,7 +148,8 @@ def view(state: dict, viewer_id: int | None, now: float) -> dict:
         "legal": legal(state) if not state["over"] and side == state["turn"] else [],
         "last": state["last"],
         "win": state["win"],
-        "seconds_left": max(0, int(state["deadline"] - now)) if state["deadline"] else 0,
+        "seconds_left": int(left),
+        "left_ms": int(left * 1000),
         "move_seconds": state["move_seconds"],
         "draw_offer": None,
         "over": state["over"],

@@ -460,6 +460,7 @@ def test_grid_tictactoe_rules():
 
     state = gridlive.new_state("tictactoe", 1, 2, 1000.0)
     assert gridlive.view(state, 1, 1000.0)["legal"] == list(range(9)) and gridlive.view(state, 2, 1000.0)["legal"] == []
+    assert gridlive.view(state, 1, 1010.5)["left_ms"] == 19_500
     with pytest.raises(live.LiveError, match="not_your_turn"):
         gridlive.apply_move(state, 2, 0, 0, "", 1000.0)
     for user, cell in [(1, 0), (2, 3), (1, 1), (2, 4)]:

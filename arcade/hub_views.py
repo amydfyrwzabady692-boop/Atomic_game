@@ -46,7 +46,15 @@ def _ok(**data) -> JsonResponse:
 
 def _game(key: str) -> dict:
     info = get_info(key)
-    return {"key": key, "title": info.title_fa if info else key, "emoji": info.emoji if info else "🎮"}
+    data = {"key": key, "title": info.title_fa if info else key, "emoji": info.emoji if info else "🎮"}
+    if key == "chess":
+        # کنترل زمانی شطرنج حریف تصادفی (مثل ۵+۳)؛ نشانه‌ی چپ‌به‌راست جلوی برعکس شدن «+» را می‌گیرد
+        from core.texts import fa_num
+        from games.chess import live
+
+        base, increment = live.TIME_CONTROLS[live.DEFAULT_CONTROL]
+        data["note"] = f"\u200e{fa_num(base // 60)}+{fa_num(increment)}"
+    return data
 
 
 # ------------------------------------------------------------------ پروفایل و رتبه‌بندی

@@ -1,4 +1,5 @@
 /* صفحه‌ی دوز و دوز چهارتایی در مینی‌اپ (پایه‌ی مشترک در chess.css است). */
+#grid-head { display: flex; align-items: center; justify-content: space-between; width: var(--size); }
 #title { margin: 2px 0 0; font-size: 20px; font-weight: 900; }
 .disc {
   flex: 0 0 30px;
@@ -46,7 +47,7 @@
   font-weight: 900;
   font-size: calc(var(--size) / 7);
   line-height: 1;
-  animation: drop .28s cubic-bezier(.3, 1.4, .5, 1);
+  animation: drop calc(.18s + var(--fall, 1) * .06s) cubic-bezier(.45, 0, .7, 1.25);
 }
 .cell i.R { background: radial-gradient(circle at 35% 30%, #ff9aa9, #e6375a 70%); box-shadow: inset 0 -6px 10px rgba(0, 0, 0, .3); }
 .cell i.Y { background: radial-gradient(circle at 35% 30%, #fff3a8, #f5b301 70%); box-shadow: inset 0 -6px 10px rgba(0, 0, 0, .25); }
@@ -62,8 +63,20 @@
   border-radius: 50%;
   background: rgba(255, 255, 255, .22);
 }
-@keyframes drop { from { transform: translateY(-140%); opacity: .4; } to { transform: none; opacity: 1; } }
-.xo .cell i { animation-name: pop; }
+/* مهره از بالای همان ستون می‌افتد: --fall تعداد ردیف‌های بالای خانه است */
+@keyframes drop { from { transform: translateY(calc(var(--fall, 1.3) * -118%)); } to { transform: none; } }
+.cell.preview::before { /* مهره‌ی کم‌رنگ: این‌جا می‌افتد */
+  content: "";
+  position: absolute;
+  inset: 7%;
+  border-radius: 50%;
+  opacity: .35;
+  background: var(--preview, #fff);
+}
+.cell.preview[data-preview="R"] { --preview: radial-gradient(circle at 35% 30%, #ff9aa9, #e6375a 70%); }
+.cell.preview[data-preview="Y"] { --preview: radial-gradient(circle at 35% 30%, #fff3a8, #f5b301 70%); }
+.xo .cell.preview::before { display: none; }
+.xo .cell i { animation: pop .28s cubic-bezier(.3, 1.4, .5, 1); }
 @keyframes glow { from { filter: brightness(1); transform: scale(1); } to { filter: brightness(1.35); transform: scale(1.08); } }
 #actions .btn { flex: 0 1 220px; margin: 0 auto; }
 @media (prefers-reduced-motion: reduce) { .cell i, .cell.win i { animation: none; } }

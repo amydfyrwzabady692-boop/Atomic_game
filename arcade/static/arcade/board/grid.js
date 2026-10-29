@@ -1,5 +1,6 @@
 /* صفحه‌ی دوز و دوز چهارتایی مینی‌اپ. وضعیت از سرور می‌آید و حرکت‌ها همان‌جا اعتبارسنجی می‌شوند؛
-   این فایل فقط صفحه را می‌کشد و انتخاب بازیکن (خانه یا ستون) را می‌فرستد. */
+   این فایل صفحه را می‌کشد، حرکت بازیکن را همان لحظه نشان می‌دهد (مهره از بالای ستون می‌افتد) و
+   انتخاب او (خانه یا ستون) را می‌فرستد. */
 (function () {
   "use strict";
 
@@ -9,7 +10,6 @@
   var initData = tg && tg.initData ? tg.initData : "";
   if (!initData && BOOT.devAuth && query.get("dev_user")) initData = "dev:" + query.get("dev_user");
 
-  var POLL_MS = 1200;
   var TITLES = { tictactoe: "❌⭕️ دوز", connect4: "🔴🟡 دوز چهارتایی" };
   var MARKS = { X: "✕", O: "◯", R: "", Y: "" };
   var ERRORS = {
@@ -28,13 +28,17 @@
   var state = null;
   var busy = false;
   var receivedAt = 0;
+  var leftBase = 0;
   var resultShown = false;
   var cells = [];
+  var pollTimer = null;
 
   function $(id) { return document.getElementById(id); }
   function fa(value) {
     return String(value).replace(/\d/g, function (d) { return "۰۱۲۳۴۵۶۷۸۹"[d]; });
   }
+  function now() { return window.performance && performance.now ? performance.now() : Date.now(); }
+  function sound(kind) { if (window.SFX) window.SFX.play(kind); }
   function haptic(kind) {
     try {
       if (!tg || !tg.HapticFeedback) return;
@@ -106,6 +110,8 @@
         disc = document.createElement("i");
         disc.className = mark;
         disc.textContent = MARKS[mark];
+        // در دوز چهارتایی مهره از بالای ستون تا همین ردیف می‌افتد
+        if (state.gravity) disc.style.setProperty("--fall", state.rows - Math.floor(i / state.cols));
         cell.appendChild(disc);
       } else if (!mark && disc) {
         cell.removeChild(disc);
@@ -131,7 +137,7 @@
   }
   function secondsLeft() {
     if (!state || state.over) return 0;
-    return Math.max(0, state.seconds_left - Math.floor((Date.now() - receivedAt) / 1000));
+    return Math.max(0, Math.ceil((leftBase - (now() - receivedAt)) / 1000));
   }
   function clocks() {
     if (!state) return;
@@ -155,8 +161,24 @@
     if (state.cancelled) { el.textContent = "این مسابقه لغو شده است."; el.className = "alert"; return; }
     if (state.over) { el.textContent = resultTitle(); return; }
     var mine = state.you === state.turn;
-    if (mine) el.className = "mine";
-    el.textContent = state.you ? (mine ? "نوبت توست" : "نوبت حریف است") : "نوبت " + (state.players[state.turn] || "");
+    if (mine) el.className = secondsLeft() <= 5 ? "warn" : "mine";
+    var text = state.you ? (mine ? "نوبت توست" : "نوبت حریف است") : "نوبت " + (state.players[state.turn] || "");
+    text += " (" + fa(secondsLeft()) + " ثانیه)";
+    if (el.textContent !== text) el.textContent = text;
+  }
+  function confetti() {
+    var box = $("confetti");
+    var colors = ["#ffc857", "#6ee7ff", "#a78bfa", "#34d399", "#ff5c7a", "#ffffff"];
+    box.textContent = "";
+    for (var i = 0; i < 40; i++) {
+      var bit = document.createElement("i");
+      bit.style.left = Math.random() * 100 + "%";
+      bit.style.background = colors[i % colors.length];
+      bit.style.animationDuration = (1.8 + Math.random() * 1.6).toFixed(2) + "s";
+      bit.style.animationDelay = (Math.random() * 0.5).toFixed(2) + "s";
+      box.appendChild(bit);
+    }
+    setTimeout(function () { box.textContent = ""; }, 4200);
   }
   function showResult() {
     if (resultShown) return;
@@ -166,7 +188,12 @@
     $("result-icon").textContent = !over.side ? "🤝" : (!state.you || won ? "🏆" : "😔");
     $("result-title").textContent = resultTitle();
     $("result-reason").textContent = REASONS[over.reason] || "";
-    setTimeout(function () { $("result").classList.remove("hidden"); }, 900); // خط برنده اول دیده شود
+    var lost = !!state.you && !!over.side && !won;
+    setTimeout(function () {
+      $("result").classList.remove("hidden"); // خط برنده اول دیده شود
+      if (won) confetti();
+    }, 900);
+    sound(won ? "win" : lost ? "lose" : "draw");
     haptic(won || !over.side ? "success" : "error");
   }
 
@@ -176,26 +203,47 @@
       haptic("error");
       return false;
     }
+    receivedAt = now();
     if (response.changed === false) {
-      state.seconds_left = response.seconds_left;
-      receivedAt = Date.now();
+      leftBase = response.left_ms !== undefined ? response.left_ms : response.seconds_left * 1000;
       clocks();
+      status();
       return true;
     }
     var first = !state;
     var previous = state;
     state = response.state;
-    receivedAt = Date.now();
+    leftBase = state.left_ms !== undefined ? state.left_ms : state.seconds_left * 1000;
     if (first) build();
+    var placed = previous && previous.cells.join() !== state.cells.join() && !optimistic;
+    optimistic = false;
     paint();
+    if (placed) sound(state.gravity ? "drop" : "move");
     bars();
     clocks();
     status();
     $("actions").classList.toggle("hidden", !state.you);
     $("resign-btn").disabled = !state.you || !!state.over || !!state.cancelled;
-    if (previous && previous.version !== state.version && state.you === state.turn) haptic("medium");
+    if (previous && previous.version !== state.version && state.you === state.turn && !state.over) {
+      haptic("medium");
+      sound("turn");
+    }
     if (state.over) showResult();
     return true;
+  }
+  function pollDelay() {
+    if (!state || state.over || state.cancelled) return 5000;
+    return state.you && state.turn !== state.you ? 800 : 1300;
+  }
+  function loop() {
+    clearTimeout(pollTimer);
+    pollTimer = setTimeout(function () {
+      if (document.hidden || busy || !state) { loop(); return; }
+      api("board/state", { version: state.version }).then(function (response) {
+        if (!busy && response.ok) apply(response);
+        loop();
+      });
+    }, pollDelay());
   }
   function refresh() {
     if (busy || document.hidden || !state) return;
@@ -203,16 +251,48 @@
       if (!busy && response.ok) apply(response);
     });
   }
+  var optimistic = false;
   function onCell(cell) {
     if (!state || busy || state.over || state.cancelled || !state.you || state.you !== state.turn) return;
     var move = state.gravity ? Number(cell.dataset.c) : Number(cell.dataset.i);
     if (state.legal.indexOf(move) === -1) return;
     busy = true;
     haptic("light");
+    clearPreview();
+    // مهره همان لحظه روی صفحه می‌نشیند؛ نتیجه‌ی قطعی با جواب سرور می‌آید
+    var before = state;
+    var index = state.gravity ? landing(move) : move;
+    var board = state.cells.slice();
+    board[index] = state.you;
+    state = Object.assign({}, state, { cells: board, last: index, legal: [], turn: state.you === state.sides[0] ? state.sides[1] : state.sides[0] });
+    paint();
+    bars();
+    sound(state.gravity ? "drop" : "move");
+    optimistic = true;
     api("board/move", { src: move }).then(function (response) {
       busy = false;
+      if (!response.ok) {
+        optimistic = false;
+        state = before;
+        paint();
+        bars();
+      }
       apply(response);
     });
+  }
+  // دوز چهارتایی: خانه‌ای که مهره در آن می‌افتد کم‌رنگ نشان داده می‌شود
+  function clearPreview() {
+    Array.prototype.forEach.call(document.querySelectorAll(".cell.preview"), function (cell) { cell.classList.remove("preview"); });
+  }
+  function preview(cell) {
+    clearPreview();
+    if (!cell || !state || !state.gravity || busy || state.over || !state.you || state.you !== state.turn) return;
+    var column = Number(cell.dataset.c);
+    if (state.legal.indexOf(column) === -1) return;
+    var target = cells[landing(column)];
+    if (!target) return;
+    target.dataset.preview = state.you;
+    target.classList.add("preview");
   }
   function fail(text) {
     $("loading-text").textContent = text;
@@ -223,6 +303,16 @@
     var cell = event.target.closest(".cell");
     if (cell) onCell(cell);
   });
+  $("grid").addEventListener("pointermove", function (event) { preview(event.target.closest(".cell")); });
+  $("grid").addEventListener("pointerleave", clearPreview);
+  function soundButton() { $("sound-btn").textContent = window.SFX && window.SFX.isMuted() ? "🔇" : "🔊"; }
+  $("sound-btn").addEventListener("click", function () {
+    if (!window.SFX) return;
+    window.SFX.setMuted(!window.SFX.isMuted());
+    soundButton();
+    if (!window.SFX.isMuted()) setTimeout(function () { sound("move"); }, 60);
+  });
+  soundButton();
   $("resign-btn").addEventListener("click", function () {
     var run = function () {
       busy = true;
@@ -254,8 +344,8 @@
     apply(response);
     $("loading").classList.add("hidden");
     $("game").classList.remove("hidden");
-    setInterval(refresh, POLL_MS);
-    setInterval(clocks, 500);
+    loop();
+    setInterval(function () { if (state) { clocks(); if (!state.over) status(); } }, 250);
     document.addEventListener("visibilitychange", function () { if (!document.hidden) refresh(); });
   });
 })();

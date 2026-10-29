@@ -71,6 +71,8 @@ def test_duel_through_the_mini_app(client, make_user):
     a, b = make_user(1000), make_user(1000)
     status, data = post(client, "duel/state", a)
     assert data["state"]["mode"] == "idle" and {g["key"] for g in data["games"]} == {"chess", "tictactoe", "connect4", "poker"}
+    # شطرنج حریف تصادفی کنترل زمانی ۵+۳ دارد و برچسبش در متن راست‌به‌چپ برعکس نمی‌شود
+    assert {g["key"]: g.get("note") for g in data["games"]}["chess"] == "\u200e۵+۳"
     status, data = post(client, "duel/search", a, game="poker", stake=None)
     assert data["state"]["mode"] == "searching" and data["state"]["stake"] is None
     status, data = post(client, "duel/search", b, game="poker", stake=250)

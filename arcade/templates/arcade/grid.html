@@ -12,7 +12,10 @@
 </head>
 <body>
 <main id="game" class="hidden">
-  <h1 id="title"></h1>
+  <header id="grid-head">
+    <h1 id="title"></h1>
+    <button class="icon-btn" id="sound-btn" type="button" aria-label="صدا" title="صدا">🔊</button>
+  </header>
   <section class="player" id="bar-top">
     <span class="disc" id="top-disc"></span>
     <div class="who"><b id="top-name"></b></div>
@@ -46,9 +49,11 @@
   </div>
 </section>
 
+<div id="confetti" aria-hidden="true"></div>
 <div id="toast" class="hidden" role="alert"></div>
 
 <script src="{% static 'arcade/common/telegram-web-app.js' %}?v={{ version }}"></script>
+<script src="{% static 'arcade/common/sfx.js' %}?v={{ version }}"></script>
 <script>
 window.BOARD_BOOT = {
   token: "{{ token|escapejs }}",
