@@ -48,14 +48,21 @@ def allow(key: str, limit: int, window: int) -> bool:
     return count <= limit
 
 
+# کاربرهای اینترنت همراه پشت NAT اپراتور اغلب یک IP مشترک دارند؛ سقف هر IP چند برابر سقف هر کاربر است
+# تا بازیکن‌های هم‌اپراتور جلوی هم را نگیرند. سقف واقعی هر نفر را ``authenticated`` با شناسه‌ی کاربر می‌گیرد.
+IP_SHARE = 10
+
+
 def rate_limited(name: str, limit: int, window: int):
-    """محدودیت نرخ بر اساس IP (و در viewهای احرازشده، بر اساس کاربر هم)."""
+    """محدودیت نرخ: ``limit`` درخواست در ``window`` ثانیه برای هر کاربر (در viewهای احرازشده) و
+    ``limit × IP_SHARE`` برای هر IP."""
 
     def decorator(view):
         @wraps(view)
         def wrapper(request, *args, **kwargs):
-            if not allow(f"rl:web:{name}:{client_ip(request)}", limit, window):
+            if not allow(f"rl:web:{name}:{client_ip(request)}", limit * IP_SHARE, window):
                 return error("rate_limited", 429)
+            request.rate_limit = (name, limit, window)
             return view(request, *args, **kwargs)
 
         return wrapper
@@ -83,6 +90,9 @@ def authenticated(view):
         if user.is_banned:
             return error("banned", 403)
         if not allow(f"rl:web:user:{user.pk}", 40, 10):
+            return error("rate_limited", 429)
+        rule = getattr(request, "rate_limit", None)
+        if rule is not None and not allow(f"rl:web:{rule[0]}:u{user.pk}", rule[1], rule[2]):
             return error("rate_limited", 429)
         try:
             return view(request, user, payload, *args, **kwargs)

@@ -622,7 +622,7 @@ async def test_rules_command_lists_games_and_shows_each_games_rules(app):
 
     chess = await click(app, 211, "rules:g:chess", 1, group.rules_callback)
     text = chess.edits[-1]["text"]
-    assert "قوانین شطرنج" in text and "۹۰ ثانیه" in text and "۲ بازیکن" in text
+    assert "قوانین شطرنج" in text and "۳+۲" in text and "۲ بازیکن" in text
     assert buttons_of(chess.edits[-1]["reply_markup"])[0].callback_data == "rules:t"
     pins = await click(app, 211, "rules:g:arcade_pins", 1, group.rules_callback)
     assert "قوانین سیخ‌زن" in pins.edits[-1]["text"] and "بهترین امتیازت" in pins.edits[-1]["text"]

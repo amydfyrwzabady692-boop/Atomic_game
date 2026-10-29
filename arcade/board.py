@@ -26,10 +26,12 @@ def rules_for(state: dict):
     return gridlive
 
 
-def new_state(game: str, user_ids: list[int], now: float, seed: str = "") -> dict:
-    """وضعیت تازه؛ ``user_ids`` به ترتیب نشستن (شطرنج: سفید، سیاه). پوکر ۲ تا ۸ نفر می‌گیرد."""
+def new_state(game: str, user_ids: list[int], now: float, seed: str = "", options: dict | None = None) -> dict:
+    """وضعیت تازه؛ ``user_ids`` به ترتیب نشستن (شطرنج: سفید، سیاه). پوکر ۲ تا ۸ نفر می‌گیرد.
+    کنترل زمانی شطرنج همان گزینه‌ای است که سازنده‌ی مسابقه انتخاب کرده (``options["variant"]``)."""
     if game == "chess":
-        return live.new_state(user_ids[0], user_ids[1], now)
+        control = (options or {}).get("variant") or live.DEFAULT_CONTROL
+        return live.new_state(user_ids[0], user_ids[1], now, control=control)
     if game == "poker":
         return poker.new_state(list(user_ids), now, seed=seed)
     return gridlive.new_state(game, user_ids[0], user_ids[1], now)

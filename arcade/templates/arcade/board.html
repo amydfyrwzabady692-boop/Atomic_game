@@ -9,12 +9,24 @@
 <link rel="stylesheet" href="{% static 'arcade/board/chess.css' %}?v={{ version }}">
 <link rel="preload" href="/arcade/font/regular.ttf" as="font" type="font/ttf" crossorigin>
 </head>
-<body>
+<body class="chess">
 <main id="game" class="hidden">
+  <header id="topbar">
+    <button class="icon-btn" id="flip-btn" type="button" aria-label="چرخاندن صفحه" title="چرخاندن صفحه">⇅</button>
+    <div class="title">
+      <b id="title">شطرنج</b>
+      <span class="chip hidden" id="control-chip"></span>
+    </div>
+    <div class="tools">
+      <button class="icon-btn" id="theme-btn" type="button" aria-label="رنگ صفحه" title="رنگ صفحه">🎨</button>
+      <button class="icon-btn" id="sound-btn" type="button" aria-label="صدا" title="صدا">🔊</button>
+    </div>
+  </header>
+
   <section class="player" id="bar-top">
     <span class="avatar" id="top-avatar"></span>
     <div class="who"><b id="top-name"></b><div class="taken" id="top-taken"></div></div>
-    <div class="clock" id="top-clock"></div>
+    <div class="clock" id="top-clock"><span class="clock-text"></span></div>
   </section>
 
   <div id="board-wrap">
@@ -25,8 +37,10 @@
   <section class="player" id="bar-bottom">
     <span class="avatar" id="bottom-avatar"></span>
     <div class="who"><b id="bottom-name"></b><div class="taken" id="bottom-taken"></div></div>
-    <div class="clock" id="bottom-clock"></div>
+    <div class="clock" id="bottom-clock"><span class="clock-text"></span></div>
   </section>
+
+  <div id="moves" aria-label="حرکت‌ها"><span class="empty">حرکت‌ها این‌جا نوشته می‌شوند</span></div>
 
   <p id="status" aria-live="polite"></p>
 
@@ -35,6 +49,8 @@
     <button id="resign-btn" class="btn danger" type="button">🏳 تسلیم</button>
   </div>
 </main>
+
+<img id="ghost" class="hidden" alt="" draggable="false">
 
 <section id="loading" class="overlay">
   <div class="spinner"></div>
@@ -58,10 +74,12 @@
     <div class="result-icon" id="result-icon">🏆</div>
     <h1 id="result-title"></h1>
     <p class="muted" id="result-reason"></p>
+    <p class="result-clocks hidden" id="result-clocks"></p>
     <button id="result-close" class="btn go" type="button">برگشت به گروه</button>
     <button id="result-view" class="btn violet" type="button">دیدن صفحه</button>
   </div>
 </section>
+<div id="confetti" aria-hidden="true"></div>
 
 <div id="toast" class="hidden" role="alert"></div>
 

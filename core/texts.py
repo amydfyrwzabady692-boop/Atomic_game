@@ -561,10 +561,26 @@ C4_HINT = "\n<i>شماره‌ی ستون را بزن تا مهره‌ات در �
 C4_FULL = "این ستون پر است!"
 
 # ------------------------------------------------------------------ شطرنج
-CHESS_CAPTION = "♟ <b>شطرنج</b>\n⚪️ {white}   ·   ⚫️ {black}\n" + DIVIDER + "\n{status}{last}"
-CHESS_TURN = "👉 نوبت <b>{name}</b> ({color})  ⏱ {seconds} ثانیه"
+CHESS_CAPTION = (
+    "♟ <b>شطرنج</b>{control}\n⚪️ {white}{white_clock}\n⚫️ {black}{black_clock}\n" + DIVIDER + "\n{status}{last}"
+)
+CHESS_CAPTION_CONTROL = "  ·  {label}"
+CHESS_CAPTION_CLOCK = "   ⏱ <b>{time}</b>"
+CHESS_TURN = "👉 نوبت <b>{name}</b> ({color})"
+CHESS_FIRST_MOVE = "\n⏳ اولین حرکت تا {seconds} ثانیه؛ از ساعت کم نمی‌شود."
 CHESS_CHECK = "  ⚠️ <b>کیش!</b>"
-CHESS_LAST = "\n↩️ آخرین حرکت: <code>{move}</code>"
+CHESS_LAST = "\n↩️ آخرین حرکت: <b>{move}</b>"
+# کنترل‌های زمانی رایج شطرنج بین‌المللی: «دقیقه‌ی هر نفر + ثانیه‌ی اضافه بعد از هر حرکت». نشانه‌ی
+# چپ‌به‌راست (\u200e) لازم است: بدون آن «۳+۲» بعد از حرف فارسی برعکس («۲+۳») نمایش داده می‌شود.
+CHESS_CONTROL_TITLE = "کنترل زمان"
+CHESS_CONTROLS = {
+    "bullet": "🚀 بولت \u200e۲+۱",
+    "blitz3": "⚡️ برق‌آسا \u200e۳+۲",
+    "blitz5": "⚡️ برق‌آسا \u200e۵+۳",
+    "rapid10": "⏱ سریع \u200e۱۰+۵",
+    "rapid15": "⏱ سریع \u200e۱۵+۱۰",
+    "classic": "🏛 کلاسیک \u200e۳۰+۲۰",
+}
 CHESS_HINT = "\n<i>اول مهره، بعد خانه‌ی مقصد را از کیبورد پایین بزن.</i>"
 CHESS_DRAW_OFFER = "\n🤝 {name} پیشنهاد مساوی داده است؛ حریف می‌تواند قبول کند."
 CHESS_LIVE_HINT = "\n\n<i>برای بازی، دکمه‌ی زیر را بزن تا صفحه‌ی شطرنج باز شود. بقیه هم می‌توانند تماشا کنند.</i>"
@@ -592,6 +608,7 @@ CHESS_DRAW_SENT = "پیشنهاد مساوی ثبت شد ✅"
 CHESS_END_MATE = "🏆 <b>کیش و مات!</b> {name} برد."
 CHESS_END_RESIGN = "🏳 {loser} تسلیم شد؛ {winner} برد."
 CHESS_END_TIMEOUT = "⏰ وقت {loser} تمام شد؛ {winner} برد."
+CHESS_END_TIMEOUT_DRAW = "⏰ وقت {loser} تمام شد ولی حریف فقط شاه دارد و نمی‌تواند مات کند؛ <b>مساوی</b>."
 CHESS_END_DRAW = "🤝 <b>مساوی</b> — {reason}"
 CHESS_DRAW_REASONS = {
     "stalemate": "پات (حرکت مجاز نمانده)",
@@ -600,6 +617,7 @@ CHESS_DRAW_REASONS = {
     "repetition": "تکرار سه‌باره‌ی وضعیت",
     "agreed": "با توافق دو بازیکن",
     "limit": "سقف تعداد حرکت‌ها",
+    "timeout_draw": "پایان وقت در برابر شاه تنها",
 }
 LOBBY_PLAYER = "{n}. {name}"
 MORE_PLAYERS = "<i>… و {n} نفر دیگر</i>"

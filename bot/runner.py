@@ -27,7 +27,8 @@ from games import config as game_config
 from games import gridlive
 from games.catalog import GameInfo, get_info
 from games.chess import live as chess_live
-from games.chess.engine import Move, square_name
+from games.chess import text as chess_text
+from games.chess.engine import Move
 from games.chess.render import render_board
 from games.content.provider import DbContentProvider, NoContent
 from games.engine import services
@@ -690,6 +691,8 @@ class MatchManager:
         by_id = {p.user_id: p for p in active.players_by_tg.values()}
         white, black = by_id[state["w"]], by_id[state["b"]]
         position = chess_live.position_of(state)
+        to_move = white if position.turn == "w" else black
+        clocks = chess_live.clocks(state, time.time())  # وضعیت قدیمی (بدون ساعت) را هم یکدست می‌کند
         over = state["over"]
         if over:
             winner = by_id.get(over["winner"])
@@ -700,32 +703,34 @@ class MatchManager:
                 status = texts.CHESS_END_RESIGN.format(loser=escape(loser.name), winner=winner.mention)
             elif over["reason"] == "timeout":
                 status = texts.CHESS_END_TIMEOUT.format(loser=escape(loser.name), winner=winner.mention)
+            elif over["reason"] == "timeout_draw":
+                status = texts.CHESS_END_TIMEOUT_DRAW.format(loser=escape(to_move.name))
             else:
                 status = texts.CHESS_END_DRAW.format(reason=texts.CHESS_DRAW_REASONS.get(over["reason"], ""))
         else:
-            current = white if position.turn == "w" else black
             status = texts.CHESS_TURN.format(
-                name=escape(current.name),
-                color=texts.CHESS_WHITE if position.turn == "w" else texts.CHESS_BLACK,
-                seconds=fa_num(state["move_seconds"]),
+                name=escape(to_move.name), color=texts.CHESS_WHITE if position.turn == "w" else texts.CHESS_BLACK
             )
             if position.in_check():
                 status += texts.CHESS_CHECK
+            if clocks is not None and chess_live.in_first_move(state):
+                status += texts.CHESS_FIRST_MOVE.format(seconds=fa_num(chess_live.FIRST_MOVE_SECONDS))
         last, last_move = "", None
         if state["last"]:
             last_move = Move(state["last"][0], state["last"][1])
-            last = texts.CHESS_LAST.format(move=f"{square_name(last_move.src)} → {square_name(last_move.dst)}")
+            san = state["san"]
+            last = texts.CHESS_LAST.format(move=chess_text.notation(san[-1], len(san) - 1))
         if not over:
             last += texts.CHESS_LIVE_HINT
-        caption = texts.CHESS_CAPTION.format(
-            white=escape(white.name), black=escape(black.name), status=status, last=last
-        )
+        caption = chess_text.caption(escape(white.name), escape(black.name), state["control"], clocks, status, last)
         return render_board(position, last_move), caption
 
     async def _start_live(self, active: ActiveMatch, match: Match, players: list[Player]) -> None:
         order = list(players)
         random.Random(match.seed).shuffle(order)
-        state = live_board.new_state(active.info.key, [p.user_id for p in order], time.time(), seed=str(match.seed))
+        state = live_board.new_state(
+            active.info.key, [p.user_id for p in order], time.time(), seed=str(match.seed), options=match.options
+        )
         await db(live_board.start)(match.pk, state)
         active.live_version = state["version"]
         image, caption = await asyncio.to_thread(self._live_view, active, state)

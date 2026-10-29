@@ -2,7 +2,9 @@ from html import escape
 
 from core import texts
 from core.textutils import fa_num
-from games.chess.engine import Move, Position, square_name
+from games.chess import live
+from games.chess import text as chess_text
+from games.chess.engine import Move, Position
 from games.chess.render import render_board
 from games.engine.base import DANGER, PRIMARY, SUCCESS, BaseGame, Button, IncomingCallback
 from games.engine.registry import register_game
@@ -13,22 +15,28 @@ BLANK = "⠀"  # کاراکتر نامرئی برای دکمه‌های خالی
 @register_game
 class ChessGame(BaseGame):
     """شطرنج دونفره در گروه. صفحه به‌صورت تصویر نمایش داده می‌شود و یک کیبورد ۸×۸ هم‌تراز
-    با تصویر برای انتخاب مهره و مقصد زیر آن است. ارتقای پیاده خودکار به وزیر است."""
+    با تصویر برای انتخاب مهره و مقصد زیر آن است. ارتقای پیاده خودکار به وزیر است.
+
+    ساعت مثل شطرنج بین‌المللی است (همان قواعد ``games.chess.live``): هر بازیکن ساعت خودش را دارد و بعد
+    از هر حرکت افزایش کنترل زمانی به آن اضافه می‌شود؛ اولین حرکت هر طرف از ساعت کم نمی‌شود."""
 
     key = "chess"
     title_fa = "شطرنج"
     emoji = "♟"
-    description_fa = "شطرنج دونفره با صفحه‌ی گرافیکی واقعی و تایمر هر حرکت؛ مات کن تا ببری."
+    description_fa = "شطرنج دونفره با صفحه‌ی گرافیکی واقعی و ساعت شطرنج بین‌المللی (مثل \u200e۳+۲ یا \u200e۱۵+۱۰)؛ مات کن تا ببری."
     min_players = 2
     max_players = 2
     players_ceiling = 2
-    move_seconds = 90
+    variant_title_fa = texts.CHESS_CONTROL_TITLE
+    variants = dict(texts.CHESS_CONTROLS)
+    first_move_seconds = live.FIRST_MOVE_SECONDS
     rules_fa = [
-        "روی مهره و بعد روی خانه‌ی مقصد بزن؛ خانه‌های مجاز مشخص می‌شوند.",
-        "برای هر حرکت {move_seconds} ثانیه وقت داری؛ تمام شدن وقت یعنی باخت.",
-        "مات، تسلیم، پایان وقت یا مساوی بازی را تمام می‌کند.",
+        "مهره و بعد خانه‌ی مقصد را بزن؛ خانه‌های مجاز مشخص می‌شوند.",
+        "ساعت شطرنج بین‌المللی: \u200e۳+۲ یعنی ۳ دقیقه و ۲ ثانیه اضافه بعد از هر حرکت.",
+        "مات، تسلیم، تمام شدن ساعت یا مساوی، بازی را تمام می‌کند.",
     ]
-    max_plies = 300
+    style_fa = "نوبتی با ساعت شطرنج: از بولت \u200e۲+۱ تا کلاسیک \u200e۳۰+۲۰، اولین حرکت تا {first_move_seconds} ثانیه."
+    max_plies = live.MAX_PLIES
 
     async def start(self) -> None:
         order = list(self.players)
@@ -37,12 +45,18 @@ class ChessGame(BaseGame):
         self.position = Position.initial()
         self.selected: int | None = None
         self.last_move: Move | None = None
+        self.last_san = ""
         self.history: dict[tuple, int] = {self.position.key(): 1}
         self.draw_offer: int | None = None
         self.plies = 0
         self.result_line = ""
+        variant = self.ctx.options.get("variant")
+        self.control = variant if variant in live.TIME_CONTROLS else live.DEFAULT_CONTROL
+        base, self.increment = live.TIME_CONTROLS[self.control]
+        self.clock = {"w": float(base), "b": float(base)}
+        self.turn_at = self.ctx.now()
         self.message_id = await self.ctx.send_photo(self._image(), self._caption(), self._buttons())
-        self.ctx.set_timer("move", self.move_seconds, self._timeout)
+        self._arm_clock()
 
     async def next_round(self) -> None:
         return None
@@ -63,26 +77,43 @@ class ChessGame(BaseGame):
     def _image(self) -> bytes:
         return render_board(self.position, self.last_move, self.selected, self._targets())
 
+    @property
+    def first_move(self) -> bool:
+        """هنوز اولین حرکت یکی از دو طرف مانده است (ساعت شروع نشده)."""
+        return self.plies < 2
+
+    def clocks(self) -> dict:
+        """ثانیه‌ی باقی‌مانده‌ی هر طرف همین لحظه."""
+        result = dict(self.clock)
+        if not self.finished and not self.first_move:
+            turn = self.position.turn
+            result[turn] = max(0.0, result[turn] - (self.ctx.now() - self.turn_at))
+        return result
+
+    def _arm_clock(self) -> None:
+        seconds = self.first_move_seconds if self.first_move else self.clock[self.position.turn]
+        self.ctx.set_timer("move", seconds, self._timeout)
+
     def _caption(self) -> str:
         if self.finished:
             status = self.result_line
         else:
             color = texts.CHESS_WHITE if self.position.turn == "w" else texts.CHESS_BLACK
-            status = texts.CHESS_TURN.format(
-                name=escape(self.current.name), color=color, seconds=fa_num(self.move_seconds)
-            )
+            status = texts.CHESS_TURN.format(name=escape(self.current.name), color=color)
             if self.position.in_check():
                 status += texts.CHESS_CHECK
+            if self.first_move:
+                status += texts.CHESS_FIRST_MOVE.format(seconds=fa_num(self.first_move_seconds))
         last = ""
-        if self.last_move is not None:
-            last = texts.CHESS_LAST.format(move=f"{square_name(self.last_move.src)} → {square_name(self.last_move.dst)}")
+        if self.last_san:
+            last = texts.CHESS_LAST.format(move=chess_text.notation(self.last_san, self.plies - 1))
         if not self.finished:
             if self.draw_offer is not None:
                 last += texts.CHESS_DRAW_OFFER.format(name=escape(self.by_id[self.draw_offer].name))
             elif self.plies == 0:
                 last += texts.CHESS_HINT
-        return texts.CHESS_CAPTION.format(
-            white=escape(self.white.name), black=escape(self.black.name), status=status, last=last
+        return chess_text.caption(
+            escape(self.white.name), escape(self.black.name), self.control, self.clocks(), status, last
         )
 
     def _buttons(self):
@@ -167,6 +198,13 @@ class ChessGame(BaseGame):
         # ارتقای خودکار به وزیر
         move = next((m for m in candidates if m.promo.upper() in ("", "Q")), candidates[0])
         mover = self.current
+        now = self.ctx.now()
+        side = self.position.turn
+        if not self.first_move:
+            spent = now - self.turn_at
+            self.clock[side] = round(max(0.0, self.clock[side] - spent) + self.increment, 3)
+        self.turn_at = now
+        self.last_san = self.position.san(move)
         self.position = self.position.push(move)
         self.last_move = move
         self.selected = None
@@ -189,13 +227,21 @@ class ChessGame(BaseGame):
             await self._end(texts.CHESS_END_DRAW.format(reason=texts.CHESS_DRAW_REASONS[reason]))
             return
         await self._refresh()
-        self.ctx.set_timer("move", self.move_seconds, self._timeout)
+        self._arm_clock()
 
     async def _timeout(self) -> None:
         if self.finished:
             return
         loser = self.current
-        winner = self._player("b" if self.position.turn == "w" else "w")
+        flagged = self.position.turn
+        if not self.first_move:
+            self.clock[flagged] = 0.0
+        opponent = "b" if flagged == "w" else "w"
+        if not self.position.has_mating_material(opponent):
+            # قانون ۶.۹ فیده: حریفی که با هیچ حرکتی نمی‌تواند مات کند، با تمام شدن وقت برنده نمی‌شود
+            await self._end(texts.CHESS_END_TIMEOUT_DRAW.format(loser=escape(loser.name)))
+            return
+        winner = self._player(opponent)
         await self._end(texts.CHESS_END_TIMEOUT.format(loser=escape(loser.name), winner=winner.mention), winner)
 
     async def _end(self, line: str, winner=None) -> None:

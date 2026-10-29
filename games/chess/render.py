@@ -6,6 +6,7 @@
 """
 
 import io
+import math
 import random
 from functools import lru_cache
 
@@ -30,6 +31,8 @@ LAST_MOVE = (255, 221, 70, 105)
 SELECTED = (72, 190, 255, 125)
 TARGET_DOT = (18, 14, 10, 105)
 CHECK = (232, 30, 60)
+ARROW = (255, 160, 20)
+ARROW_ALPHA = 165
 
 
 @lru_cache(maxsize=4)
@@ -112,6 +115,30 @@ def _empty_board() -> Image.Image:
     return image.convert("RGBA")
 
 
+def _center(index: int) -> tuple[float, float]:
+    x, y = _square_xy(index)
+    return x + SQUARE / 2, y + SQUARE / 2
+
+
+def _arrow_mask(src: int, dst: int) -> Image.Image:
+    """ماسک فلش آخرین حرکت (مثل سایت‌های شطرنج): با دو برابر وضوح کشیده و کوچک می‌شود تا لبه‌ها نرم باشند.
+    ماسک یک‌رنگ است تا روی هم افتادن بدنه و سر فلش دو برابر پررنگ نشود."""
+    scale = 2
+    mask = Image.new("L", (SIZE * scale, SIZE * scale), 0)
+    draw = ImageDraw.Draw(mask)
+    (x1, y1), (x2, y2) = _center(src), _center(dst)
+    angle = math.atan2(y2 - y1, x2 - x1)
+    cos, sin = math.cos(angle), math.sin(angle)
+    head, half = SQUARE * 0.44, SQUARE * 0.27  # طول و نیم‌پهنای سر فلش
+    start = (x1 + cos * SQUARE * 0.22, y1 + sin * SQUARE * 0.22)
+    base = (x2 - cos * head, y2 - sin * head)
+    draw.line([(start[0] * scale, start[1] * scale), (base[0] * scale + cos, base[1] * scale + sin)], fill=255, width=int(SQUARE * 0.17 * scale))
+    tip = (x2 - cos * SQUARE * 0.06, y2 - sin * SQUARE * 0.06)
+    wings = [(base[0] - sin * half, base[1] + cos * half), (base[0] + sin * half, base[1] - cos * half)]
+    draw.polygon([(px * scale, py * scale) for px, py in [tip, *wings]], fill=255)
+    return mask.resize((SIZE, SIZE), Image.LANCZOS)
+
+
 def render_board(
     position: Position,
     last_move: Move | None = None,
@@ -148,6 +175,11 @@ def render_board(
         image.alpha_composite(shadow, (x + 3, y + 3))
     for index, piece in occupied:
         image.alpha_composite(piece_sprite(piece, SQUARE), _square_xy(index))
+
+    # فلش آخرین حرکت (وقتی مهره‌ای انتخاب نشده)، روی مهره‌ها ولی نیمه‌شفاف
+    if last_move is not None and selected is None:
+        mask = _arrow_mask(last_move.src, last_move.dst).point(lambda value: value * ARROW_ALPHA // 255)
+        image.paste(ARROW + (255,), (0, 0), mask)
 
     # نقطه‌ی خانه‌های مجاز (حلقه برای خانه‌ی دارای مهره‌ی حریف)
     marks = Image.new("RGBA", image.size, (0, 0, 0, 0))

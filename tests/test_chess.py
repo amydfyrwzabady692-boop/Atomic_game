@@ -175,6 +175,45 @@ async def test_resign_draw_and_timeout():
     assert ctx.ended and game.scores[game.white.user_id] == 1
 
 
+async def test_in_chat_chess_uses_the_chosen_time_control():
+    ctx = FakeContext(n_players=2, options={"variant": "blitz3"})
+    game = ChessGame(ctx)
+    await game.start()
+    white, black = ctx.players.index(game.white), ctx.players.index(game.black)
+    caption = ctx.sent[0]["text"]
+    assert "برق‌آسا \u200e۳+۲" in caption and "۳:۰۰" in caption and "اولین حرکت" in caption
+    assert ctx.timers["move"][0] == ctx.clock + game.first_move_seconds
+    await move(ctx, game, white, "e2", "e4")
+    await move(ctx, game, black, "e7", "e5")
+    assert game.clock == {"w": 180.0, "b": 180.0}  # اولین حرکت‌ها مجانی‌اند
+    ctx.clock += 30
+    await move(ctx, game, white, "g1", "f3")
+    assert game.clock["w"] == 152.0 and "۲:۳۲" in ctx.edits[-1]["text"] and "♘f3" in ctx.edits[-1]["text"]
+    assert ctx.timers["move"][0] == ctx.clock + 180.0  # ساعت سیاه
+    await ctx.fire("move")
+    assert ctx.ended and game.scores[game.white.user_id] == 1 and "وقت" in ctx.edits[-1]["text"]
+
+
+def test_time_control_labels_never_flip_in_right_to_left_text():
+    """بدون نشانه‌ی چپ‌به‌راست، «۳+۲» بعد از حرف فارسی برعکس («۲+۳») نمایش داده می‌شود."""
+    import re
+
+    from core import texts
+    from games.chess import live
+
+    assert set(texts.CHESS_CONTROLS) == set(live.TIME_CONTROLS)
+    for line in [*texts.CHESS_CONTROLS.values(), *ChessGame.rules(), ChessGame.description_fa]:
+        for match in re.finditer(r"[۰-۹]+\+[۰-۹]+", line):
+            assert line[match.start() - 1] == "\u200e", line
+
+
+async def test_in_chat_chess_flag_against_lone_king_draws():
+    ctx, game, white, black = await start_game()
+    game.position = Position.from_fen("7k/8/8/8/8/8/8/KQ6 w - - 0 1")
+    await ctx.fire("move")
+    assert ctx.ended and sum(game.scores.values()) == 0 and "مساوی" in ctx.edits[-1]["text"]
+
+
 async def test_outsiders_cannot_play_and_threefold_repetition_draws():
     ctx, game, white, black = await start_game()
     outsider = await tap(ctx, game, None, "e2")

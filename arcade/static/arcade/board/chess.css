@@ -1,4 +1,5 @@
-/* صفحه‌ی شطرنج مینی‌اپ: تخته‌ی چوبی، مهره‌های حجم‌دار و نوار بازیکن‌ها. */
+/* صفحه‌ی شطرنج مینی‌اپ: تخته با چند رنگ‌بندی، مهره‌های حجم‌دار، ساعت شطرنج و فهرست حرکت‌ها.
+   پایه‌ی مشترک صفحه‌های دوز و پوکر هم همین فایل است (نوار بازیکن، دکمه‌ها، لایه‌ها). */
 /* فونت از خود سرور سرو می‌شود (font_view)؛ تا رسیدنش متن با فونت سیستم نمایش داده می‌شود */
 @font-face { font-family: Vazirmatn; src: url("/arcade/font/regular.ttf") format("truetype"); font-weight: 100 600; font-display: swap; }
 @font-face { font-family: Vazirmatn; src: url("/arcade/font/bold.ttf") format("truetype"); font-weight: 700 1000; font-display: swap; }
@@ -16,13 +17,35 @@
   --light: #ecd3a6;
   --dark: #a8703f;
   --frame: #4a2c17;
+  --frame-hi: #6b4526;
+  --frame-lo: #2d1a0d;
+  --coord-light: rgba(70, 40, 15, .7);
+  --coord-dark: rgba(255, 236, 205, .78);
+  --grain: .1;
   --safe-top: calc(env(safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px) + var(--tg-safe-area-inset-top, 0px));
   --safe-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--tg-safe-area-inset-bottom, 0px));
   /* ضلع تخته: تا جایی که عرض و ارتفاع صفحه اجازه بدهد */
-  --size: min(calc(100vw - 20px), calc(100vh - var(--safe-top) - var(--safe-bottom) - 264px), 560px);
+  --chrome: 264px;
+  --size: min(calc(100vw - 20px), calc(100vh - var(--safe-top) - var(--safe-bottom) - var(--chrome)), 560px);
 }
 @supports (height: 100dvh) {
-  :root { --size: min(calc(100vw - 20px), calc(100dvh - var(--safe-top) - var(--safe-bottom) - 264px), 560px); }
+  :root { --size: min(calc(100vw - 20px), calc(100dvh - var(--safe-top) - var(--safe-bottom) - var(--chrome)), 560px); }
+}
+/* صفحه‌ی شطرنج نوار بالا و فهرست حرکت‌ها هم دارد */
+body.chess { --chrome: 330px; }
+
+/* رنگ‌بندی‌های تخته (دکمه‌ی 🎨) */
+body[data-theme="green"] {
+  --light: #eeeed2; --dark: #769656; --frame: #2f3b24; --frame-hi: #4d5f3b; --frame-lo: #1a2213;
+  --coord-light: rgba(80, 110, 60, .9); --coord-dark: rgba(240, 240, 214, .9); --grain: .04;
+}
+body[data-theme="blue"] {
+  --light: #dee3e6; --dark: #8ca2ad; --frame: #2c3e50; --frame-hi: #47627c; --frame-lo: #18222d;
+  --coord-light: rgba(80, 100, 115, .9); --coord-dark: rgba(240, 244, 246, .9); --grain: .04;
+}
+body[data-theme="violet"] {
+  --light: #ece6fb; --dark: #9583c9; --frame: #34265e; --frame-hi: #57449a; --frame-lo: #1c1438;
+  --coord-light: rgba(98, 78, 160, .9); --coord-dark: rgba(246, 242, 255, .9); --grain: .04;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -50,6 +73,38 @@ html, body {
   min-height: 100vh;
   padding: calc(var(--safe-top) + 10px) 10px calc(var(--safe-bottom) + 12px);
 }
+
+/* ---------------------------------------------------------------- نوار بالا */
+#topbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: var(--size); }
+#topbar .title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+#topbar .title b { font-size: 18px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#topbar .tools { display: flex; gap: 6px; }
+.chip {
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: rgba(255, 200, 87, .14);
+  border: 1px solid rgba(255, 200, 87, .45);
+  color: #ffe7b0;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .07);
+  color: var(--ink);
+  font: inherit;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+.icon-btn:active { transform: scale(.92); }
 
 /* ---------------------------------------------------------------- نوار بازیکن */
 .player {
@@ -80,20 +135,27 @@ html, body {
 .taken img { width: 18px; height: 18px; margin-inline-start: -5px; }
 .taken span { font-size: 12px; color: var(--gold); font-weight: 800; margin-inline-start: 6px; }
 .clock {
+  position: relative;
   flex: 0 0 auto;
-  min-width: 62px;
-  padding: 5px 10px;
+  min-width: 74px;
+  padding: 6px 10px;
   border-radius: 12px;
   background: rgba(255, 255, 255, .07);
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   text-align: center;
   direction: ltr;
-  opacity: .45;
+  opacity: .5;
+  overflow: hidden;
+  transition: opacity .2s ease, background .2s ease;
 }
 .player.active .clock { opacity: 1; background: linear-gradient(120deg, var(--accent), #7aa2ff); color: #0b1026; }
 .player.active .clock.low { background: linear-gradient(120deg, #ff9aa9, var(--danger)); color: #3d0514; animation: pulse .9s ease-in-out infinite; }
+.clock.flagged { opacity: 1; background: rgba(255, 92, 122, .25); color: #ffd0da; }
+.clock.paused { opacity: .8; }
+/* نوار باریک زیر ساعت: سهم باقی‌مانده از وقت اولیه */
+.clock .clock-bar { position: absolute; inset-inline: 0; bottom: 0; height: 3px; background: currentColor; opacity: .35; transform-origin: left; }
 @keyframes pulse { 50% { transform: scale(1.06); } }
 
 /* ---------------------------------------------------------------- تخته */
@@ -103,8 +165,8 @@ html, body {
   height: var(--size);
   padding: 7px;
   border-radius: 14px;
-  background: linear-gradient(145deg, #6b4526, var(--frame) 55%, #2d1a0d);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .22);
+  background: linear-gradient(145deg, var(--frame-hi), var(--frame) 55%, var(--frame-lo));
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .22), inset 0 -2px 0 rgba(0, 0, 0, .3);
 }
 #board {
   display: grid;
@@ -115,6 +177,8 @@ html, body {
   border-radius: 7px;
   overflow: hidden;
   direction: ltr;
+  touch-action: none; /* کشیدن مهره صفحه را جابه‌جا نکند */
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .35);
 }
 .sq {
   position: relative;
@@ -125,37 +189,45 @@ html, body {
   cursor: pointer;
 }
 .sq.dark { background: var(--dark); }
-.sq::before { /* رگه‌ی ملایم چوب */
+.sq::before { /* رگه‌ی ملایم چوب یا براقی صفحه */
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(100deg, rgba(255, 255, 255, .1), transparent 40%, rgba(0, 0, 0, .07) 75%, transparent);
+  background: linear-gradient(100deg, rgba(255, 255, 255, var(--grain)), transparent 40%, rgba(0, 0, 0, calc(var(--grain) * .7)) 75%, transparent);
   pointer-events: none;
 }
 .sq.last { box-shadow: inset 0 0 0 100px rgba(255, 214, 80, .42); }
 .sq.selected { box-shadow: inset 0 0 0 100px rgba(80, 190, 255, .5); }
-.sq.check { box-shadow: inset 0 0 0 100px rgba(255, 60, 80, .55); }
+.sq.check { background-image: radial-gradient(circle, rgba(255, 40, 60, .95) 0%, rgba(231, 20, 40, .6) 32%, rgba(169, 0, 0, 0) 72%); }
+.sq.hover { box-shadow: inset 0 0 0 4px rgba(255, 255, 255, .8), inset 0 0 0 100px rgba(255, 255, 255, .12); }
 .sq img {
   position: absolute;
   inset: 3%;
+  z-index: 1;
   width: 94%;
   height: 94%;
   object-fit: contain;
   filter: drop-shadow(0 3px 3px rgba(0, 0, 0, .38));
   pointer-events: none;
-  transition: transform .12s ease;
+  transition: transform .12s ease, opacity .12s ease;
 }
 .sq.selected img { transform: translateY(-6%) scale(1.07); }
+.sq.dragging img { opacity: .28; transform: none; }
 .sq.arrived img { animation: land .22s ease-out; }
+.sq img.sliding { z-index: 3; transition: transform .2s cubic-bezier(.25, .8, .35, 1); }
+.sq img.fading { animation: fade .22s ease-out forwards; }
 @keyframes land { from { transform: scale(1.25); } to { transform: none; } }
+@keyframes fade { to { opacity: 0; transform: scale(.6); } }
 /* خانه‌های مقصد: نقطه برای خانه‌ی خالی، حلقه برای زدن مهره */
 .sq.target::after {
   content: "";
   position: absolute;
   inset: 36%;
+  z-index: 2;
   border-radius: 50%;
   background: rgba(20, 110, 60, .55);
   box-shadow: 0 0 0 2px rgba(255, 255, 255, .25);
+  pointer-events: none;
 }
 .sq.target.capture::after {
   inset: 5%;
@@ -165,26 +237,40 @@ html, body {
 }
 .coord {
   position: absolute;
+  z-index: 2;
   font-size: 9.5px;
   font-weight: 800;
   line-height: 1;
-  color: rgba(70, 40, 15, .7);
+  color: var(--coord-light);
   pointer-events: none;
 }
-.sq.dark .coord { color: rgba(255, 236, 205, .75); }
+.sq.dark .coord { color: var(--coord-dark); }
 .coord.file { right: 3px; bottom: 2px; }
 .coord.rank { left: 3px; top: 2px; }
+
+/* مهره‌ای که با انگشت کشیده می‌شود */
+#ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 30;
+  pointer-events: none;
+  filter: drop-shadow(0 12px 10px rgba(0, 0, 0, .5));
+  will-change: transform;
+}
 
 /* ---------------------------------------------------------------- انتخاب مهره‌ی ارتقا */
 #promo {
   position: absolute;
   inset: 0;
+  z-index: 5;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   border-radius: 14px;
   background: rgba(9, 11, 28, .72);
+  backdrop-filter: blur(2px);
 }
 #promo button {
   width: 21%;
@@ -193,13 +279,40 @@ html, body {
   border-radius: 16px;
   background: linear-gradient(160deg, #fff7e2, #dcc08d);
   box-shadow: 0 10px 24px rgba(0, 0, 0, .45);
+  animation: pop .2s cubic-bezier(.2, 1.4, .4, 1);
 }
 #promo img { width: 100%; height: 100%; }
+
+/* ---------------------------------------------------------------- فهرست حرکت‌ها */
+#moves {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: var(--size);
+  min-height: 34px;
+  padding: 5px 8px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  overflow-x: auto;
+  white-space: nowrap;
+  direction: ltr;
+  font-size: 14px;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+}
+#moves::-webkit-scrollbar { display: none; }
+#moves .num { margin: 0 1px 0 7px; color: var(--muted); font-weight: 700; }
+#moves .num:first-child { margin-left: 0; }
+#moves .mv { padding: 2px 6px; border-radius: 8px; font-weight: 800; }
+#moves .mv.cur { background: linear-gradient(120deg, var(--accent), #7aa2ff); color: #0b1026; }
+#moves .empty { width: 100%; color: var(--muted); font-size: 12px; text-align: center; direction: rtl; }
 
 /* ---------------------------------------------------------------- وضعیت و دکمه‌ها */
 #status { margin: 2px 0 0; min-height: 26px; font-size: 15px; font-weight: 800; text-align: center; }
 #status.mine { color: var(--accent); }
 #status.alert { color: #ff8fa3; }
+#status.warn { color: var(--gold); }
 #actions { display: flex; gap: 10px; width: var(--size); }
 .btn {
   position: relative;
@@ -260,6 +373,12 @@ body.practice .clock, body.practice #draw-btn { display: none; }
 .card h1 { margin: 6px 0 4px; font-size: 26px; font-weight: 900; }
 .card p { margin: 0 0 8px; line-height: 1.8; }
 .result-icon { font-size: 60px; line-height: 1.1; }
+.result-icon img { width: 84px; height: 84px; filter: drop-shadow(0 10px 18px rgba(0, 0, 0, .45)); }
+.result-icon .pair { display: inline-flex; gap: 4px; }
+.result-icon .pair img { width: 66px; height: 66px; }
+.result-icon.won img { animation: bob 1.4s ease-in-out infinite; }
+.result-clocks { direction: ltr; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+@keyframes bob { 50% { transform: translateY(-6px) rotate(-4deg); } }
 @keyframes pop { from { transform: scale(.7); opacity: 0; } to { transform: none; opacity: 1; } }
 .spinner {
   width: 46px; height: 46px;
@@ -285,7 +404,15 @@ body.practice .clock, body.practice #draw-btn { display: none; }
   font-weight: 800;
   box-shadow: 0 12px 30px rgba(0, 0, 0, .4);
 }
+#toast.info { background: #3b4bd8; }
+
+/* کاغذرنگی برد */
+#confetti { position: fixed; inset: 0; z-index: 12; overflow: hidden; pointer-events: none; }
+#confetti i { position: absolute; top: -14px; width: 8px; height: 14px; border-radius: 2px; animation: fall linear forwards; }
+@keyframes fall { to { transform: translateY(112vh) rotate(760deg); } }
+
 @media (prefers-reduced-motion: reduce) {
-  .sq img, .sq.arrived img, .btn.offer, .clock.low, .card { animation: none; transition: none; }
+  .sq img, .sq.arrived img, .sq img.sliding, .btn.offer, .clock.low, .card, #promo button, .result-icon.won img { animation: none; transition: none; }
+  #confetti { display: none; }
 }
 .result-icon img.knight { display: block; margin: 0 auto; filter: drop-shadow(0 10px 18px rgba(0, 0, 0, .45)); }

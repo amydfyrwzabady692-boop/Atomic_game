@@ -226,6 +226,44 @@ class Position:
     def moves_from(self, square: int) -> list[Move]:
         return [m for m in self.legal_moves() if m.src == square]
 
+    def san(self, move: Move) -> str:
+        """نماد جبری استاندارد (SAN) یک حرکت قانونی، مثل Nf3، exd5، Nbd7، O-O، e8=Q+ یا Qh4#."""
+        piece = self.board[move.src]
+        kind = piece.upper()
+        if kind == "K" and abs(move.dst - move.src) == 2:
+            text = "O-O" if move.dst > move.src else "O-O-O"
+        else:
+            en_passant = kind == "P" and move.dst == self.ep and move.src % 8 != move.dst % 8
+            capture = self.board[move.dst] != "." or en_passant
+            if kind == "P":
+                text = (FILES[move.src % 8] + "x" if capture else "") + square_name(move.dst)
+                if move.promo:
+                    text += "=" + move.promo.upper()
+            else:
+                text = kind
+                # اگر مهره‌ی هم‌نوع دیگری هم به همین خانه می‌رود، ستون یا ردیف (یا هر دو) نوشته می‌شود
+                rivals = [m.src for m in self.legal_moves() if m.dst == move.dst and m.src != move.src and self.board[m.src] == piece]
+                if rivals:
+                    if all(src % 8 != move.src % 8 for src in rivals):
+                        text += FILES[move.src % 8]
+                    elif all(src // 8 != move.src // 8 for src in rivals):
+                        text += str(move.src // 8 + 1)
+                    else:
+                        text += square_name(move.src)
+                text += ("x" if capture else "") + square_name(move.dst)
+        after = self.push(move, validate=False)
+        if after.in_check():
+            text += "+" if after.legal_moves() else "#"
+        return text
+
+    def has_mating_material(self, color: str) -> bool:
+        """آیا رنگ ``color`` با هیچ رشته حرکت قانونی‌ای می‌تواند مات کند؟ (قانون ۶.۹ فیده برای پایان وقت)
+
+        شاه تنها هرگز نمی‌تواند مات کند. با هر مهره‌ی دیگری (حتی یک اسب یا فیل) مات کمکی در وضعیت‌هایی
+        ممکن است که مهره‌های خود حریف راه فرار شاهش را بسته‌اند؛ آن حالت‌های بی‌مهره‌ی دو طرف (مثل شاه و
+        فیل در برابر شاه تنها) پیش‌تر با «مهره‌ی ناکافی» مساوی شده‌اند."""
+        return any(p != "." and color_of(p) == color and p.upper() != "K" for p in self.board)
+
     # ------------------------------------------------------------------ اجرای حرکت
     def push(self, move: Move, validate: bool = True) -> Position:
         """وضعیت جدید بعد از حرکت (وضعیت فعلی تغییر نمی‌کند)."""

@@ -69,6 +69,15 @@ def fa_num(value: int) -> str:
     return fa_digits(f"{int(value):,}").replace(",", "٬")
 
 
+def fa_clock(seconds: float) -> str:
+    """زمان ساعت شطرنج با ارقام فارسی: 298.4 → ۴:۵۸ و بیشتر از یک ساعت ۱:۰۵:۰۰ (ثانیه‌ی ناقص حساب نمی‌شود)."""
+    total = max(0, int(seconds))
+    hours, rest = divmod(total, 3600)
+    minutes, secs = divmod(rest, 60)
+    text = f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
+    return fa_digits(text)
+
+
 # منفی یونیکد، خط تیره‌های کوتاه/بلند و خط فاصله‌ها → «-» معمولی
 _MINUS = str.maketrans({"−": "-", "–": "-", "—": "-", "‐": "-", "‑": "-"})
 

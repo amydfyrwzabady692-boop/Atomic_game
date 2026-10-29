@@ -117,8 +117,9 @@ def state(request, user, payload):
             lambda: board.update(match.pk, lambda s: board.rules_for(s).check_timeout(s, now))
         )
     if payload.get("version") == current["version"] and match.status != MatchStatus.CANCELLED:
-        left = max(0, int(current["deadline"] - now)) if current["deadline"] else 0
-        return JsonResponse({"ok": True, "changed": False, "seconds_left": left})
+        # فقط زمان تا پایان مهلت/ساعت نوبت فعلی؛ کلاینت ساعت را با همین هم‌گام نگه می‌دارد
+        left = max(0.0, current["deadline"] - now) if current["deadline"] else 0.0
+        return JsonResponse({"ok": True, "changed": False, "seconds_left": int(left), "left_ms": int(left * 1000)})
     return _response(match, current, user)
 
 
@@ -177,7 +178,6 @@ def action(request, user, payload):
 
 # ---------------------------------------------------------------------- شطرنج با کامپیوتر
 COMPUTER_ID = 0  # هیچ کاربری شناسه‌ی صفر ندارد
-PRACTICE_MOVE_SECONDS = 10**8  # تمرین ساعت ندارد
 LEVEL_NAMES = {"easy": "آسان", "medium": "متوسط", "hard": "سخت"}
 
 
@@ -240,7 +240,8 @@ def practice_new(request, user, payload):
     ChessPractice.objects.filter(user=user, finished=False).update(finished=True)
     white_is_user = secrets.randbelow(2) == 0
     sides = (user.pk, COMPUTER_ID) if white_is_user else (COMPUTER_ID, user.pk)
-    game = ChessPractice(user=user, level=level, state=live.new_state(*sides, time.time(), PRACTICE_MOVE_SECONDS))
+    # تمرین ساعت ندارد
+    game = ChessPractice(user=user, level=level, state=live.new_state(*sides, time.time(), control=None))
     _computer_moves(game)
     game.save()
     return _practice_response(game, user)

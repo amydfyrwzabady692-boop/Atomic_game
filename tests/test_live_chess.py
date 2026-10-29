@@ -55,11 +55,14 @@ def test_moves_are_validated_and_turns_alternate():
         live.apply_move(state, 1, 99, 5, "", 1000.0)
     assert state["version"] == 1 and state["moves"] == []
     live.apply_move(state, 1, sq("e2"), sq("e4"), "", 1005.0)
-    assert state["moves"] == ["e2e4"] and state["last"] == [sq("e2"), sq("e4")]
-    assert state["deadline"] == 1005.0 + state["move_seconds"] and state["version"] == 2
+    assert state["moves"] == ["e2e4"] and state["san"] == ["e4"] and state["last"] == [sq("e2"), sq("e4")]
+    # اولین حرکت سیاه هم مهلت جداگانه دارد و از ساعتش کم نمی‌شود
+    assert state["deadline"] == 1005.0 + live.FIRST_MOVE_SECONDS and state["version"] == 2
 
     mine = live.view(state, 2, 1010.0)
-    assert mine["you"] == "b" and mine["turn"] == "b" and len(mine["legal"]) == 10 and mine["seconds_left"] == 85
+    assert mine["you"] == "b" and mine["turn"] == "b" and len(mine["legal"]) == 10 and mine["seconds_left"] == 55
+    assert mine["first_move"] and mine["running"] is None and mine["clock"] == {"w": 300_000, "b": 300_000}
+    assert (mine["control"], mine["base"], mine["inc"]) == ("blitz5", 300, 3)
     assert sq("e5") in mine["legal"][str(sq("e7"))]
     theirs = live.view(state, 1, 1010.0)
     assert theirs["you"] == "w" and theirs["legal"] == {}  # نوبت او نیست
@@ -93,8 +96,9 @@ def test_promotion_piece_can_be_chosen():
 
 def test_timeout_resign_draw_offer_and_repetition():
     state = live.new_state(1, 2, 1000.0)
-    assert not live.check_timeout(state, 1089.0)
-    assert live.check_timeout(state, 1091.0) and state["over"] == {"reason": "timeout", "side": "b", "winner": 2}
+    assert not live.check_timeout(state, 1000.0 + live.FIRST_MOVE_SECONDS - 1)
+    assert live.check_timeout(state, 1000.0 + live.FIRST_MOVE_SECONDS + 1)
+    assert state["over"] == {"reason": "timeout", "side": "b", "winner": 2}
 
     state = live.new_state(1, 2, 1000.0)
     with pytest.raises(live.LiveError, match="game_over"):
@@ -124,6 +128,86 @@ def test_timeout_resign_draw_offer_and_repetition():
     assert state["over"] is None
     play(state, ["f6g8"])
     assert state["over"]["reason"] == "repetition" and state["over"]["winner"] is None
+
+
+def test_chess_clock_runs_like_international_time_controls():
+    """۳+۲: اولین حرکت هر طرف مجانی؛ بعد از آن وقت مصرف‌شده کم و ۲ ثانیه افزایش اضافه می‌شود."""
+    state = live.new_state(1, 2, 0.0, control="blitz3")
+    assert state["clock"] == {"w": 180.0, "b": 180.0} and state["deadline"] == live.FIRST_MOVE_SECONDS
+    live.apply_move(state, 1, sq("e2"), sq("e4"), "", 10.0)
+    live.apply_move(state, 2, sq("e7"), sq("e5"), "", 20.0)
+    assert state["clock"] == {"w": 180.0, "b": 180.0} and state["deadline"] == 200.0  # ساعت سفید از حالا می‌رود
+    view = live.view(state, 1, 30.0)
+    assert view["running"] == "w" and view["clock"] == {"w": 170_000, "b": 180_000} and not view["first_move"]
+    live.apply_move(state, 1, sq("g1"), sq("f3"), "", 50.0)
+    assert state["clock"]["w"] == 152.0 and state["deadline"] == 50.0 + 180.0
+    assert live.view(state, 2, 60.0)["clock"] == {"w": 152_000, "b": 170_000}
+    live.apply_move(state, 2, sq("b8"), sq("c6"), "", 100.0)
+    assert state["clock"]["b"] == 132.0 and state["deadline"] == 252.0
+    assert state["san"] == ["e4", "e5", "Nf3", "Nc6"]
+    assert not live.check_timeout(state, 252.0)
+    assert live.check_timeout(state, 252.5)
+    assert state["over"] == {"reason": "timeout", "side": "b", "winner": 2} and state["clock"]["w"] == 0.0
+    # کلید ناشناخته = پیش‌فرض؛ None = بدون ساعت (تمرین با کامپیوتر)
+    assert live.new_state(1, 2, 0.0, control="nonsense")["control"] == live.DEFAULT_CONTROL
+    untimed = live.new_state(1, 2, 0.0, control=None)
+    assert untimed["deadline"] is None and not live.check_timeout(untimed, 10**9)
+    assert live.view(untimed, 1, 10**9)["clock"] is None
+
+
+def test_flag_fall_against_a_lone_king_is_a_draw():
+    """قانون ۶.۹ فیده: اگر حریف فقط شاه دارد و با هیچ حرکتی نمی‌تواند مات کند، پایان وقت مساوی است."""
+    state = live.new_state(1, 2, 0.0, control="bullet")
+    state["fen"] = "7k/8/8/8/8/8/8/KQ6 w - - 0 1"  # نوبت سفید که وزیر دارد؛ سیاه فقط شاه
+    assert live.check_timeout(state, 1000.0)
+    assert state["over"] == {"reason": "timeout_draw", "side": None, "winner": None}
+    state = live.new_state(1, 2, 0.0, control="bullet")
+    state["fen"] = "7k/8/8/8/8/8/8/KN6 b - - 0 1"  # سیاهِ تنها وقتش تمام شد؛ سفید با اسب هنوز (کمکی) مات دارد
+    assert live.check_timeout(state, 1000.0) and state["over"]["winner"] == 1
+
+
+def test_san_notation():
+    from games.chess.engine import Move
+
+    start = Position.initial()
+    assert start.san(Move(sq("g1"), sq("f3"))) == "Nf3" and start.san(Move(sq("e2"), sq("e4"))) == "e4"
+    knights = Position.from_fen("4k3/8/8/8/8/5N2/8/1N2K3 w - - 0 1")
+    assert knights.san(Move(sq("b1"), sq("d2"))) == "Nbd2" and knights.san(Move(sq("f3"), sq("d2"))) == "Nfd2"
+    rooks = Position.from_fen("4k3/8/8/R7/8/8/8/R3K3 w - - 0 1")
+    assert rooks.san(Move(sq("a1"), sq("a3"))) == "R1a3" and rooks.san(Move(sq("a5"), sq("a3"))) == "R5a3"
+    castle = Position.from_fen("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1")
+    assert castle.san(Move(sq("e1"), sq("g1"))) == "O-O" and castle.san(Move(sq("e1"), sq("c1"))) == "O-O-O"
+    assert Position.from_fen("8/P6k/8/8/8/8/8/K7 w - - 0 1").san(Move(sq("a7"), sq("a8"), "Q")) == "a8=Q"
+    passant = Position.from_fen("4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1")
+    assert passant.san(Move(sq("e5"), sq("d6"))) == "exd6"
+    state = live.new_state(1, 2, 1000.0)
+    play(state, ["f2f3", "e7e5", "g2g4", "d8h4"])
+    assert state["san"] == ["f3", "e5", "g4", "Qh4#"]
+    assert live.new_state(1, 2, 0.0)["san"] == []
+    from games.chess.text import notation
+
+    assert notation("Qh4#", 3) == "\u200e۲… ♕h4#" and notation("Nf3", 0) == "\u200e۱. ♘f3"
+
+
+def test_state_saved_before_the_chess_clock_still_works():
+    """بازی‌هایی که با قالب قدیمی (مهلت ثابت هر حرکت) ذخیره شده‌اند بعد از به‌روزرسانی خراب نمی‌شوند."""
+    old = {
+        "game": "chess", "w": 1, "b": 2, "fen": START_FEN, "moves": [], "last": None,
+        "deadline": 1090.0, "move_seconds": 90, "draw_offer": None, "over": None, "version": 1,
+    }  # fmt: skip
+    play(old, ["e2e4", "e7e5", "g1f3"], now=1050.0)
+    assert old["san"] == ["e4", "e5", "Nf3"] and old["control"] == "rapid10" and "move_seconds" not in old
+    assert live.view(old, 2, 1060.0)["clock"]["b"] == 590_000
+    practice = {
+        "game": "chess", "w": 1, "b": 0, "fen": START_FEN, "moves": [], "last": None,
+        "deadline": 1000.0 + 10**8, "move_seconds": 10**8, "draw_offer": None, "over": None, "version": 1,
+    }  # fmt: skip
+    assert live.view(practice, 1, 2000.0)["clock"] is None and practice["deadline"] is None
+
+
+def test_board_state_uses_the_chosen_time_control():
+    assert board.new_state("chess", [1, 2], 0.0, options={"variant": "rapid15"})["base"] == 900
+    assert board.new_state("chess", [1, 2], 0.0)["control"] == live.DEFAULT_CONTROL
 
 
 # ------------------------------------------------------------------ API مینی‌اپ
@@ -176,7 +260,8 @@ def test_board_api_plays_a_game_and_only_players_can_move(client, chess_match):
     assert status == 200 and data["state"]["you"] == "w" and data["state"]["players"] == {"w": "سفید", "b": "سیاه"}
     assert len(data["state"]["legal"]) == 10 and data["state"]["version"] == 1
     status, same = post(client, "board/state", white, match_token=match.token, version=1)
-    assert same == {"ok": True, "changed": False, "seconds_left": same["seconds_left"]} and same["seconds_left"] > 80
+    assert set(same) == {"ok", "changed", "seconds_left", "left_ms"} and same["changed"] is False
+    assert 50 < same["seconds_left"] <= live.FIRST_MOVE_SECONDS and same["left_ms"] // 1000 == same["seconds_left"]
 
     assert post(client, "board/move", black, match_token=match.token, src=sq("e7"), dst=sq("e5")) == (
         409,
