@@ -120,6 +120,12 @@ def cancel_match(match_id: int, reason: str = "") -> tuple[Match, list[MatchPlay
         match.pot = 0
         match.finished_at = timezone.now()
         match.save(update_fields=["status", "cancel_reason", "pot", "finished_at"])
+    board = (match.state or {}).get("board")
+    if board:
+        # صفحه‌ی بازی زنده (شطرنج، پوکر، ...) همان لحظه لغو را ببیند، نه بعد از کهنه شدن کش نسخه
+        from arcade.board import publish_version
+
+        publish_version(match, board)
     return match, refunded
 
 

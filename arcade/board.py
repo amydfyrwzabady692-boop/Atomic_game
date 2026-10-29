@@ -2,16 +2,26 @@
 
 همه‌ی تغییرها زیر قفل ردیفی مسابقه انجام می‌شوند، چون هم سرویس وب (حرکت بازیکن‌ها) و هم ربات
 (پایان مهلت حرکت و اعلام نتیجه) همین وضعیت را می‌خوانند و می‌نویسند.
+
+مینی‌اپ هر بازیکن تقریباً هر ثانیه می‌پرسد «چیزی عوض شده؟». نسخه‌ی هر وضعیت چند ثانیه در Redis
+می‌ماند تا جواب «تغییری نیست» بدون خواندن کل وضعیت از پایگاه داده داده شود؛ هر نوشتن تازه همان لحظه
+آن را عوض می‌کند.
 """
 
+import json
+import logging
 import time
 
 from django.db import transaction
 
 from games import gridlive
 from games.chess import live
-from games.models import Match
+from games.models import Match, MatchStatus
 from games.poker import live as poker
+
+logger = logging.getLogger(__name__)
+
+VERSION_TTL = 3  # ثانیه؛ لغو مسابقه (که نسخه را عوض نمی‌کند) حداکثر با همین تأخیر دیده می‌شود
 
 LIVE_GAMES = ("chess", "tictactoe", "connect4", "poker")
 
@@ -46,6 +56,34 @@ def standings(state: dict) -> list[tuple[int, int]]:
     return [(uid, 1 if uid == winner else 0) for uid in rules.players(state).values()]
 
 
+def _version_key(token: str) -> str:
+    return f"board:v:{token}"
+
+
+def publish_version(match: Match, state: dict, only_new: bool = False) -> None:
+    """نسخه، مهلت و پایان بازی را برای جواب سریع «تغییری نیست» نگه می‌دارد.
+
+    ``only_new`` برای خواننده‌هاست: اگر نویسنده‌ای همین الان نسخه‌ی تازه‌تر را گذاشته، کهنه رویش نمی‌نشیند."""
+    from core.redis import get_sync_redis
+
+    value = json.dumps([state["version"], state.get("deadline"), bool(state.get("over")), match.status == MatchStatus.CANCELLED])
+    try:
+        get_sync_redis().set(_version_key(match.token), value, ex=VERSION_TTL, nx=only_new)
+    except Exception:  # فقط کش است؛ بدون Redis همه از پایگاه داده خوانده می‌شود
+        logger.warning("board version cache unavailable", exc_info=True)
+
+
+def cached_version(token: str) -> list | None:
+    """[نسخه، مهلت، تمام‌شده، لغوشده] یا ``None``."""
+    from core.redis import get_sync_redis
+
+    try:
+        raw = get_sync_redis().get(_version_key(token))
+    except Exception:
+        return None
+    return json.loads(raw) if raw else None
+
+
 def live_match(token: str) -> Match | None:
     """مسابقه‌ای با این توکن که صفحه‌ی گرافیکی دارد (یا ``None``)."""
     match = Match.objects.filter(token=token, game_type__in=LIVE_GAMES).first()
@@ -57,6 +95,7 @@ def start(match_id: int, state: dict) -> None:
         match = Match.objects.select_for_update().get(pk=match_id)
         match.state = {**(match.state or {}), "board": state}
         match.save(update_fields=["state"])
+    publish_version(match, state)
 
 
 def remember(match_id: int, **values) -> None:
@@ -85,9 +124,12 @@ def update(match_id: int, change):
             result = change(state)
         except live.LiveError as exc:
             error = exc
-        if state["version"] != before:
+        changed = state["version"] != before
+        if changed:
             match.state = {**match.state, "board": state}
             match.save(update_fields=["state"])
+    if changed:
+        publish_version(match, state)  # بعد از commit، تا کسی نسخه‌ای را که هنوز ذخیره نشده نبیند
     if error is not None:
         raise error
     return match, state, result

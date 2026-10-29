@@ -82,17 +82,32 @@ def _names(state: dict) -> dict:
     return {side: users.get(uid, "") for side, uid in sides.items()}
 
 
+_PROFILE_SECONDS = 30
+_profile_cache: dict[tuple, tuple[float, dict]] = {}
+
+
 def _profiles(state: dict) -> dict:
-    """سطح و نشان فروشگاه هر بازیکن برای نوار بازیکن‌ها (مثل امتیاز در اپ‌های شطرنج)."""
+    """سطح و نشان فروشگاه هر بازیکن برای نوار بازیکن‌ها (مثل امتیاز در اپ‌های شطرنج).
+
+    در یک بازی زنده هر جواب تازه این را لازم دارد؛ برای همان بازیکن‌ها چند ثانیه نگه داشته می‌شود."""
     from shop.services import decorations
 
     sides = board.rules_for(state).players(state)
+    key = tuple(sorted(sides.items()))
+    now = time.monotonic()
+    hit = _profile_cache.get(key)
+    if hit is not None and now - hit[0] < _PROFILE_SECONDS:
+        return hit[1]
     levels = dict(TelegramUser.objects.filter(pk__in=list(sides.values())).values_list("pk", "level"))
     badges = decorations(list(sides.values()))
-    return {
+    result = {
         side: {"level": levels.get(uid, 1), "emoji": badges.get(uid, {}).get("emoji", ""), "title": badges.get(uid, {}).get("title", "")}
         for side, uid in sides.items()
     }
+    if len(_profile_cache) > 500:
+        _profile_cache.clear()
+    _profile_cache[key] = (now, result)
+    return result
 
 
 def _response(match, state: dict, user) -> JsonResponse:
@@ -117,23 +132,36 @@ def _guard(change):
         raise ArcadeError(exc.code, 404 if exc.code == "match_not_found" else 409) from exc
 
 
+def _unchanged(deadline: float | None, now: float) -> JsonResponse:
+    # فقط زمان تا پایان مهلت/ساعت نوبت فعلی؛ کلاینت ساعت را با همین هم‌گام نگه می‌دارد
+    left = max(0.0, deadline - now) if deadline else 0.0
+    return JsonResponse({"ok": True, "changed": False, "seconds_left": int(left), "left_ms": int(left * 1000)})
+
+
 @csrf_exempt
 @require_POST
 @rate_limited("board", 120, 10)
 @authenticated
 def state(request, user, payload):
-    """وضعیت فعلی. اگر کلاینت همان نسخه را داشته باشد فقط زمان باقی‌مانده برمی‌گردد."""
+    """وضعیت فعلی. اگر کلاینت همان نسخه را داشته باشد فقط زمان باقی‌مانده برمی‌گردد.
+
+    این جواب کوتاه معمولاً از نسخه‌ی نگه‌داشته در Redis می‌آید؛ اگر مهلت نوبت گذشته باشد (و باید
+    زیر قفل بسته شود) یا نسخه‌ای در کار نباشد، وضعیت از پایگاه داده خوانده می‌شود."""
+    now = time.time()
+    version = payload.get("version")
+    if version is not None:
+        cached = board.cached_version(str(payload.get("match_token") or "")[:32])
+        if cached and cached[0] == version and not cached[3] and (cached[2] or not cached[1] or now <= cached[1]):
+            return _unchanged(cached[1], now)
     match = _match(payload)
     current = match.state["board"]
-    now = time.time()
     if match.status == MatchStatus.RUNNING and not current["over"] and now > (current["deadline"] or now):
         match, current, _ = _guard(
             lambda: board.update(match.pk, lambda s: board.rules_for(s).check_timeout(s, now))
         )
-    if payload.get("version") == current["version"] and match.status != MatchStatus.CANCELLED:
-        # فقط زمان تا پایان مهلت/ساعت نوبت فعلی؛ کلاینت ساعت را با همین هم‌گام نگه می‌دارد
-        left = max(0.0, current["deadline"] - now) if current["deadline"] else 0.0
-        return JsonResponse({"ok": True, "changed": False, "seconds_left": int(left), "left_ms": int(left * 1000)})
+    board.publish_version(match, current, only_new=True)
+    if version == current["version"] and match.status != MatchStatus.CANCELLED:
+        return _unchanged(current["deadline"], now)
     return _response(match, current, user)
 
 

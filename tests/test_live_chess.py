@@ -285,6 +285,26 @@ def test_board_api_plays_a_game_and_only_players_can_move(client, chess_match):
     assert match.state["board"]["moves"] == ["f2f3", "e7e5", "g2g4", "d8h4"]
 
 
+def test_unchanged_polls_skip_the_database_but_never_hide_a_move(client, chess_match, monkeypatch):
+    from games.engine import services as match_services
+
+    match, white, black, _ = chess_match
+    post(client, "board/state", white, match_token=match.token)  # نسخه در Redis گذاشته می‌شود
+    loads = []
+    real = board.live_match
+    monkeypatch.setattr(board, "live_match", lambda token: loads.append(token) or real(token))
+    status, data = post(client, "board/state", white, match_token=match.token, version=1)
+    assert data["changed"] is False and loads == []  # بدون خواندن مسابقه از پایگاه داده
+    # حرکت حریف نسخه را همان لحظه عوض می‌کند؛ بازیکن دیگر وضعیت تازه را می‌گیرد
+    post(client, "board/move", white, match_token=match.token, src=sq("e2"), dst=sq("e4"))
+    status, data = post(client, "board/state", black, match_token=match.token, version=1)
+    assert data["changed"] is True and data["state"]["plies"] == 1 and data["state"]["version"] == 2
+    # لغو مسابقه هم بلافاصله دیده می‌شود
+    match_services.cancel_match(match.pk, "admin")
+    status, data = post(client, "board/state", black, match_token=match.token, version=2)
+    assert data["changed"] is True and data["state"]["cancelled"] is True
+
+
 def test_board_api_actions_and_auth(client, chess_match):
     match, white, black, _ = chess_match
     assert post(client, "board/action", white, match_token=match.token, action="dance")[0] == 400

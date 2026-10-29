@@ -34,6 +34,16 @@ def group(db):
 
 
 @pytest.fixture(autouse=True)
+def fresh_board_profiles():
+    """سطح بازیکن‌های صفحه‌ی بازی زنده که چند ثانیه نگه داشته می‌شود بین تست‌ها نشت نکند."""
+    from arcade import board_views
+
+    board_views._profile_cache.clear()
+    yield
+    board_views._profile_cache.clear()
+
+
+@pytest.fixture(autouse=True)
 def fresh_game_settings():
     """کش تنظیمات بازی‌ها بین تست‌ها نشت نکند."""
     game_config.reset()
