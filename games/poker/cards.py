@@ -94,3 +94,42 @@ def best_hand(cards: list[str]) -> tuple[tuple, list[str]]:
 
 def hand_name(score: tuple) -> str:
     return HAND_NAMES[score[0]]
+
+
+RANK_NAMES = {14: "آس", 13: "شاه", 12: "بی‌بی", 11: "سرباز", 10: "۱۰", 9: "۹", 8: "۸", 7: "۷", 6: "۶", 5: "۵", 4: "۴", 3: "۳", 2: "۲"}
+
+
+def describe(score: tuple) -> str:
+    """نام کامل دست مثل میزهای واقعی: «جفت آس»، «دو جفت شاه و ۷»، «فول هاوس: سه ۸ و دو شاه»، «رویال فلاش»."""
+    category, values = score[0], score[1:]
+    top = RANK_NAMES[values[0]]
+    if category == 8:
+        return "رویال فلاش" if values[0] == 14 else f"استریت فلاش تا {top}"
+    if category == 7:
+        return f"چهارتایی {top}"
+    if category == 6:
+        return f"فول هاوس: سه {top} و دو {RANK_NAMES[values[3]]}"
+    if category == 5:
+        return f"فلاش {top}"
+    if category == 4:
+        return f"استریت تا {top}"
+    if category == 3:
+        return f"سه‌تایی {top}"
+    if category == 2:
+        return f"دو جفت {top} و {RANK_NAMES[values[2]]}"
+    if category == 1:
+        return f"جفت {top}"
+    return f"کارت بالا {top}"
+
+
+def describe_cards(cards: list[str]) -> str:
+    """بهترین دست بازیکن با کارت‌های فعلی؛ قبل از فلاپ فقط دو کارت دست (مثل «جفت آس» یا «آس و شاه هم‌خال»)."""
+    if len(cards) >= 5:
+        return describe(best_hand(cards)[0])
+    if len(cards) != 2:
+        return ""
+    high, low = sorted((RANK_VALUE[c[0]] for c in cards), reverse=True)
+    if high == low:
+        return f"جفت {RANK_NAMES[high]}"
+    suited = " هم‌خال" if cards[0][1] == cards[1][1] else ""
+    return f"{RANK_NAMES[high]} و {RANK_NAMES[low]}{suited}"

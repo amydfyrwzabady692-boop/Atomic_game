@@ -10,44 +10,63 @@
 <link rel="stylesheet" href="{% static 'arcade/board/poker.css' %}?v={{ version }}">
 <link rel="preload" href="/arcade/font/regular.ttf" as="font" type="font/ttf" crossorigin>
 </head>
-<body>
+<body class="poker">
 <main id="game" class="hidden">
   <header id="table-head">
-    <h1>🃏 پوکر</h1>
-    <span id="hand-info"></span>
+    <div class="title">
+      <b>🃏 پوکر</b>
+      <span class="chip" id="hand-chip"></span>
+      <span class="chip blinds" id="blind-chip"></span>
+    </div>
+    <div class="tools">
+      <button class="icon-btn" id="sound-btn" type="button" aria-label="صدا" title="صدا">🔊</button>
+      <button class="icon-btn" id="resign-btn" type="button" aria-label="ترک میز" title="ترک میز">🚪</button>
+    </div>
   </header>
 
-  <div id="seats"></div>
-
-  <section id="felt" aria-label="میز">
-    <div id="board-cards"></div>
-    <div id="pot">پات: <b id="pot-amount">۰</b></div>
-    <div id="street"></div>
+  <section id="table" aria-label="میز پوکر">
+    <div id="felt">
+      <div class="felt-logo">WINZON</div>
+      <div id="center">
+        <div id="pot"><i class="chip-ico"></i><span>پات</span> <b id="pot-amount">۰</b></div>
+        <div id="board-cards"></div>
+        <div id="street"></div>
+      </div>
+    </div>
+    <div id="layer"></div>
   </section>
 
   <section id="me" class="hidden">
     <div id="my-cards"></div>
+    <div class="hero">
+      <div class="ava" id="my-ava"><span id="my-initial"></span></div>
+      <div class="meta"><b id="my-name"></b><small id="my-chips"></small></div>
+      <span class="hero-bet hidden" id="my-bet"></span>
+    </div>
     <div id="my-hand"></div>
   </section>
+
+  <div id="log" aria-live="polite"></div>
 
   <p id="status" aria-live="polite"></p>
 
   <section id="controls" class="hidden">
-    <div class="row">
+    <div id="sizing" class="hidden">
+      <div class="presets" id="presets"></div>
+      <div class="slider">
+        <button class="icon-btn" id="minus-btn" type="button" aria-label="کمتر">−</button>
+        <input id="raise-range" type="range" min="0" max="0" step="1" aria-label="مقدار رِیز">
+        <button class="icon-btn" id="plus-btn" type="button" aria-label="بیشتر">+</button>
+      </div>
+    </div>
+    <div class="row main">
       <button id="fold-btn" class="btn danger" type="button">فولد</button>
       <button id="check-btn" class="btn go" type="button">چک</button>
       <button id="call-btn" class="btn go" type="button">کال</button>
-    </div>
-    <div class="row" id="raise-row">
-      <input id="raise-range" type="range" min="0" max="0" step="1" aria-label="مقدار رِیز">
       <button id="raise-btn" class="btn violet" type="button">رِیز</button>
-    </div>
-    <div class="row">
-      <button id="allin-btn" class="btn danger" type="button">آل‌این</button>
+      <button id="allin-btn" class="btn gold" type="button">آل‌این</button>
     </div>
   </section>
-
-  <div id="actions"><button id="resign-btn" class="btn violet" type="button">🚪 ترک میز</button></div>
 </main>
 
 <section id="loading" class="overlay">
@@ -60,14 +79,17 @@
     <div class="result-icon" id="result-icon">🏆</div>
     <h1 id="result-title"></h1>
     <p class="muted" id="result-reason"></p>
+    <ol id="result-list"></ol>
     <button id="result-close" class="btn go" type="button">برگشت</button>
     <button id="result-view" class="btn violet" type="button">دیدن میز</button>
   </div>
 </section>
+<div id="confetti" aria-hidden="true"></div>
 
 <div id="toast" class="hidden" role="alert"></div>
 
 <script src="{% static 'arcade/common/telegram-web-app.js' %}?v={{ version }}"></script>
+<script src="{% static 'arcade/common/sfx.js' %}?v={{ version }}"></script>
 <script>
 window.BOARD_BOOT = {
   token: "{{ token|escapejs }}",

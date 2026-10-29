@@ -123,74 +123,10 @@
     return kind + " \u200e" + fa(Math.round(base / 60)) + "+" + fa(inc); // بدون نشانه‌ی چپ‌به‌راست «۳+۲» برعکس می‌شود
   }
 
-  // ------------------------------------------------------------------ صدا (بدون فایل؛ با WebAudio ساخته می‌شود)
-  var muted = load("chess.muted") === "1";
-  var audio = null;
-  function audioContext() {
-    if (audio) return audio;
-    var Ctor = window.AudioContext || window.webkitAudioContext;
-    if (!Ctor) return null;
-    try { audio = new Ctor(); } catch (e) { audio = null; }
-    return audio;
-  }
-  function unlockAudio() {
-    if (muted) return;
-    var ctx = audioContext();
-    if (ctx && ctx.state === "suspended") { try { ctx.resume(); } catch (e) { /* مرورگر قدیمی */ } }
-  }
-  function knock(ctx, at, freq, gain, length) {
-    // ضربه‌ی کوتاه چوبی: نویز فیلترشده و یک موج بم که زود خاموش می‌شود
-    var buffer = ctx.createBuffer(1, Math.max(1, Math.floor(ctx.sampleRate * length)), ctx.sampleRate);
-    var data = buffer.getChannelData(0);
-    for (var i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 4);
-    var noise = ctx.createBufferSource();
-    noise.buffer = buffer;
-    var filter = ctx.createBiquadFilter();
-    filter.type = "bandpass";
-    filter.frequency.value = freq;
-    filter.Q.value = 1.4;
-    var level = ctx.createGain();
-    level.gain.setValueAtTime(gain, at);
-    level.gain.exponentialRampToValueAtTime(0.001, at + length);
-    noise.connect(filter);
-    filter.connect(level);
-    level.connect(ctx.destination);
-    noise.start(at);
-    noise.stop(at + length);
-    tone(ctx, at, freq / 7, length, gain * 0.5, "sine", freq / 12);
-  }
-  function tone(ctx, at, freq, length, gain, type, endFreq) {
-    var osc = ctx.createOscillator();
-    osc.type = type || "sine";
-    osc.frequency.setValueAtTime(freq, at);
-    if (endFreq) osc.frequency.exponentialRampToValueAtTime(endFreq, at + length);
-    var level = ctx.createGain();
-    level.gain.setValueAtTime(0.0001, at);
-    level.gain.exponentialRampToValueAtTime(gain, at + 0.008);
-    level.gain.exponentialRampToValueAtTime(0.0001, at + length);
-    osc.connect(level);
-    level.connect(ctx.destination);
-    osc.start(at);
-    osc.stop(at + length + 0.02);
-  }
-  function sound(kind) {
-    if (muted) return;
-    var ctx = audioContext();
-    if (!ctx) return;
-    if (ctx.state !== "running") { unlockAudio(); return; } // تا اولین لمس کاربر مرورگر اجازه‌ی صدا نمی‌دهد
-    var at = ctx.currentTime + 0.01;
-    try {
-      if (kind === "move") knock(ctx, at, 1600, 0.55, 0.09);
-      else if (kind === "capture") { knock(ctx, at, 1150, 0.9, 0.13); knock(ctx, at + 0.045, 2100, 0.45, 0.08); }
-      else if (kind === "check") { tone(ctx, at, 880, 0.12, 0.16, "triangle"); tone(ctx, at + 0.13, 660, 0.2, 0.16, "triangle"); }
-      else if (kind === "low") tone(ctx, at, 1250, 0.08, 0.12, "square");
-      else if (kind === "start") { tone(ctx, at, 523, 0.12, 0.14, "triangle"); tone(ctx, at + 0.12, 784, 0.18, 0.14, "triangle"); }
-      else if (kind === "win") [523, 659, 784, 1047].forEach(function (f, i) { tone(ctx, at + i * 0.11, f, 0.22, 0.16, "triangle"); });
-      else if (kind === "lose") [523, 440, 349].forEach(function (f, i) { tone(ctx, at + i * 0.16, f, 0.28, 0.14, "sine"); });
-      else if (kind === "draw") { tone(ctx, at, 587, 0.2, 0.14, "triangle"); tone(ctx, at + 0.2, 587, 0.25, 0.14, "triangle"); }
-    } catch (e) { /* صدا اختیاری است */ }
-  }
-  function soundButton() { $("sound-btn").textContent = muted ? "🔇" : "🔊"; }
+  // ------------------------------------------------------------------ صدا (common/sfx.js)
+  function sound(kind) { if (window.SFX) window.SFX.play(kind); }
+  function unlockAudio() { if (window.SFX) window.SFX.unlock(); }
+  function soundButton() { $("sound-btn").textContent = window.SFX && window.SFX.isMuted() ? "🔇" : "🔊"; }
 
   // ------------------------------------------------------------------ ساخت تخته
   function buildBoard() {
@@ -824,10 +760,10 @@
     haptic("light");
   });
   $("sound-btn").addEventListener("click", function () {
-    muted = !muted;
-    save("chess.muted", muted ? "1" : "0");
+    if (!window.SFX) return;
+    window.SFX.setMuted(!window.SFX.isMuted());
     soundButton();
-    if (!muted) { unlockAudio(); setTimeout(function () { sound("move"); }, 60); }
+    if (!window.SFX.isMuted()) setTimeout(function () { sound("move"); }, 60);
   });
   $("result-close").addEventListener("click", function () {
     if (PRACTICE) { $("result").classList.add("hidden"); chooseLevel(); return; }

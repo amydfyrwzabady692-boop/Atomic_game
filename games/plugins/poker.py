@@ -11,7 +11,7 @@ from games.engine.base import DANGER, PRIMARY, SUCCESS, BaseGame, Button, Incomi
 from games.engine.payout import Standing
 from games.engine.registry import register_game
 from games.poker import live as engine
-from games.poker.cards import best_hand, hand_name, label
+from games.poker.cards import describe_cards, label
 
 
 @register_game
@@ -135,9 +135,8 @@ class PokerGame(BaseGame):
         if seat is None or not state["hole"][seat]:
             return texts.POKER_NO_CARDS
         cards = state["hole"][seat]
-        best = ""
-        if len(cards) + len(state["board"]) >= 5:
-            best = "دست تو: " + hand_name(best_hand(cards + state["board"])[0])
+        described = describe_cards(cards + state["board"])
+        best = "دست تو: " + described if described else ""
         board = " ".join(label(c) for c in state["board"]) or "—"
         return texts.POKER_MY_CARDS.format(cards=" ".join(label(c) for c in cards), board=board, best=best)
 

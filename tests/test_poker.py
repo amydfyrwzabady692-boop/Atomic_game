@@ -141,6 +141,57 @@ def test_all_in_runs_out_the_board_and_side_pot():
     assert sum(w["amount"] for w in s["result"]["winners"]) > 0
 
 
+def test_short_all_in_does_not_reopen_the_betting():
+    """قاعده‌ی رِیز ناقص (TDA): آل‌اینِ کمتر از یک رِیز کامل، به کسی که قبلاً حرکت کرده فقط حق کال/فولد می‌دهد."""
+    s = table(3, chips=[1000, 1000, 150])
+    assert s["dealer"] == 0 and s["to_act"] == 0  # سه‌نفره: دیلر اول حرف می‌زند؛ ۱ بلایند کوچک، ۲ بلایند بزرگ
+    poker.act(s, uid(s, 0), "raise", 100, 1)
+    poker.act(s, uid(s, 1), "call", 0, 2)
+    legal = poker.legal_actions(s, 2)
+    assert legal["raise_min"] == 0 and legal["allin"] == 130  # کمتر از حداقل رِیز (۱۸۰)، ولی آل‌این مجاز
+    poker.act(s, uid(s, 2), "allin", 0, 3)
+    assert s["current_bet"] == 150 and s["min_raise"] == 80  # رِیز ناقص حداقل رِیز را عوض نمی‌کند
+    legal = poker.legal_actions(s, 0)
+    assert legal == {"fold": True, "check": False, "call": 50, "raise_min": 0, "raise_max": 0, "allin": 0}
+    for kind, amount in (("raise", 400), ("allin", 0)):
+        with pytest.raises(LiveError, match="illegal_move"):
+            poker.act(s, uid(s, 0), kind, amount, 4)
+    poker.act(s, uid(s, 0), "call", 0, 4)
+    assert poker.legal_actions(s, 1)["raise_min"] == 0
+    poker.act(s, uid(s, 1), "call", 0, 5)
+    assert s["street"] == "flop" and s["log"][-1]["kind"] == "call"
+    assert [e["kind"] for e in s["log"]] == ["sb", "bb", "raise", "call", "allin", "call", "call"]
+
+
+def test_short_all_ins_that_add_up_to_a_full_raise_reopen_the_betting():
+    s = table(4, chips=[1000, 150, 210, 1000])
+    assert s["to_act"] == 3  # چهارنفره: نفر بعد از بلایند بزرگ
+    poker.act(s, uid(s, 3), "raise", 100, 1)  # رِیز کامل ۸۰ تایی
+    poker.act(s, uid(s, 0), "call", 0, 2)
+    poker.act(s, uid(s, 1), "allin", 0, 3)  # تا ۱۵۰: +۵۰ ناقص
+    poker.act(s, uid(s, 2), "allin", 0, 4)  # تا ۲۱۰: +۶۰ ناقص، ولی روی هم ۱۱۰ ≥ ۸۰
+    assert s["current_bet"] == 210 and s["to_act"] == 3
+    assert poker.legal_actions(s, 3)["raise_min"] == 290
+    poker.act(s, uid(s, 3), "raise", 400, 5)
+    assert poker.legal_actions(s, 0)["raise_min"] == 590  # رِیز کامل تازه برای همه باز است
+
+
+def test_hand_descriptions_like_a_real_table():
+    from games.poker.cards import describe, describe_cards
+
+    assert describe(rank5(["Ah", "Ad", "Kc", "7s", "2d"])) == "جفت آس"
+    assert describe(rank5(["Kh", "Kd", "7c", "7s", "2d"])) == "دو جفت شاه و ۷"
+    assert describe(rank5(["8h", "8d", "8c", "Ks", "Kd"])) == "فول هاوس: سه ۸ و دو شاه"
+    assert describe(rank5(["As", "Ks", "Qs", "Js", "Ts"])) == "رویال فلاش"
+    assert describe(rank5(["5c", "4d", "3h", "2s", "Ac"])) == "استریت تا ۵"
+    assert describe_cards(["Qs", "Qd"]) == "جفت بی‌بی" and describe_cards(["Ks", "As"]) == "آس و شاه هم‌خال"
+    assert describe_cards(["Jc", "Td"]) == "سرباز و ۱۰" and describe_cards([]) == ""
+    s = table(2)
+    me = poker.view(s, uid(s, 0), 1)
+    assert me["my_hand"] == describe_cards(s["hole"][0]) and me["current_bet"] == 20 and me["left_ms"] > 0
+    assert [e["kind"] for e in me["log"]] == ["sb", "bb"] and poker.view(s, None, 1)["my_hand"] == ""
+
+
 def test_side_pots_math():
     s = table(3)
     s["in_hand"] = [True, True, True]
@@ -194,7 +245,7 @@ def test_random_play_never_breaks_chip_accounting(seed):
             continue
         seat = s["to_act"]
         legal = poker.legal_actions(s, seat)
-        options = ["fold", "allin"]
+        options = ["fold"] + (["allin"] if legal["allin"] else [])
         if legal["check"]:
             options += ["check"] * 3
         if legal["call"]:

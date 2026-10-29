@@ -6,14 +6,17 @@
 ژتون‌ها را برد) تمام می‌شود و رتبه‌بندی نهایی بر اساس ژتون است؛ جایزه‌ی سکه را موتور مسابقه
 بر اساس همین رتبه‌ها تقسیم می‌کند.
 
-قوانین: بلایند کوچک/بزرگ (هر ``BLIND_UP_HANDS`` دست دو برابر)، چهار دور شرط‌بندی، پات‌های جانبی
-برای آل‌این، تقسیم پات در تساوی. در بازی دونفره دیلر بلایند کوچک را می‌گذارد و قبل از فلاپ اول
-حرف می‌زند. مهلت هر حرکت ``MOVE_SECONDS`` است؛ اگر تمام شود چک (اگر ممکن باشد) وگرنه فولد می‌شود.
+قوانین (مثل میزهای واقعی نو-لیمیت): بلایند کوچک/بزرگ (هر ``BLIND_UP_HANDS`` دست دو برابر)، سوزاندن
+کارت، چهار دور شرط‌بندی، حداقل رِیز به اندازه‌ی آخرین رِیز کامل، پات‌های جانبی برای آل‌این و تقسیم پات در
+تساوی (ژتون فرد به اولین برنده بعد از دیلر). آل‌اینِ کمتر از یک رِیز کامل شرط‌بندی را دوباره باز نمی‌کند:
+کسی که قبلاً حرکت کرده فقط می‌تواند کال یا فولد کند، مگر مجموع افزایش‌ها به یک رِیز کامل برسد (قاعده‌ی TDA).
+در بازی دونفره دیلر بلایند کوچک را می‌گذارد و قبل از فلاپ اول حرف می‌زند. مهلت هر حرکت ``MOVE_SECONDS``
+است؛ اگر تمام شود چک (اگر ممکن باشد) وگرنه فولد می‌شود.
 """
 
 from games.chess.live import LiveError
 
-from .cards import best_hand, hand_name, shuffled_deck
+from .cards import best_hand, describe, describe_cards, shuffled_deck
 
 START_CHIPS = 1000
 SMALL_BLIND = 10
@@ -25,6 +28,7 @@ MIN_PLAYERS = 2
 MAX_PLAYERS = 8
 STREETS = ("preflop", "flop", "turn", "river")
 ACTIONS = ("fold", "check", "call", "raise", "allin")
+LOG_SIZE = 24  # حرکت‌های دست فعلی که نگه داشته می‌شود
 
 
 # ------------------------------------------------------------------ ساخت میز
@@ -52,6 +56,10 @@ def new_state(user_ids: list[int], now: float, seed: str = "", hand_limit: int =
         "bet": [0] * n,
         "contrib": [0] * n,
         "acted": [False] * n,
+        # مبلغ شرط میز و حداقل رِیز در لحظه‌ی آخرین حرکت هر صندلی در این دور (قاعده‌ی رِیز ناقص)
+        "acted_level": [0] * n,
+        "acted_min": [0] * n,
+        "log": [],
         "street": "",
         "to_act": None,
         "current_bet": 0,
@@ -122,6 +130,31 @@ def _contenders(state: dict) -> list[int]:
     return [i for i in range(len(state["seats"])) if not state["left"][i] and state["chips"][i] > 0]
 
 
+def _reset_round(state: dict) -> None:
+    n = len(state["seats"])
+    state["acted"] = [False] * n
+    state["acted_level"] = [0] * n
+    state["acted_min"] = [0] * n
+
+
+def _log(state: dict, seat: int, kind: str, amount: int = 0, **extra) -> None:
+    entry = {"seat": seat, "kind": kind, "amount": amount, "street": state["street"], **extra}
+    state["last_action"] = entry
+    state.setdefault("log", []).append(entry)
+    del state["log"][:-LOG_SIZE]
+
+
+def _can_raise(state: dict, seat: int) -> bool:
+    """کسی که در این دور حرکت نکرده همیشه می‌تواند رِیز کند؛ کسی که حرکت کرده فقط اگر از آن موقع
+    دست‌کم به اندازه‌ی یک رِیز کامل به شرط میز اضافه شده باشد (آل‌اینِ ناقص شرط‌بندی را باز نمی‌کند)."""
+    if not state["acted"][seat]:
+        return True
+    levels = state.get("acted_level")
+    if levels is None:  # وضعیت ذخیره‌شده‌ی قدیمی
+        return True
+    return state["current_bet"] - levels[seat] >= state["acted_min"][seat]
+
+
 # ------------------------------------------------------------------ چرخه‌ی دست
 def _start_hand(state: dict, now: float) -> None:
     contenders = _contenders(state)
@@ -140,11 +173,12 @@ def _start_hand(state: dict, now: float) -> None:
     state["allin"] = [False] * n
     state["bet"] = [0] * n
     state["contrib"] = [0] * n
-    state["acted"] = [False] * n
+    _reset_round(state)
     state["board"] = []
     state["hole"] = [[] for _ in range(n)]
     state["result"] = None
     state["last_action"] = None
+    state["log"] = []
     deck = shuffled_deck(f"{state['seed']}:{state['hand']}")
     order = [state["dealer"]]
     while len(order) < len(contenders):
@@ -159,11 +193,12 @@ def _start_hand(state: dict, now: float) -> None:
     else:
         sb_seat = _next_seat(state, state["dealer"], lambda i: in_hand[i])
         bb_seat = _next_seat(state, sb_seat, lambda i: in_hand[i])
-    _put(state, sb_seat, state["sb"])
-    _put(state, bb_seat, state["bb"])
+    state["street"] = "preflop"
+    _log(state, sb_seat, "sb", _put(state, sb_seat, state["sb"]))
+    _log(state, bb_seat, "bb", _put(state, bb_seat, state["bb"]))
+    state["last_action"] = None
     state["current_bet"] = max(state["bet"])
     state["min_raise"] = state["bb"]
-    state["street"] = "preflop"
     state["phase"] = "betting"
     state["to_act"] = _next_seat(state, bb_seat, lambda i: _needs_action(state, i))
     state["deadline"] = now + state["move_seconds"]
@@ -183,7 +218,7 @@ def _next_street(state: dict, now: float) -> None:
         state["bet"] = [0] * n
         state["current_bet"] = 0
         state["min_raise"] = state["bb"]
-        state["acted"] = [False] * n
+        _reset_round(state)
         if state["street"] == "river":
             _showdown(state, now)
             return
@@ -252,8 +287,9 @@ def _showdown(state: dict, now: float) -> None:
         state["chips"][seat] += amount
     state["result"] = {
         "reveal": {str(i): state["hole"][i] for i in live},
+        "hands": {str(i): describe(scores[i][0]) for i in live},
         "winners": [
-            {"seat": i, "amount": amount, "hand": hand_name(scores[i][0]), "cards": scores[i][1]}
+            {"seat": i, "amount": amount, "hand": describe(scores[i][0]), "cards": scores[i][1]}
             for i, amount in sorted(won.items())
         ],
     }
@@ -295,8 +331,8 @@ def check_timeout(state: dict, now: float) -> bool:
         kind = "check" if state["bet"][seat] == state["current_bet"] else "fold"
         if kind == "fold":
             state["folded"][seat] = True
-        state["acted"][seat] = True
-        state["last_action"] = {"seat": seat, "kind": kind, "amount": 0, "timeout": True}
+        _mark_acted(state, seat)
+        _log(state, seat, kind, 0, timeout=True)
         _after_action(state, now)
     state["version"] += 1
     return True
@@ -310,14 +346,23 @@ def legal_actions(state: dict, seat: int) -> dict:
     to_call = min(current - bet, chips)
     min_to = current + state["min_raise"]
     max_to = bet + chips
+    can_raise = _can_raise(state, seat)
     return {
         "fold": True,
         "check": bet == current,
         "call": to_call if to_call > 0 else 0,
-        "raise_min": min_to if max_to > min_to else 0,
-        "raise_max": max_to if max_to > min_to else 0,
-        "allin": chips,
+        "raise_min": min_to if can_raise and max_to > min_to else 0,
+        "raise_max": max_to if can_raise and max_to > min_to else 0,
+        # آل‌اینی که بیشتر از کال است رِیز حساب می‌شود و فقط وقتی مجاز است که رِیز مجاز باشد
+        "allin": chips if can_raise or chips <= current - bet else 0,
     }
+
+
+def _mark_acted(state: dict, seat: int) -> None:
+    state["acted"][seat] = True
+    if "acted_level" in state:
+        state["acted_level"][seat] = state["current_bet"]
+        state["acted_min"][seat] = state["min_raise"]
 
 
 def act(state: dict, user_id: int, kind: str, amount: int, now: float) -> None:
@@ -345,6 +390,8 @@ def act(state: dict, user_id: int, kind: str, amount: int, now: float) -> None:
             raise LiveError("illegal_move")
         put = _put(state, seat, legal["call"])
     elif kind in ("raise", "allin"):
+        if kind == "allin" and not legal["allin"]:
+            raise LiveError("illegal_move")
         target = state["bet"][seat] + state["chips"][seat] if kind == "allin" else amount
         if kind == "raise":
             if isinstance(target, bool) or not isinstance(target, int) or not legal["raise_min"]:
@@ -355,15 +402,17 @@ def act(state: dict, user_id: int, kind: str, amount: int, now: float) -> None:
         new_bet = state["bet"][seat]
         if new_bet > current:
             if new_bet - current >= state["min_raise"]:
+                # رِیز کامل: شرط‌بندی برای همه دوباره باز می‌شود
                 state["min_raise"] = new_bet - current
+                for other in range(len(state["seats"])):
+                    if other != seat:
+                        state["acted"][other] = False
+            # آل‌این ناقص: بقیه باید مبلغ تازه را کال کنند، ولی حق رِیز دوباره فقط طبق ``_can_raise`` است
             state["current_bet"] = new_bet
-            for other in range(len(state["seats"])):
-                if other != seat:
-                    state["acted"][other] = False
     else:
         raise LiveError("bad_action")
-    state["acted"][seat] = True
-    state["last_action"] = {"seat": seat, "kind": kind, "amount": put}
+    _mark_acted(state, seat)
+    _log(state, seat, kind, put, to=state["bet"][seat])
     _after_action(state, now)
     state["version"] += 1
 
@@ -387,8 +436,8 @@ def resign(state: dict, user_id: int, now: float | None = None) -> None:
     state["left"][seat] = True
     if state["phase"] == "betting" and state["in_hand"][seat] and not state["folded"][seat]:
         state["folded"][seat] = True
-        state["acted"][seat] = True
-        state["last_action"] = {"seat": seat, "kind": "leave", "amount": 0}
+        _mark_acted(state, seat)
+        _log(state, seat, "leave")
         if state["to_act"] == seat:
             _after_action(state, now)
         elif len(_live(state)) == 1:
@@ -429,6 +478,8 @@ def view(state: dict, viewer_id: int | None, now: float) -> dict:
                 "cards": cards,
             }
         )
+    mine = state["hole"][you] if you is not None else []
+    left = max(0.0, state["deadline"] - now) if state["deadline"] else 0.0
     return {
         "game": "poker",
         "seats": seats,
@@ -439,13 +490,19 @@ def view(state: dict, viewer_id: int | None, now: float) -> dict:
         "phase": state["phase"],
         "to_act": state["to_act"],
         "legal": legal_actions(state, you) if you is not None else {},
+        "current_bet": state["current_bet"],
+        "min_raise": state["min_raise"],
         "hand": state["hand"],
         "hand_limit": state["hand_limit"],
         "sb": state["sb"],
         "bb": state["bb"],
         "last_action": state["last_action"],
+        "log": state.get("log", [])[-8:],
+        # قدرت دست خود بیننده (کارت‌های خودش + کارت‌های وسط)
+        "my_hand": describe_cards(mine + state["board"]) if mine and not state["folded"][you] else "",
         "result": state["result"] if state["phase"] in ("pause", "over") else None,
-        "seconds_left": max(0, int(state["deadline"] - now)) if state["deadline"] else 0,
+        "seconds_left": int(left),
+        "left_ms": int(left * 1000),
         "move_seconds": state["move_seconds"],
         "draw_offer": None,
         "over": state["over"],

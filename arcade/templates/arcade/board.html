@@ -84,6 +84,7 @@
 <div id="toast" class="hidden" role="alert"></div>
 
 <script src="{% static 'arcade/common/telegram-web-app.js' %}?v={{ version }}"></script>
+<script src="{% static 'arcade/common/sfx.js' %}?v={{ version }}"></script>
 <script>
 window.BOARD_BOOT = {
   token: "{{ token|escapejs }}",
