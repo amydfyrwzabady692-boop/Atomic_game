@@ -308,12 +308,117 @@ html, body {
 #moves .mv.cur { background: linear-gradient(120deg, var(--accent), #7aa2ff); color: #0b1026; }
 #moves .empty { width: 100%; color: var(--muted); font-size: 12px; text-align: center; direction: rtl; }
 
+/* ---------------------------------------------------------------- پیش‌حرکت، مرور، فلش‌ها */
+.sq.premove { box-shadow: inset 0 0 0 100px rgba(214, 60, 60, .42); }
+.sq.pre-target::after {
+  content: "";
+  position: absolute;
+  inset: 38%;
+  z-index: 2;
+  border-radius: 50%;
+  background: rgba(170, 40, 40, .55);
+  pointer-events: none;
+}
+.sq.check { animation: check-pulse 1s ease-in-out infinite; }
+@keyframes check-pulse { 50% { filter: brightness(1.18); } }
+.sq.hint { box-shadow: inset 0 0 0 100px rgba(52, 211, 153, .45); }
+#arrows { position: absolute; inset: 7px; z-index: 4; width: calc(100% - 14px); height: calc(100% - 14px); pointer-events: none; overflow: visible; }
+#arrows .arrow { fill: rgba(52, 211, 153, .82); }
+#arrows .arrow.pre { fill: rgba(214, 60, 60, .7); }
+#board-wrap.reviewing #board { filter: saturate(.75); }
+#board-wrap.reviewing { box-shadow: 0 0 0 3px rgba(255, 200, 87, .7), 0 18px 40px rgba(0, 0, 0, .5); }
+/* مرور حرکت‌ها جای خط وضعیت را می‌گیرد تا روی تخته چیزی نیاید و صفحه جابه‌جا نشود */
+#review-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: var(--size);
+  min-height: 28px;
+  margin: 2px 0 0;
+  padding: 3px 4px 3px 12px;
+  border-radius: 999px;
+  background: rgba(255, 200, 87, .12);
+  border: 1px solid rgba(255, 200, 87, .45);
+  color: var(--gold);
+  font-size: 13px;
+  font-weight: 800;
+}
+#review-bar button {
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: linear-gradient(120deg, var(--gold), #ffb020);
+  color: #3a2600;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+}
+#moves .mv { cursor: pointer; }
+#moves .mv.viewing { outline: 2px solid var(--gold); outline-offset: -2px; }
+.who .lvl {
+  display: inline-block;
+  margin-inline-start: 6px;
+  padding: 0 7px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, .1);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  vertical-align: middle;
+}
+#offline {
+  position: fixed;
+  top: calc(var(--safe-top) + 8px);
+  left: 50%;
+  z-index: 25;
+  transform: translateX(-50%);
+  padding: 7px 14px;
+  border-radius: 99px;
+  background: rgba(230, 55, 90, .92);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, .35);
+}
+
+/* ---------------------------------------------------------------- نوار ابزار پایین (مثل اپ‌های شطرنج) */
+/* دکمه‌ها در گوشی‌های باریک هم جا می‌شوند: هر دکمه سهم برابر از عرض دارد */
+#toolbar { display: flex; gap: 10px; width: var(--size); }
+#toolbar .nav-group { display: flex; gap: 4px; flex: 4 1 0; min-width: 0; }
+#toolbar #actions { flex: 2 1 0; }
+body.practice #toolbar #actions { flex: 3 1 0; }
+.tool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 6px 2px 5px;
+  border: 1px solid var(--stroke);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .06);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  transition: transform .08s ease, background .15s ease;
+}
+.tool b { font-size: 17px; line-height: 1.1; }
+.tool small { max-width: 100%; overflow: hidden; font-size: 10.5px; font-weight: 800; color: var(--muted); white-space: nowrap; text-overflow: ellipsis; }
+.tool:active { transform: scale(.94); }
+.tool:disabled { opacity: .35; }
+.tool.danger { border-color: rgba(255, 92, 122, .45); background: rgba(255, 92, 122, .12); }
+.tool.offer { border-color: var(--gold); background: rgba(255, 200, 87, .18); animation: pulse 1s ease-in-out infinite; }
+.tool.fresh b { color: var(--gold); }
+body.practice #draw-btn { display: none; }
+
 /* ---------------------------------------------------------------- وضعیت و دکمه‌ها */
 #status { margin: 2px 0 0; min-height: 26px; font-size: 15px; font-weight: 800; text-align: center; }
 #status.mine { color: var(--accent); }
 #status.alert { color: #ff8fa3; }
 #status.warn { color: var(--gold); }
-#actions { display: flex; gap: 10px; width: var(--size); }
 .btn {
   position: relative;
   flex: 1 1 0;

@@ -276,6 +276,9 @@ def test_board_api_plays_a_game_and_only_players_can_move(client, chess_match):
         status, data = post(client, "board/move", user, match_token=match.token, src=sq(move[:2]), dst=sq(move[2:]))
         assert status == 200, data
     assert data["state"]["over"] == {"reason": "checkmate", "side": "b", "winner": black.pk}
+    # حرکت‌ها برای مرور بازی و سطح بازیکن‌ها برای نوار بالا/پایین تخته
+    assert data["state"]["uci"] == ["f2f3", "e7e5", "g2g4", "d8h4"] and data["state"]["san"][-1] == "Qh4#"
+    assert data["state"]["profiles"] == {"w": {"level": 1, "emoji": "", "title": ""}, "b": {"level": 1, "emoji": "", "title": ""}}
     assert post(client, "board/move", white, match_token=match.token, src=sq("a2"), dst=sq("a3"))[1]["error"] == "game_over"
     assert post(client, "board/action", white, match_token=match.token, action="resign")[1]["error"] == "game_over"
     match.refresh_from_db()
@@ -596,6 +599,55 @@ def test_practice_chess_api_plays_against_the_computer(client, make_user):
     assert post(client, "practice/chess/state", user)[1].get("none") is True
     post(client, "practice/chess/new", user, level="nonsense")
     assert ChessPractice.objects.filter(user=user, finished=False).get().level == "medium"
+
+
+def test_undo_rebuilds_the_position_and_only_works_without_a_clock():
+    state = live.new_state(1, 2, 1000.0, control=None)
+    play(state, ["f2f3", "e7e5", "g2g4", "d8h4"])
+    assert state["over"]["reason"] == "checkmate"
+    version = state["version"]
+    assert live.undo(state, 1) == 1 and state["over"] is None and state["version"] == version + 1
+    assert state["moves"] == ["f2f3", "e7e5", "g2g4"] and state["san"] == ["f3", "e5", "g4"]
+    assert state["last"] == [sq("g2"), sq("g4")] and live.position_of(state).turn == "b"
+    assert live.undo(state, 10) == 3 and state["fen"] == START_FEN and state["last"] is None and state["san"] == []
+    assert live.undo(state, 1) == 0
+    with pytest.raises(live.LiveError, match="bad_action"):
+        live.undo(live.new_state(1, 2, 1000.0), 1)  # بازی با ساعت برگشت ندارد
+
+
+def test_practice_hint_and_undo(client, make_user):
+    from arcade.board_views import COMPUTER_ID
+    from arcade.models import ChessPractice
+
+    user = make_user(first_name="تمرین", level=4)
+    game = ChessPractice.objects.create(user=user, level="easy", state=live.new_state(user.pk, COMPUTER_ID, time.time(), control=None))
+    body = {"game_id": game.pk}
+    status, data = post(client, "practice/chess/action", user, action="undo", **body)
+    assert status == 409 and data["error"] == "bad_action"  # هنوز حرکتی نشده
+    status, data = post(client, "practice/chess/action", user, action="hint", **body)
+    src, dst = data["hint"]
+    assert status == 200 and dst in data["state"]["legal"][str(src)] and data["state"]["plies"] == 0
+    assert data["state"]["profiles"]["w"]["level"] == 4 and data["state"]["profiles"]["b"]["emoji"] == "🤖"
+    status, data = post(client, "practice/chess/move", user, src=src, dst=dst, **body)
+    assert data["state"]["plies"] == 2 and data["state"]["turn"] == "w" and len(data["state"]["uci"]) == 2
+    # برگشت: حرکت کامپیوتر و حرکت خود بازیکن هر دو برمی‌گردند
+    status, data = post(client, "practice/chess/action", user, action="undo", **body)
+    assert status == 200 and data["state"]["plies"] == 0 and data["state"]["turn"] == "w" and data["state"]["uci"] == []
+    assert ChessPractice.objects.get(pk=game.pk).state["moves"] == []
+
+    # بعد از مات شدن هم می‌شود برگشت و بازی را ادامه داد، ولی تسلیم برگشت ندارد
+    state = live.new_state(COMPUTER_ID, user.pk, time.time(), control=None)
+    play(state, ["f2f3", "e7e5", "g2g4"])
+    live.apply_move(state, user.pk, sq("d8"), sq("h4"), "", time.time())
+    game = ChessPractice.objects.create(user=user, level="easy", state=state, finished=True)
+    status, data = post(client, "practice/chess/action", user, action="hint", game_id=game.pk)
+    assert data["error"] == "not_your_turn"
+    status, data = post(client, "practice/chess/action", user, action="undo", game_id=game.pk)
+    assert status == 200 and data["state"]["plies"] == 3 and data["state"]["over"] is None and data["state"]["turn"] == "b"
+    assert not ChessPractice.objects.get(pk=game.pk).finished
+    post(client, "practice/chess/action", user, action="resign", game_id=game.pk)
+    status, data = post(client, "practice/chess/action", user, action="undo", game_id=game.pk)
+    assert status == 409 and data["error"] == "bad_action"
 
 
 def test_practice_menu_has_a_chess_tile(client):

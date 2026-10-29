@@ -31,6 +31,7 @@
 
   <div id="board-wrap">
     <div id="board" role="grid" aria-label="صفحه‌ی شطرنج"></div>
+    <svg id="arrows" viewBox="0 0 8 8" aria-hidden="true"></svg>
     <div id="promo" class="hidden" role="dialog" aria-label="انتخاب مهره برای ارتقا"></div>
   </div>
 
@@ -43,12 +44,25 @@
   <div id="moves" aria-label="حرکت‌ها"><span class="empty">حرکت‌ها این‌جا نوشته می‌شوند</span></div>
 
   <p id="status" aria-live="polite"></p>
+  <div id="review-bar" class="hidden"><span id="review-text"></span><button type="button" id="live-btn">برگشت به بازی ⏭</button></div>
 
-  <div id="actions">
-    <button id="draw-btn" class="btn violet" type="button">🤝 پیشنهاد مساوی</button>
-    <button id="resign-btn" class="btn danger" type="button">🏳 تسلیم</button>
-  </div>
+  <nav id="toolbar" aria-label="ابزار بازی">
+    <div class="nav-group" dir="ltr">
+      <button class="tool" type="button" id="first-btn" aria-label="اولین حرکت"><b>⏮</b><small>اول</small></button>
+      <button class="tool" type="button" id="prev-btn" aria-label="حرکت قبلی"><b>◀</b><small>قبلی</small></button>
+      <button class="tool" type="button" id="next-btn" aria-label="حرکت بعدی"><b>▶</b><small>بعدی</small></button>
+      <button class="tool" type="button" id="last-btn" aria-label="آخرین حرکت"><b>⏭</b><small>آخر</small></button>
+    </div>
+    <div class="nav-group" id="actions">
+      <button class="tool hidden" type="button" id="hint-btn"><b>💡</b><small>راهنما</small></button>
+      <button class="tool hidden" type="button" id="undo-btn"><b>↩️</b><small>برگشت</small></button>
+      <button class="tool" type="button" id="draw-btn"><b>🤝</b><small>مساوی</small></button>
+      <button class="tool danger" type="button" id="resign-btn"><b>🏳</b><small>تسلیم</small></button>
+    </div>
+  </nav>
 </main>
+
+<div id="offline" class="hidden" role="status">📡 اتصال ضعیف است؛ در حال تلاش دوباره…</div>
 
 <img id="ghost" class="hidden" alt="" draggable="false">
 

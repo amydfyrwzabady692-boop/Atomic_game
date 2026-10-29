@@ -228,6 +228,26 @@ def apply_move(state: dict, user_id: int, src: int, dst: int, promo: str, now: f
     return move
 
 
+def undo(state: dict, plies: int) -> int:
+    """آخرین ``plies`` نیم‌حرکت را برمی‌گرداند (فقط تمرین بدون ساعت با کامپیوتر). تعداد برگشته را می‌دهد."""
+    _upgrade(state)
+    if state["clock"] is not None:
+        raise LiveError("bad_action")
+    plies = max(0, min(plies, len(state["moves"])))
+    if not plies:
+        return 0
+    moves = state["moves"][:-plies]
+    position, san, last = Position.initial(), [], None
+    for text in moves:
+        move = _parse(position, text)
+        san.append(position.san(move))
+        position = position.push(move, validate=False)
+        last = [move.src, move.dst]
+    state.update(fen=position.fen(), moves=moves, san=san, last=last, over=None, draw_offer=None, deadline=None)
+    state["version"] += 1
+    return plies
+
+
 def resign(state: dict, user_id: int) -> None:
     _upgrade(state)
     side = side_of(state, user_id)
@@ -281,6 +301,7 @@ def view(state: dict, viewer_id: int | None, now: float) -> dict:
         "last": state["last"],
         "plies": len(state["moves"]),
         "san": state["san"],
+        "uci": state["moves"],  # برای مرور حرکت‌ها در کلاینت
         "control": state["control"],
         "base": state["base"],
         "inc": state["inc"],

@@ -82,9 +82,23 @@ def _names(state: dict) -> dict:
     return {side: users.get(uid, "") for side, uid in sides.items()}
 
 
+def _profiles(state: dict) -> dict:
+    """سطح و نشان فروشگاه هر بازیکن برای نوار بازیکن‌ها (مثل امتیاز در اپ‌های شطرنج)."""
+    from shop.services import decorations
+
+    sides = board.rules_for(state).players(state)
+    levels = dict(TelegramUser.objects.filter(pk__in=list(sides.values())).values_list("pk", "level"))
+    badges = decorations(list(sides.values()))
+    return {
+        side: {"level": levels.get(uid, 1), "emoji": badges.get(uid, {}).get("emoji", ""), "title": badges.get(uid, {}).get("title", "")}
+        for side, uid in sides.items()
+    }
+
+
 def _response(match, state: dict, user) -> JsonResponse:
     data = board.rules_for(state).view(state, user.pk, time.time())
     data["players"] = _names(state)
+    data["profiles"] = _profiles(state)
     data["cancelled"] = match.status == MatchStatus.CANCELLED
     return JsonResponse({"ok": True, "changed": True, "state": data})
 
@@ -186,16 +200,18 @@ def practice_page(request):
     return render_page(request, "", practice=True)
 
 
-def _practice_response(game, user) -> JsonResponse:
+def _practice_response(game, user, **extra) -> JsonResponse:
     data = live.view(game.state, user.pk, time.time())
     you = data["you"]
     computer = "کامپیوتر (" + LEVEL_NAMES.get(game.level, "") + ")"
-    data["players"] = {you: user.display_name, ("b" if you == "w" else "w"): computer}
+    them = "b" if you == "w" else "w"
+    data["players"] = {you: user.display_name, them: computer}
+    data["profiles"] = {you: {"level": user.level, "emoji": "", "title": ""}, them: {"level": 0, "emoji": "🤖", "title": ""}}
     data["cancelled"] = False
     data["practice"] = True
     data["game_id"] = game.pk
     data["level"] = game.level
-    return JsonResponse({"ok": True, "changed": True, "state": data})
+    return JsonResponse({"ok": True, "changed": True, "state": data, **extra})
 
 
 def _computer_moves(game) -> None:
@@ -281,9 +297,30 @@ def practice_move(request, user, payload):
 @rate_limited("practice_chess", 30, 10)
 @authenticated
 def practice_action(request, user, payload):
+    """تسلیم، برگشت حرکت (حرکت خود بازیکن و جواب کامپیوتر) یا راهنمایی (پیشنهاد یک حرکت خوب)."""
+    from games.chess import ai
+
     game = _practice_game(user, payload)
-    if payload.get("action") != "resign":
+    kind = payload.get("action")
+    if kind == "resign":
+        _guard(lambda: live.resign(game.state, user.pk))
+    elif kind == "undo":
+        state = game.state
+        you = live.side_of(state, user.pk)
+        # اگر نوبت بازیکن است، حرکت کامپیوتر و حرکت قبلی خودش برمی‌گردد؛ اگر بازی با حرکت خودش تمام شده، فقط همان.
+        # تسلیم برگشت ندارد.
+        plies = 2 if live.position_of(state).turn == you else 1
+        resigned = bool(state["over"]) and state["over"]["reason"] == "resign"
+        if resigned or len(state["moves"]) - plies < (0 if you == "w" else 1):
+            raise ArcadeError("bad_action", 409)
+        _guard(lambda: live.undo(state, plies))
+    elif kind == "hint":
+        state = game.state
+        if state["over"] or live.side_of(state, user.pk) != live.position_of(state).turn:
+            raise ArcadeError("not_your_turn", 409)
+        move = ai.choose_move(live.position_of(state), "medium")
+        return _practice_response(game, user, hint=[move.src, move.dst] if move is not None else None)
+    else:
         raise ArcadeError("bad_action", 400)
-    _guard(lambda: live.resign(game.state, user.pk))
     _save(game)
     return _practice_response(game, user)
