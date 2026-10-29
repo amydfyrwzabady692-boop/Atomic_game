@@ -869,17 +869,29 @@ ADMIN_FLOW_CANCELLED = "عملیات لغو شد."
 ADMIN_NOT_SET = "<i>ثبت نشده</i>"
 ADMIN_ON = "روشن"
 ADMIN_OFF = "خاموش"
-ADMIN_PANEL = (
-    "👑 <b>پنل مدیریت وینزون بت</b>\n" + DIVIDER + "\n"
-    "👤 مدیر: <b>{name}</b> (<code>{tg_id}</code>)\n\n"
-    "💳 <b>کارت واریز:</b> {card}\n"
-    "👤 به نام: {holder}\n\n"
-    "🪙 <b>نرخ‌ها:</b> خرید <b>{price}</b> · فروش <b>{sell_price}</b> تومان  ·  کارمزد شارژ <b>{fee}٪</b>\n"
-    "⬇️ حداقل فروش: <b>{min_sell}</b> سکه  ·  🎁 جایزه‌ی روزانه: <b>{daily}</b>\n" + DIVIDER + "\n"
-    "⏳ <b>در انتظار:</b> 🧾 {topups} رسید شارژ  ·  💸 {sells} فروش ({sells_toman} تومان)\n"
-    "📅 <b>امروز:</b> ✅ {approved} شارژ ({approved_toman} تومان)  ·  💵 {paid} واریز ({paid_toman} تومان)\n"
-    "👥 مدیران ربات: <b>{admins}</b> نفر"
+ADMIN_PANEL = "🛠 <b>پنل مدیریت وینزون بت</b>\n" + DIVIDER + "\n👤 <b>{name}</b>  ·  {role}\n{body}"
+ADMIN_PANEL_PAYMENTS = (
+    "\n💳 <b>مالی</b>\n"
+    "⏳ در انتظار: <b>{topups}</b> رسید شارژ  ·  <b>{sells}</b> فروش ({sells_toman} تومان)\n"
+    "📅 امروز: <b>{approved}</b> شارژ ({approved_toman} تومان)  ·  <b>{paid}</b> واریز ({paid_toman} تومان)\n"
 )
+ADMIN_PANEL_LIVE = (
+    "\n📈 <b>همین حالا</b>\n"
+    "🎮 <b>{live}</b> مسابقه‌ی در جریان  ·  👤 <b>{users}</b> کاربر ({dau} فعال امروز)\n"
+    + COIN + " سکه در گردش: <b>{coins}</b>\n"
+)
+ADMIN_PANEL_SETTINGS = (
+    "\n⚙️ <b>تنظیمات</b>\n"
+    "🪙 خرید <b>{price}</b>  ·  فروش <b>{sell_price}</b> تومان  ·  کارمزد <b>{fee}٪</b>\n"
+    "💳 کارت: {card}  ·  🎁 روزانه: <b>{daily}</b>\n"
+)
+ADMIN_ROLE_OWNER = "👑 مالک"
+ADMIN_ROLE = "🎖 {role}"
+ADMIN_NO_ACCESS = "⛔️ دسترسی این بخش را نداری."
+ADMIN_USERS_BTN = "👤 کاربران"
+ADMIN_GAMES_BTN = "🎮 بازی‌ها و مسابقه‌ها"
+ADMIN_SETTINGS_BTN = "⚙️ تنظیمات اقتصاد"
+ADMIN_AUDIT_BTN = "🧾 حسابرسی سکه"
 ADMIN_TOPUPS_BTN = "🧾 رسیدهای شارژ ({n})"
 ADMIN_SELLS_BTN = "💸 درخواست‌های فروش ({n})"
 ADMIN_SET_CARD_BTN = "💳 کارت واریز"
@@ -942,17 +954,167 @@ ADMIN_RATE_SAVED = (
     "حداقل فروش: <b>{min_sell}</b> سکه  ·  قیمت فروش: <b>{sell_price}</b> تومان"
 )
 ADMIN_DAILY_TOGGLED = "جایزه‌ی روزانه {state} شد."
-ADMIN_ADMINS_HEADER = "👥 <b>مدیران ربات</b>\n" + DIVIDER + "\n👑 مالک: <code>{owner}</code>\n\n"
-ADMIN_ADMINS_LINE = "{n}. <code>{tg_id}</code>"
+ADMIN_ADMINS_HEADER = (
+    "👮 <b>مدیران ربات</b>\n" + DIVIDER + "\n"
+    "👑 مالک و مدیران کل (از تنظیمات سرور، همه‌ی دسترسی‌ها): {owners}\n\n"
+)
+ADMIN_ADMINS_LINE = "{n}. <b>{name}</b> <code>{tg_id}</code> — {role}"
 ADMIN_ADMINS_EMPTY = "<i>مدیر دیگری اضافه نشده است.</i>"
+ADMIN_ADMINS_HINT = "\n\n<i>هر مدیر را بزن تا دسترسی‌هایش را تغییر دهی یا حذفش کنی.</i>"
 ADMIN_ADD_ADMIN_BTN = "➕ افزودن مدیر"
-ADMIN_DEL_ADMIN_BTN = "➖ حذف مدیر"
-ADMIN_DEL_ONE_BTN = "❌ حذف {tg_id}"
-ADMIN_PICK_TO_DELETE = "کدام مدیر حذف شود؟"
-ADMIN_ASK_NEW_ADMIN = "➕ آیدی عددی تلگرام مدیر جدید را بفرست:\n<i>(از @userinfobot می‌شود گرفت)</i>"
-ADMIN_BAD_ADMIN_ID = "❌ یک آیدی عددی معتبر بفرست."
-ADMIN_ADDED = "✅ <code>{tg_id}</code> به مدیران ربات اضافه شد."
+ADMIN_ADMIN_ITEM_BTN = "✏️ {name} — {role}"
+ADMIN_ASK_NEW_ADMIN = (
+    "➕ <b>مدیر تازه</b>\n" + DIVIDER + "\n"
+    "آیدی عددی یا @یوزرنیم کسی که می‌خواهی مدیر شود را بفرست.\n"
+    "<i>(آیدی عددی را از @userinfobot می‌شود گرفت؛ برای انصراف «لغو» بفرست)</i>"
+)
+ADMIN_BAD_ADMIN_ID = "❌ یک آیدی عددی معتبر یا @یوزرنیم کاربری که ربات را استارت کرده بفرست."
+ADMIN_ALREADY_OWNER = "این کاربر مالک یا مدیر کل است و همه‌ی دسترسی‌ها را دارد."
+ADMIN_PICK_ROLE = (
+    "🎖 <b>نقش {name}</b> (<code>{tg_id}</code>)\n" + DIVIDER + "\n"
+    "یکی از نقش‌های آماده را انتخاب کن؛ بعداً هر دسترسی را جدا هم می‌شود روشن یا خاموش کرد."
+)
+ADMIN_ADMIN_DETAIL = (
+    "👮 <b>{name}</b> (<code>{tg_id}</code>)\n" + DIVIDER + "\n"
+    "🎖 نقش: <b>{role}</b>\n📅 از {date}\n\n"
+    "دسترسی‌ها را با زدن هر کدام روشن ✅ یا خاموش ⬜️ کن، یا یکی از نقش‌های آماده را بزن:"
+)
+ADMIN_PRESET_BTN = "🎖 {name}"
+ADMIN_DEL_ADMIN_BTN = "🗑 حذف این مدیر"
+ADMIN_DEL_SURE = "⚠️ <b>{name}</b> (<code>{tg_id}</code>) از مدیران حذف شود؟"
+ADMIN_DEL_SURE_BTN = "🗑 بله، حذف کن"
+ADMIN_ONLY_OWNER = "فقط مالک ربات می‌تواند دسترسی مدیریت مدیران را بدهد یا بگیرد."
+ADMIN_ADDED = "✅ <b>{name}</b> (<code>{tg_id}</code>) با نقش «{role}» مدیر شد."
 ADMIN_REMOVED = "مدیر {tg_id} حذف شد."
+ADMIN_PERMS_SAVED = "دسترسی‌ها ذخیره شد ✅"
+ADMIN_NEW_ADMIN_NOTE = (
+    "🎖 <b>تو مدیر ربات وینزون بت شدی</b> (نقش: {role}).\n"
+    "برای باز کردن پنل مدیریت /admin را بفرست."
+)
+
+# ------------------------------------------------------------------ پنل: کاربران
+ADMIN_ASK_USER = (
+    "👤 <b>جستجوی کاربر</b>\n" + DIVIDER + "\n"
+    "آیدی عددی یا @یوزرنیم کاربر را بفرست.\n<i>(برای انصراف «لغو» بفرست)</i>"
+)
+ADMIN_USER_CARD = (
+    "👤 <b>{name}</b>{username}\n" + DIVIDER + "\n"
+    "🆔 <code>{tg_id}</code>  ·  📅 عضویت: {joined}\n"
+    + COIN + " موجودی: <b>{coins}</b> سکه\n"
+    "⭐ سطح {level}  ·  🎮 {games} بازی  ·  🏆 {wins} برد\n"
+    "📥 شارژ تأییدشده: <b>{topups}</b> تومان  ·  📤 فروش واریزشده: <b>{sells}</b> تومان\n"
+    "{status}\n" + DIVIDER + "\n"
+    "🧾 <b>آخرین تراکنش‌ها</b>\n{txs}"
+)
+ADMIN_USER_ACTIVE = "✅ وضعیت: فعال"
+ADMIN_USER_BANNED = "⛔️ وضعیت: <b>مسدود</b>"
+ADMIN_USER_NOT_STARTED = "  ·  <i>ربات را استارت نکرده</i>"
+ADMIN_USER_TX = "{sign}{amount} {kind} <i>— {date}</i>"
+ADMIN_USER_NO_TX = "<i>هنوز تراکنشی ندارد.</i>"
+ADMIN_GIVE_BTN = "➕ دادن سکه"
+ADMIN_TAKE_BTN = "➖ کم کردن سکه"
+ADMIN_BAN_BTN = "⛔️ مسدود کردن"
+ADMIN_UNBAN_BTN = "✅ رفع مسدودی"
+ADMIN_FIND_OTHER_BTN = "🔎 کاربر دیگر"
+ADMIN_USER_DM_BTN = "✉️ پیام"
+ADMIN_ASK_AMOUNT = (
+    "{icon} <b>{action} سکه برای {name}</b> (<code>{tg_id}</code>)\n" + DIVIDER + "\n"
+    "موجودی فعلی: <b>{coins}</b> سکه\nتعداد سکه را بفرست:\n<i>(برای انصراف «لغو» بفرست)</i>"
+)
+ADMIN_GIVE_WORD = "دادن"
+ADMIN_TAKE_WORD = "کم کردن"
+ADMIN_BAD_AMOUNT = "❌ یک عدد مثبت بفرست (حداکثر ۱٬۰۰۰٬۰۰۰ سکه در هر بار)."
+ADMIN_GRANT_CONFIRM = (
+    "⚠️ <b>تأیید نهایی</b>\n" + DIVIDER + "\n"
+    "{icon} <b>{amount}</b> سکه {side} <b>{name}</b> (<code>{tg_id}</code>) {verb}؟\n"
+    "موجودی بعد از این کار: <b>{after}</b> سکه"
+)
+ADMIN_GRANT_TO = "به"
+ADMIN_GRANT_FROM = "از"
+ADMIN_GRANT_GIVE_VERB = "داده شود"
+ADMIN_GRANT_TAKE_VERB = "کم شود"
+ADMIN_GRANT_SURE_BTN = "✅ بله، انجام بده"
+ADMIN_GRANT_DONE = "✅ انجام شد؛ موجودی تازه: {balance} سکه."
+ADMIN_GRANT_LOW = "❌ موجودی کاربر برای این کسر کافی نیست (موجودی: {balance})."
+ADMIN_BANNED_ALERT = "⛔️ {name} مسدود شد."
+ADMIN_UNBANNED_ALERT = "✅ {name} آزاد شد."
+ADMIN_CANT_BAN_ADMIN = "مدیران ربات را نمی‌شود مسدود کرد."
+
+# ------------------------------------------------------------------ پنل: بازی‌ها و مسابقه‌های در جریان
+ADMIN_GAMES = (
+    "🎮 <b>بازی‌ها</b>\n" + DIVIDER + "\n"
+    "هر بازی را بزن تا در همه‌ی گروه‌ها روشن 🟢 یا خاموش 🔴 شود.\n"
+    "🟢 فعال: <b>{on}</b>  ·  🔴 خاموش: <b>{off}</b>  ·  🎮 در جریان: <b>{live}</b>"
+)
+ADMIN_GAME_BTN = "{dot} {emoji} {title}"
+ADMIN_GAME_TOGGLED = "{title}: {state}"
+ADMIN_LIVE_BTN = "🎮 مسابقه‌های در جریان ({n})"
+ADMIN_LIVE_LIST = "🎮 <b>مسابقه‌های در جریان</b> ({total})\n" + DIVIDER + "\n{lines}"
+ADMIN_LIVE_EMPTY = "✅ <b>هیچ مسابقه‌ای الان در جریان نیست.</b>"
+ADMIN_LIVE_LINE = "<b>#{id}</b> {emoji} {title}  ·  {status}  ·  👥 {players}  ·  " + COIN + " {pot}\n<i>{place} — {age}</i>"
+ADMIN_LIVE_ITEM_BTN = "#{id} {emoji} {title}"
+ADMIN_LIVE_DETAIL = (
+    "{emoji} <b>{title}</b>{variant}  ·  <b>#{id}</b>\n" + DIVIDER + "\n"
+    "📍 {place}\n👤 سازنده: {creator}\n"
+    "⏱ وضعیت: <b>{status}</b>  ·  ساخته‌شده {age}\n"
+    + COIN + " ورودی: <b>{fee}</b>  ·  جایزه‌ی کل: <b>{pot}</b>\n"
+    "👥 بازیکن‌ها ({count}):\n{players}"
+)
+ADMIN_LIVE_CANCEL_BTN = "❌ لغو و برگشت ورودی‌ها"
+ADMIN_LIVE_CANCEL_SURE = "⚠️ مسابقه‌ی <b>#{id}</b> ({title}) لغو و ورودی همه‌ی بازیکن‌ها کامل برگردانده شود؟"
+ADMIN_LIVE_CANCEL_SURE_BTN = "❌ بله، لغو کن"
+ADMIN_LIVE_CANCELLED = "✅ مسابقه‌ی #{id} لغو شد و ورودی‌ها برگشت."
+ADMIN_LIVE_GONE = "این مسابقه دیگر در جریان نیست."
+ADMIN_LIVE_STATUS = {"LOBBY": "عضوگیری", "RUNNING": "در حال بازی"}
+ADMIN_LIVE_DUEL = "⚔️ حریف تصادفی"
+
+# ------------------------------------------------------------------ پنل: تنظیمات اقتصاد
+ADMIN_SETTINGS = (
+    "⚙️ <b>تنظیمات اقتصاد سکه</b>\n" + DIVIDER + "\n"
+    "💳 کارت واریز: {card}\n👤 به نام: {holder}\n\n"
+    "🪙 قیمت خرید هر سکه: <b>{price}</b> تومان  ·  کارمزد شارژ: <b>{fee}٪</b>\n"
+    "💵 قیمت فروش هر سکه: <b>{sell_price}</b> تومان  ·  حداقل فروش: <b>{min_sell}</b> سکه\n"
+    "🎁 جایزه‌ی روزانه: <b>{daily}</b>\n"
+    "🎉 هدیه‌ی ثبت‌نام: <b>{bonus}</b> سکه\n"
+    "🤝 جایزه‌ی دعوت: <b>{ref_reward}</b> سکه برای هر <b>{ref_every}</b> دعوت"
+)
+ADMIN_BONUS_BTN = "🎉 هدیه‌ی ثبت‌نام"
+ADMIN_REFERRAL_BTN = "🤝 جایزه‌ی دعوت"
+ADMIN_ASK_BONUS = (
+    "🎉 <b>هدیه‌ی ثبت‌نام</b>\n" + DIVIDER + "\n"
+    "فعلی: <b>{bonus}</b> سکه\nتعداد سکه‌ای که هر کاربر تازه با اولین /start می‌گیرد را بفرست (۰ = خاموش):"
+)
+ADMIN_ASK_REFERRAL = (
+    "🤝 <b>جایزه‌ی دعوت دوست</b>\n" + DIVIDER + "\n"
+    "فعلی: <b>{reward}</b> سکه برای هر <b>{every}</b> دعوت\n"
+    "دو عدد با فاصله بفرست: <code>[سکه‌ی جایزه] [تعداد دعوت]</code>\n<i>مثال:</i> <code>30 10</code>  (جایزه‌ی ۰ = خاموش)"
+)
+ADMIN_BAD_NUMBERS = "❌ عددها معتبر نیستند؛ دوباره بفرست (یا «لغو» برای انصراف)."
+ADMIN_SAVED = "✅ ذخیره شد."
+
+# ------------------------------------------------------------------ پنل: آمار و حسابرسی
+ADMIN_STATS = (
+    "📊 <b>آمار ربات</b>\n" + DIVIDER + "\n"
+    "👤 کاربران: <b>{users}</b>  ·  تازه امروز {new_today}  ·  ۷ روز {new_week}\n"
+    "🔥 فعال: امروز <b>{dau}</b>  ·  ۷ روز <b>{wau}</b>\n"
+    "👥 گروه‌های فعال: <b>{groups}</b>\n"
+    "🎮 مسابقه: امروز <b>{matches_today}</b>  ·  ۷ روز {matches_week}  ·  کل {matches}  ·  الان {live}\n"
+    "⭐ محبوب‌ترین‌ها (۷ روز): {top_games}\n"
+    + COIN + " سکه در گردش: <b>{coins}</b>\n" + DIVIDER + "\n"
+    "💳 <b>شارژ تأییدشده</b> (تومان)\nامروز {topup_today}  ·  ۷ روز {topup_week}  ·  ۳۰ روز {topup_month}\n"
+    "💵 <b>فروش واریزشده</b> (تومان)\nامروز {sell_today}  ·  ۷ روز {sell_week}  ·  ۳۰ روز {sell_month}"
+)
+ADMIN_AUDIT_RUNNING = "در حال بررسی همه‌ی کیف پول‌ها…"
+ADMIN_AUDIT_OK = (
+    "🧾 <b>حسابرسی سکه</b>\n" + DIVIDER + "\n"
+    "✅ <b>همه‌چیز دقیق است.</b>\n"
+    "موجودی <b>{users}</b> کیف پول با <b>{transactions}</b> تراکنش ledger، حساب همه‌ی مسابقه‌ها "
+    "(ورودی، جایزه و برگشت) و همه‌ی رسیدهای شارژ و درخواست‌های فروش با هم جور است."
+)
+ADMIN_AUDIT_BAD = (
+    "🧾 <b>حسابرسی سکه</b>\n" + DIVIDER + "\n"
+    "⚠️ <b>{count} مغایرت پیدا شد</b> (سکه‌ای جابه‌جا نشده؛ فقط گزارش است):\n<code>{lines}</code>"
+)
 ADMIN_ASK_MSG_TARGET = (
     "✉️ <b>پیام به کاربر</b>\n" + DIVIDER + "\n"
     "آیدی عددی یا @یوزرنیم کاربر را بفرست:\n<i>(برای انصراف «لغو» بفرست)</i>"

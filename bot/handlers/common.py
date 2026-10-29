@@ -25,41 +25,36 @@ def manager_of(context: ContextTypes.DEFAULT_TYPE) -> MatchManager:
     return context.application.bot_data["manager"]
 
 
-# ------------------------------------------------------------------ مدیران ربات
-# ادمین‌های اضافه (پنل /admin) در دیتابیس‌اند؛ برای این‌که هر بررسی «ادمین است؟» یک کوئری نشود،
-# فهرست چند ثانیه در حافظه می‌ماند. افزودن/حذف از پنل کش را همان لحظه تازه می‌کند.
+# ------------------------------------------------------------------ مدیران ربات و دسترسی‌ها
+# مدیرهای اضافه‌شده از پنل /admin (با دسترسی‌هایشان) در دیتابیس‌اند؛ برای این‌که هر بررسی دسترسی یک کوئری
+# نشود، فهرست چند ثانیه در حافظه می‌ماند. افزودن/حذف/تغییر از پنل کش را همان لحظه تازه می‌کند.
 EXTRA_ADMINS_TTL = 30.0
-_extra_admins: dict = {"ids": frozenset(), "at": float("-inf")}
+_extra_admins: dict = {"perms": {}, "at": float("-inf")}
 
 
-def _fetch_extra_admin_ids() -> frozenset[int]:
-    from wallet.models import EconomySettings
+def _fetch_extra_admins() -> dict[int, frozenset[str]]:
+    from core.models import BotAdmin
+    from core.permissions import clean
 
-    ids = set()
-    for value in EconomySettings.load().extra_admin_ids or []:
-        try:
-            ids.add(int(value))
-        except (TypeError, ValueError):
-            continue
-    return frozenset(ids)
+    return {tg_id: frozenset(clean(perms)) for tg_id, perms in BotAdmin.objects.values_list("tg_id", "permissions")}
 
 
-async def refresh_admin_ids() -> frozenset[int]:
-    """فهرست ادمین‌های اضافه را از دیتابیس می‌خواند؛ اگر دیتابیس در دسترس نبود همان فهرست قبلی می‌ماند."""
+async def refresh_admin_ids() -> dict[int, frozenset[str]]:
+    """مدیران پنل را از دیتابیس می‌خواند؛ اگر دیتابیس در دسترس نبود همان فهرست قبلی می‌ماند."""
     from ..db import db
 
     try:
-        _extra_admins["ids"] = await db(_fetch_extra_admin_ids)()
+        _extra_admins["perms"] = await db(_fetch_extra_admins)()
         _extra_admins["at"] = time.monotonic()
     except Exception as exc:
-        logger.warning("failed to load extra admin ids: %s", exc)
-    return _extra_admins["ids"]
+        logger.warning("failed to load bot admins: %s", exc)
+    return _extra_admins["perms"]
 
 
-async def _extra_admin_ids() -> frozenset[int]:
+async def _extra_admin_perms() -> dict[int, frozenset[str]]:
     if time.monotonic() - _extra_admins["at"] > EXTRA_ADMINS_TTL:
         return await refresh_admin_ids()
-    return _extra_admins["ids"]
+    return _extra_admins["perms"]
 
 
 def _static_admin_ids() -> list[int]:
@@ -67,17 +62,41 @@ def _static_admin_ids() -> list[int]:
     return list(dict.fromkeys(ids + [int(x) for x in settings.SUPERADMIN_IDS]))
 
 
-async def get_all_admin_ids() -> list[int]:
-    """شناسه‌ی همه‌ی مدیران ربات: مالک، سوپرادمین‌های .env و ادمین‌های اضافه‌شده از پنل."""
-    return list(dict.fromkeys(_static_admin_ids() + sorted(await _extra_admin_ids())))
+def is_owner(tg_id) -> bool:
+    """مالک و سوپرادمین‌های .env: همه‌ی دسترسی‌ها را دارند و از پنل حذف نمی‌شوند."""
+    try:
+        return int(tg_id) in _static_admin_ids()
+    except (TypeError, ValueError):
+        return False
 
 
-async def is_superadmin(tg_id: int) -> bool:
+async def admin_permissions(tg_id) -> frozenset[str]:
+    """دسترسی‌های این کاربر در پنل مدیریت (خالی یعنی مدیر نیست)."""
+    from core.permissions import ALL
+
     try:
         value = int(tg_id)
     except (TypeError, ValueError):
-        return False
-    return value in _static_admin_ids() or value in await _extra_admin_ids()
+        return frozenset()
+    if value in _static_admin_ids():
+        return ALL
+    return (await _extra_admin_perms()).get(value, frozenset())
+
+
+async def has_permission(tg_id, permission: str) -> bool:
+    return permission in await admin_permissions(tg_id)
+
+
+async def get_all_admin_ids(permission: str | None = None) -> list[int]:
+    """شناسه‌ی مدیرانی که این دسترسی را دارند (بدون ``permission``: همه‌ی مدیران)؛ مالک و سوپرادمین‌ها اول."""
+    extra = await _extra_admin_perms()
+    chosen = [tg_id for tg_id, perms in sorted(extra.items()) if perms and (permission is None or permission in perms)]
+    return list(dict.fromkeys(_static_admin_ids() + chosen))
+
+
+async def is_superadmin(tg_id: int) -> bool:
+    """آیا این کاربر مدیر ربات است (هر دسترسی‌ای داشته باشد)؟ هر بخش پنل دسترسی خودش را جدا بررسی می‌کند."""
+    return bool(await admin_permissions(tg_id))
 
 
 async def reply(update: Update, text: str, reply_markup=None):
@@ -90,8 +109,9 @@ async def reply(update: Update, text: str, reply_markup=None):
     )
 
 
-def command(*, private: bool = False, group: bool = False, superadmin: bool = False):
-    """handler دستور: ``async def fn(update, context, user)``"""
+def command(*, private: bool = False, group: bool = False, superadmin: bool = False, permission: str | None = None):
+    """handler دستور: ``async def fn(update, context, user)``. ``superadmin`` یعنی فقط مدیران ربات و
+    ``permission`` یعنی فقط مدیرانی که همین دسترسی را دارند (برای بقیه دستور بی‌صدا نادیده گرفته می‌شود)."""
 
     def decorator(fn):
         @wraps(fn)
@@ -100,6 +120,8 @@ def command(*, private: bool = False, group: bool = False, superadmin: bool = Fa
             if tg_user is None or chat is None or tg_user.is_bot or update.effective_message is None:
                 return
             if superadmin and not await is_superadmin(tg_user.id):
+                return
+            if permission and not await has_permission(tg_user.id, permission):
                 return
             if not await ratelimit.allow(f"rl:cmd:{tg_user.id}", 3, 2):
                 return

@@ -88,12 +88,6 @@ class EconomySettings(models.Model):
     coin_sell_price_toman = models.PositiveIntegerField(
         verbose_name="قیمت فروش هر سکه (تومان)", default=1000, help_text="مبلغ پرداختی به کاربر به ازای هر سکه در فروش (۱۰۰۰ تومان)"
     )
-    extra_admin_ids = models.JSONField(
-        verbose_name="ادمین‌های اضافه",
-        default=list,
-        blank=True,
-        help_text="لیست آیدی‌های عددی تلگرام ادمین‌های افزوده شده از پنل ربات",
-    )
     updated_at = models.DateTimeField(verbose_name="آخرین تغییر", auto_now=True)
 
     class Meta:
@@ -122,9 +116,10 @@ class TopUpRequest(models.Model):
 
     user = models.ForeignKey("core.TelegramUser", on_delete=models.CASCADE, related_name="topup_requests", verbose_name="کاربر")
     coins = models.PositiveIntegerField(verbose_name="تعداد سکه")
-    amount_toman = models.PositiveIntegerField(verbose_name="مبلغ خام (تومان)")
-    fee_toman = models.PositiveIntegerField(verbose_name="کارمزد (تومان)")
-    total_toman = models.PositiveIntegerField(verbose_name="مبلغ کل پرداختی (تومان)")
+    # مبلغ‌های تومانی ۶۴ بیتی‌اند: قیمت بالای سکه × درخواست بزرگ از سقف int32 (۲٫۱ میلیارد) رد می‌شد
+    amount_toman = models.PositiveBigIntegerField(verbose_name="مبلغ خام (تومان)")
+    fee_toman = models.PositiveBigIntegerField(verbose_name="کارمزد (تومان)")
+    total_toman = models.PositiveBigIntegerField(verbose_name="مبلغ کل پرداختی (تومان)")
     receipt_photo_id = models.CharField(verbose_name="شناسه عکس رسید تلگرام", max_length=255, blank=True)
     status = models.CharField(verbose_name="وضعیت", max_length=16, choices=Status.choices, default=Status.PENDING)
     admin_note = models.CharField(verbose_name="توضیح ادمین", max_length=255, blank=True)
@@ -135,6 +130,7 @@ class TopUpRequest(models.Model):
         verbose_name = "درخواست شارژ کیف پول"
         verbose_name_plural = "درخواست‌های شارژ کیف پول"
         ordering = ["-created_at"]
+        indexes = [models.Index(fields=["status", "created_at"])]
 
     def __str__(self) -> str:
         return f"TopUp #{self.pk} - {self.user} - {self.coins} coins ({self.status})"
@@ -148,7 +144,7 @@ class SellRequest(models.Model):
 
     user = models.ForeignKey("core.TelegramUser", on_delete=models.CASCADE, related_name="sell_requests", verbose_name="کاربر")
     coins = models.PositiveIntegerField(verbose_name="تعداد سکه")
-    amount_toman = models.PositiveIntegerField(verbose_name="مبلغ واریزی (تومان)")
+    amount_toman = models.PositiveBigIntegerField(verbose_name="مبلغ واریزی (تومان)")
     card_number = models.CharField(verbose_name="شماره کارت", max_length=32)
     card_holder = models.CharField(verbose_name="نام دارنده کارت", max_length=128, blank=True)
     status = models.CharField(verbose_name="وضعیت", max_length=16, choices=Status.choices, default=Status.PENDING)
@@ -160,6 +156,7 @@ class SellRequest(models.Model):
         verbose_name = "درخواست فروش سکه"
         verbose_name_plural = "درخواست‌های فروش سکه"
         ordering = ["-created_at"]
+        indexes = [models.Index(fields=["status", "created_at"])]
 
     def __str__(self) -> str:
         return f"Sell #{self.pk} - {self.user} - {self.coins} coins ({self.status})"

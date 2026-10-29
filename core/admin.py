@@ -1,6 +1,7 @@
 import re
 import uuid
 
+from django import forms
 from django.contrib import admin, messages
 from django.db import transaction
 from django.template.response import TemplateResponse
@@ -10,7 +11,8 @@ from django.utils.html import format_html, format_html_join
 from wallet.models import CoinTransaction, TxType
 from wallet.services import apply_transaction
 
-from .models import TelegramGroup, TelegramUser
+from . import permissions
+from .models import BotAdmin, TelegramGroup, TelegramUser
 
 admin.site.site_header = "مدیریت ربات بازی‌های گروهی"
 admin.site.site_title = "ربات بازی"
@@ -158,3 +160,29 @@ class TelegramGroupAdmin(admin.ModelAdmin):
     list_filter = ("is_active", "allow_user_created_games")
     search_fields = ("title", "chat_id")
     readonly_fields = ("chat_id", "created_at")
+
+
+class BotAdminForm(forms.ModelForm):
+    """دسترسی‌ها به‌صورت چک‌باکس؛ همان کلیدهایی که پنل ربات می‌شناسد."""
+
+    permissions = forms.MultipleChoiceField(
+        label="دسترسی‌ها", choices=list(permissions.PERMISSIONS.items()), widget=forms.CheckboxSelectMultiple, required=False
+    )
+
+    class Meta:
+        model = BotAdmin
+        fields = ["tg_id", "name", "permissions"]
+
+    def clean_permissions(self):
+        return permissions.clean(self.cleaned_data.get("permissions"))
+
+
+@admin.register(BotAdmin)
+class BotAdminAdmin(admin.ModelAdmin):
+    form = BotAdminForm
+    list_display = ("tg_id", "name", "role", "created_at")
+    search_fields = ("tg_id", "name")
+
+    @admin.display(description="نقش")
+    def role(self, obj):
+        return permissions.role_name(obj.permissions)

@@ -16,7 +16,7 @@ from core.textutils import normalize_fa
 
 from .models import CoinTransaction, EconomySettings, SellRequest, TopUpRequest, TxType
 
-# سقف هر درخواست شارژ/فروش؛ مبلغ تومانی در ستون PositiveIntegerField (حداکثر ۲٬۱۴۷٬۴۸۳٬۶۴۷) جا شود
+# سقف تعداد سکه‌ی هر درخواست شارژ/فروش (مبلغ تومانی در ستون ۶۴ بیتی ذخیره می‌شود)
 MAX_REQUEST_COINS = 100_000
 
 

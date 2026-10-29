@@ -1,6 +1,6 @@
 """فروشگاه آیتم‌های ظاهری. خرید فقط با سکه‌ی مجازی و غیرقابل برگشت است."""
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 
 from wallet.models import TxType
 from wallet.services import InsufficientFunds, apply_transaction
@@ -15,17 +15,21 @@ class ShopError(Exception):
 
 
 def buy_item(user, item_id: int) -> UserItem:
-    with transaction.atomic():
-        item = ShopItem.objects.filter(pk=item_id, is_active=True).first()
-        if item is None:
-            raise ShopError("not_found")
-        if UserItem.objects.filter(user=user, item=item).exists():
-            raise ShopError("already_owned")
-        try:
-            apply_transaction(user, -item.price, TxType.SHOP, f"shop:{user.pk}:{item.pk}")
-        except InsufficientFunds as exc:
-            raise ShopError("no_coins") from exc
-        owned = UserItem.objects.create(user=user, item=item)
+    try:
+        with transaction.atomic():
+            item = ShopItem.objects.filter(pk=item_id, is_active=True).first()
+            if item is None:
+                raise ShopError("not_found")
+            if UserItem.objects.filter(user=user, item=item).exists():
+                raise ShopError("already_owned")
+            try:
+                apply_transaction(user, -item.price, TxType.SHOP, f"shop:{user.pk}:{item.pk}")
+            except InsufficientFunds as exc:
+                raise ShopError("no_coins") from exc
+            owned = UserItem.objects.create(user=user, item=item)
+    except IntegrityError as exc:
+        # دو خرید هم‌زمان همان آیتم: سکه فقط یک بار کم شده (کلید یکتای ledger) و دومی همین‌جا رد می‌شود
+        raise ShopError("already_owned") from exc
     set_equipped(user, item_id, True)
     owned.refresh_from_db()
     return owned

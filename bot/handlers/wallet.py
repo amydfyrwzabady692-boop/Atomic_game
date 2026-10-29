@@ -33,7 +33,7 @@ from .. import render, ui
 from ..db import db
 from ..tg import tg_call
 from ..users import ensure_user, find_user
-from .common import answer, callback, command, get_all_admin_ids, is_superadmin, reply
+from .common import answer, callback, command, get_all_admin_ids, has_permission, reply
 
 logger = logging.getLogger(__name__)
 
@@ -354,7 +354,7 @@ async def _receive_receipt(update: Update, context, user: TelegramUser, flow: di
     # رسیدی که به‌صورت فایل (نه عکس) فرستاده شده با sendPhoto نمی‌رود
     as_document = message_is_document(update)
     sent = []
-    for admin_id in await get_all_admin_ids():
+    for admin_id in await get_all_admin_ids("payments"):
         if as_document:
             alert = await tg_call(
                 context.bot.send_document, admin_id, document=file_id, caption=caption, parse_mode="HTML", reply_markup=keyboard
@@ -445,7 +445,7 @@ async def _confirm_sell(update: Update, context, user: TelegramUser, query) -> N
     )
     keyboard = sell_alert_keyboard(req.pk, user.tg_id)
     sent = []
-    for admin_id in await get_all_admin_ids():
+    for admin_id in await get_all_admin_ids("payments"):
         message = await tg_call(context.bot.send_message, admin_id, text, parse_mode="HTML", reply_markup=keyboard)
         if message is not None:
             sent.append({"chat_id": admin_id, "msg_id": message.message_id, "photo": False})
@@ -674,7 +674,7 @@ async def _finish_review(update, context, user: TelegramUser, query, kind: str, 
 @callback
 async def admin_topup_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser, query):
     """adm:top:<app|rej|capp|crej|reset>:<id>[:p] — دو مرحله‌ای (اول انتخاب، بعد تأیید نهایی). «:p» یعنی از پنل /admin."""
-    if not await is_superadmin(user.tg_id):
+    if not await has_permission(user.tg_id, "payments"):
         await answer(query, texts.ADMIN_ONLY, alert=True)
         return
     parts = query.data.split(":")
@@ -729,7 +729,7 @@ async def admin_topup_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 @callback
 async def admin_sell_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser, query):
     """adm:sell:<pay|receipt|rej|cpay|crej|reset>:<id>[:p]"""
-    if not await is_superadmin(user.tg_id):
+    if not await has_permission(user.tg_id, "payments"):
         await answer(query, texts.ADMIN_ONLY, alert=True)
         return
     parts = query.data.split(":")

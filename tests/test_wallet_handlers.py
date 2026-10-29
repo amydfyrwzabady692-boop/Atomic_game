@@ -313,7 +313,7 @@ async def test_admin_panel_lists_and_approves_topups_from_the_panel(app):
     context.user_data = user_data(app, ADMIN)
     await admin_handlers.admin_cmd(update, context)
     panel = update.replies[0]
-    assert "پنل مدیریت" in panel["text"] and "۲ رسید شارژ" in panel["text"]
+    assert "پنل مدیریت" in panel["text"] and "<b>۲</b> رسید شارژ" in panel["text"]
     listing = await press(app, ADMIN, "adm:topup:list:0", handler=admin_handlers.admin_callback)
     photo = [m for m in app.bot.sent if m.get("photo") == "R10"]
     assert photo or listing.edits  # رسید با عکسش نشان داده می‌شود

@@ -74,3 +74,23 @@ class TelegramGroup(models.Model):
 
     def fee_allowed(self, fee: int) -> bool:
         return self.min_entry <= fee <= self.max_entry
+
+
+class BotAdmin(models.Model):
+    """مدیری که از پنل ربات (/admin) اضافه شده و دسترسی‌هایش. مالک و SUPERADMIN_IDS همیشه همه‌ی
+    دسترسی‌ها را دارند و این‌جا ثبت نمی‌شوند. کلیدهای دسترسی در ``core.permissions`` تعریف شده‌اند."""
+
+    tg_id = models.BigIntegerField("شناسه تلگرام", unique=True)
+    name = models.CharField(verbose_name="نام", max_length=128, blank=True, default="")
+    permissions = models.JSONField(verbose_name="دسترسی‌ها", default=list, blank=True)
+    added_by = models.BigIntegerField(verbose_name="افزوده‌شده توسط", null=True, blank=True)
+    created_at = models.DateTimeField(verbose_name="تاریخ افزودن", auto_now_add=True)
+    updated_at = models.DateTimeField(verbose_name="آخرین تغییر", auto_now=True)
+
+    class Meta:
+        verbose_name = "مدیر ربات"
+        verbose_name_plural = "مدیران ربات"
+        ordering = ["created_at", "pk"]
+
+    def __str__(self) -> str:
+        return f"{self.name or self.tg_id} ({', '.join(self.permissions)})"

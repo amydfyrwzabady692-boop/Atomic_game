@@ -84,6 +84,6 @@ def fresh_admin_cache():
     """فهرست ادمین‌های اضافه‌ی پنل بین تست‌ها نشت نکند (ربات آن را چند ثانیه در حافظه نگه می‌دارد)."""
     from bot.handlers import common
 
-    common._extra_admins.update(ids=frozenset(), at=float("-inf"))
+    common._extra_admins.update(perms={}, at=float("-inf"))
     yield
-    common._extra_admins.update(ids=frozenset(), at=float("-inf"))
+    common._extra_admins.update(perms={}, at=float("-inf"))
