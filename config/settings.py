@@ -97,7 +97,7 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 # ---------------------------------------------------------------- تلگرام
 BOT_TOKEN = env("BOT_TOKEN", default="")
 BOT_USERNAME = env("BOT_USERNAME", default="")  # بدون @؛ اگر خالی باشد از getMe خوانده می‌شود
-# مالک ربات همیشه سوپرادمین است؛ بقیه از SUPERADMIN_IDS و «ادمین‌های اضافه» پنل /admin می‌آیند
+# مالک ربات و SUPERADMIN_IDS همه‌ی دسترسی‌ها را دارند؛ بقیه‌ی مدیران با نقش و دسترسی در «مدیران ربات» (پنل /admin) ثبت می‌شوند
 OWNER_TG_ID = env.int("OWNER_TG_ID", default=639344728)
 _raw_admins = env.list("SUPERADMIN_IDS", default=[])
 SUPERADMIN_IDS = list(dict.fromkeys([OWNER_TG_ID] + [int(x) for x in _raw_admins if str(x).strip().isdigit()]))
