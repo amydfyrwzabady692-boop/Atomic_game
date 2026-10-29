@@ -47,9 +47,13 @@
 <section id="screen-over" class="screen hidden">
   <div class="card">
     <div id="confetti" aria-hidden="true"></div>
+    <div class="game-emoji over-icon" id="over-icon" aria-hidden="true"></div>
     <div class="badge hidden" id="over-badge">🏆 رکورد جدید!</div>
     <p class="muted" id="over-label">امتیاز تو</p>
     <div class="big-score" id="over-score">۰</div>
+    <!-- ستاره‌ها نسبت به رکورد شخصی قبل از این تلاش، مثل بازی‌های موبایل -->
+    <div class="stars hidden" id="over-stars" aria-hidden="true"><i>★</i><i>★</i><i>★</i></div>
+    <div class="to-record hidden" id="over-progress"><div class="bar"><i></i></div><small></small></div>
     <div class="stats" id="over-stats"></div>
     <p class="muted small" id="over-note"></p>
     <button id="again-btn" class="btn primary" type="button"><span class="btn-icon" aria-hidden="true">↻</span>دوباره بازی کن</button>

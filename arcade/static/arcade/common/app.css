@@ -70,6 +70,9 @@ html, body {
   background-clip: text;
   color: transparent;
 }
+/* از رکورد شخصی رد شده: قاب و عدد طلایی */
+.hud-score.best { border-color: rgba(255, 200, 87, .75); box-shadow: 0 8px 28px rgba(0, 0, 0, .35), 0 0 22px rgba(255, 200, 87, .35), inset 0 1px 0 rgba(255, 255, 255, .12); }
+.hud-score.best span { background-image: linear-gradient(180deg, #fff3c4, var(--gold) 60%, #ff9f43); }
 .hud-sub {
   margin-top: 6px;
   font-size: 13px;
@@ -339,6 +342,38 @@ p { margin: 6px 0; line-height: 1.8; }
   box-shadow: 0 8px 22px rgba(255, 180, 60, .4);
   animation: pop .5s cubic-bezier(.2, 1.6, .4, 1);
 }
+/* ---------------------------------------------------------------- کارت نتیجه: ستاره‌ها و فاصله تا رکورد */
+.over-icon { margin-bottom: 4px; animation: none; }
+.over-icon .game-icon { width: 64px !important; height: 64px !important; }
+.stars { display: flex; justify-content: center; align-items: flex-end; gap: 6px; margin: 2px 0 4px; }
+.stars i {
+  font-style: normal;
+  font-size: 34px;
+  line-height: 1;
+  color: rgba(255, 255, 255, .14);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, .25);
+  transition: color .2s ease;
+}
+.stars i:nth-child(2) { font-size: 46px; transform: translateY(-6px); }
+.stars i.on {
+  color: #ffd257;
+  text-shadow: 0 0 18px rgba(255, 200, 87, .65), 0 3px 0 #c27c0e;
+  animation: star-pop .5s cubic-bezier(.2, 1.7, .4, 1);
+}
+.stars i:nth-child(2).on { animation-name: star-pop-mid; }
+@keyframes star-pop { from { transform: scale(.2) rotate(-40deg); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes star-pop-mid { from { transform: translateY(-6px) scale(.2) rotate(-40deg); opacity: 0; } to { transform: translateY(-6px); opacity: 1; } }
+.to-record { margin: 4px 6px 0; }
+.to-record .bar { height: 8px; border-radius: 99px; background: rgba(255, 255, 255, .08); overflow: hidden; direction: rtl; }
+.to-record .bar i {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(270deg, var(--accent), var(--accent2));
+  transition: width .9s cubic-bezier(.2, .8, .3, 1);
+}
+.to-record small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
 #confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: inherit; }
 #confetti i {
   position: absolute;
@@ -393,5 +428,5 @@ p { margin: 6px 0; line-height: 1.8; }
   .card { padding: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .game-emoji, .tap-hint, .menu-item, .screen, .btn.go::after, .btn.primary::after, #confetti i, .badge { animation: none; }
+  .game-emoji, .tap-hint, .menu-item, .screen, .btn.go::after, .btn.primary::after, #confetti i, .badge, .stars i.on { animation: none; }
 }

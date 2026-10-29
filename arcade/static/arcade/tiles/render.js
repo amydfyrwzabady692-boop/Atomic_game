@@ -5,6 +5,7 @@
     var core = Arcade.cores.tiles, art = env.art;
     var shown = 0; // اسکرول نمایشی (در حالت ۵۰ کاشی نرم دنبال منطق می‌رود)
     var hitFlash = [];
+    var laneGlow = []; // نور ستونی که کاشی‌اش زده شد: {col, life}
     var INSET = 4;
 
     function rowH() { return env.H / core.VISIBLE_ROWS; }
@@ -86,6 +87,16 @@
       };
     }
 
+    /* نور ستون: از پایین (جای انگشت) روشن و رو به بالا محو */
+    function paintLane(c, w, h) {
+      var g = c.createLinearGradient(0, h, 0, 0);
+      g.addColorStop(0, "rgba(255,210,87,.55)");
+      g.addColorStop(0.45, "rgba(255,210,87,.16)");
+      g.addColorStop(1, "rgba(255,210,87,0)");
+      c.fillStyle = g;
+      c.fillRect(0, 0, w, h);
+    }
+
     function paintTopShade(c, w, h) {
       var g = c.createLinearGradient(0, 0, 0, h);
       g.addColorStop(0, "rgba(14,12,10,.82)");
@@ -101,6 +112,7 @@
       reset: function (state) {
         shown = state.offset;
         hitFlash = [];
+        laneGlow = [];
       },
       input: function (kind, data) {
         if (kind !== "tap") return null;
@@ -118,6 +130,14 @@
         if (name === "hit") {
           hitFlash.push({ row: state.hits - 1, life: 1 });
           var col = state.cols[state.hits - 1];
+          laneGlow.push({ col: col, life: 1 });
+          if (laneGlow.length > 4) laneGlow.shift();
+          if (state.hits % 25 === 0) {
+            // هر ۲۵ کاشی: تشویق وسط صفحه
+            env.fx.text(env.W / 2, env.H * 0.42, "🔥 " + env.fa(state.hits) + " کاشی!", "#ffd257");
+            env.fx.ring((col + 0.5) * colW(), env.H * 0.7, "#ffd257", 10, 90);
+            env.sound("bonus");
+          }
           env.fx.text((col + 0.5) * colW(), env.H * 0.62, ["♪", "♫", "♩"][state.hits % 3], ["#ffd257", "#6ee7ff", "#ff9ecb"][state.hits % 3]);
           env.haptic("light");
           env.sound("tap");
@@ -143,6 +163,16 @@
         shown = state.mode === "fifty" ? shown + (target - shown) * 0.35 : target;
 
         env.scene(c, "tiles", paintScene);
+        if (laneGlow.length) {
+          var lane = env.sprite("tiles:lane", 8, 256, paintLane);
+          for (var g = laneGlow.length - 1; g >= 0; g--) {
+            laneGlow[g].life -= 0.06;
+            if (laneGlow[g].life <= 0) { laneGlow.splice(g, 1); continue; }
+            c.globalAlpha = laneGlow[g].life;
+            c.drawImage(lane.canvas, laneGlow[g].col * cw, env.H * 0.25, cw, env.H * 0.75);
+          }
+          c.globalAlpha = 1;
+        }
         var black = env.sprite("tiles:black", tw, th, paintTile("black", tw, th), 10);
         var next = env.sprite("tiles:next", tw, th, paintTile("next", tw, th), 10);
 

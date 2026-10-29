@@ -300,6 +300,7 @@
 
     return {
       controls: "sides",
+      hudBump: false, // امتیاز همان ارتفاع است و پیوسته بالا می‌رود
       ownBackground: true,
       reset: function (state) {
         camera = state.camY;

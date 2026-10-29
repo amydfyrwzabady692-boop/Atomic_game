@@ -605,13 +605,36 @@
   }
 
   var hudScoreEl = $("hud-score"), hudSubEl = $("hud-sub");
+  var hudPill = hudScoreEl.parentNode;
   var hudShown = { score: null, sub: null };
+  var lastBump = 0;
+  /* امتیاز که بالا می‌رود عددش کمی می‌پرد (انیمیشن ترکیبی مرورگر، بدون محاسبه‌ی دوباره‌ی چیدمان).
+     بازی‌هایی که امتیازشان پیوسته بالا می‌رود (ارتفاع) با hudBump: false خاموشش می‌کنند. */
+  function bumpHud() {
+    var t = performance.now();
+    if (!hudPill.animate || t - lastBump < 160 || game.renderer.hudBump === false) return;
+    lastBump = t;
+    hudPill.animate([{ transform: "scale(1)" }, { transform: "scale(1.13)" }, { transform: "scale(1)" }], { duration: 240, easing: "ease-out" });
+  }
   function updateHud() {
     var state = run ? run.state : game.idleState;
     var score = state ? state.score : 0;
     if (score !== hudShown.score) {
+      var rising = run && hudShown.score !== null && score > hudShown.score;
       hudShown.score = score;
       hudScoreEl.textContent = fa(score);
+      if (rising) {
+        bumpHud();
+        // همان لحظه‌ای که از رکورد شخصی رد می‌شود (مثل بازی‌های موبایل)
+        var record = game.info.record || 0;
+        if (record > 0 && score > record && !run.beatRecord) {
+          run.beatRecord = true;
+          hudPill.classList.add("best");
+          fx.text(view.W / 2, env.safeTop + 34, "🏆 رکورد جدید!", colors.gold);
+          sound("bonus");
+          haptic("success");
+        }
+      }
     }
     var sub = game.renderer.hud ? game.renderer.hud(state) : "";
     if (run && run.deadline) {
@@ -696,6 +719,8 @@
         deadline: game.info.mode === "match" ? game.infoAt + game.info.seconds_left * 1000 : 0,
       };
       if (game.renderer.reset) game.renderer.reset(run.state);
+      hudPill.classList.remove("best");
+      hudShown.score = null;
       show(null);
       if (tg) {
         try { tg.BackButton.show(); tg.enableClosingConfirmation(); } catch (e) { /* قدیمی */ }
@@ -767,12 +792,46 @@
     }
   }
 
+  /* ستاره‌ها نسبت به رکورد قبل از این تلاش: رکورد تازه سه ستاره، ۷۰٪ رکورد دو و ۳۵٪ یکی.
+     بعد از بالا رفتن عدد امتیاز یکی‌یکی روشن می‌شوند. */
+  var starTimers = [];
+  function showStars(score, before) {
+    starTimers.forEach(clearTimeout);
+    starTimers = [];
+    var box = $("over-stars");
+    var count = score <= 0 ? 0 : score > before ? 3 : score >= before * 0.7 ? 2 : score >= before * 0.35 ? 1 : 0;
+    var stars = box.querySelectorAll("i");
+    for (var i = 0; i < stars.length; i++) stars[i].classList.remove("on");
+    box.classList.remove("hidden");
+    var delay = Math.min(900, 300 + score * 4) + 150;
+    for (var n = 0; n < count; n++) {
+      starTimers.push(setTimeout(function (star, last) {
+        star.classList.add("on");
+        sound(last ? "clear" : "good");
+        haptic(last ? "medium" : "light");
+      }, delay + n * 260, stars[n], n === count - 1));
+    }
+    var progress = $("over-progress");
+    progress.classList.toggle("hidden", !(before > 0 && score < before));
+    if (before > 0 && score < before) {
+      var bar = progress.querySelector("i");
+      bar.style.width = "0";
+      progress.querySelector("small").textContent = "تا رکورد شخصی " + fa(before - score) + " امتیاز مانده";
+      starTimers.push(setTimeout(function () { bar.style.width = Math.max(2, Math.round((score / before) * 100)) + "%"; }, 60));
+    }
+  }
+
   function renderOver(current) {
     var res = current.result;
     var local = current.state.score;
     var again = $("again-btn");
     $("over-note").textContent = "";
     $("over-badge").classList.add("hidden");
+    setIcon($("over-icon"), game.meta.key, game.meta.emoji, 64);
+    if (!current.celebrated) {
+      $("over-stars").classList.add("hidden");
+      $("over-progress").classList.add("hidden");
+    }
     if (!res) {
       $("over-label").textContent = "در حال ثبت امتیاز…";
       $("over-score").textContent = fa(local);
@@ -791,6 +850,7 @@
       if (!current.celebrated) {
         current.celebrated = true;
         countUp($("over-score"), res.verified_score);
+        showStars(res.verified_score, game.info.record || 0);
         // رکورد شخصی تازه (نسبت به رکوردی که هنگام شروع این تلاش داشت)
         if (res.verified_score > 0 && res.verified_score > (game.info.record || 0)) {
           $("over-badge").classList.remove("hidden");

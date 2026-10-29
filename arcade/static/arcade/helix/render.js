@@ -2,7 +2,9 @@
    و رد رنگ روی سکوها.
 
    هر طبقه یک بار از بالا (به‌صورت حلقه) در یک اسپرایت کشیده می‌شود و در هر فریم فقط با چرخش و
-   فشرده‌سازی عمودی روی صفحه می‌آید؛ ضخامت سکو با چند نسخه‌ی تیره‌ی همان حلقه زیر آن ساخته می‌شود. */
+   فشرده‌سازی عمودی روی صفحه می‌آید. از ضخامت سکو فقط نیمه‌ی جلویی دیواره‌ی بیرونی و سطح بریده‌ی لبه‌ی
+   شکافِ رو به دوربین دیده می‌شود؛ این دو مستقیم با مسیر (کمان بیضی و چهارضلعی) کشیده می‌شوند، پس هر
+   طبقه فقط یک تصویر بزرگ دارد و لبه‌ها پله‌پله نیستند. */
 (function () {
   "use strict";
   Arcade.registerRenderer("helix", function (env) {
@@ -11,7 +13,6 @@
     var TWO_PI = Math.PI * 2;
     var R_OUT = 128, R_IN = 40, TILT = 0.34, SY = 0.085, THICK = 15;
     var R_MID = (R_OUT + R_IN) / 2;
-    var WALL_SCALE = 2; // اسپرایت دیواره با نصف وضوح ساخته می‌شود
     var THEMES = [
       { sky: ["#2f6fd0", "#7fd3ff"], plat: "#ffd166", ball: "#ff4d6d" },
       { sky: ["#51377a", "#6f86c9"], plat: "#7bdff2", ball: "#ffb703" },
@@ -21,6 +22,8 @@
       { sky: ["#2d3340", "#4f8ff0"], plat: "#f7d6e0", ball: "#06d6a0" },
     ];
     var RED = "#e63946", BASE = "#ffd257";
+    var HALF = 180000; // نیم‌دایره به واحد زاویه‌ی هسته
+    var cutColors = {}, wallColors = {};
     var camera = 0, pendingDx = 0, squash = 0;
     var splats = []; // رد رنگ توپ روی سکوها: { floor, local }
     var made = {}; // کلید اسپرایت طبقه‌هایی که ساخته شده‌اند → شماره‌ی طبقه
@@ -42,14 +45,13 @@
       c.closePath();
       c.fill();
     }
-    /* حلقه‌ی یک طبقه از نمای بالا. wall=true نسخه‌ی تیره برای ضخامت است. scale برای وضوح کمتر */
-    function paintFloor(floor, plat, wall, scale) {
+    /* حلقه‌ی یک طبقه از نمای بالا */
+    function paintFloor(floor, plat) {
       return function (c, w) {
-        var m = w / 2, r1 = R_OUT / scale, r0 = R_IN / scale;
-        var platColor = wall ? art.shade(plat, -0.42) : plat;
-        var redColor = wall ? art.shade(RED, -0.45) : RED;
+        var m = w / 2, r1 = R_OUT, r0 = R_IN;
+        var platColor = plat, redColor = RED;
         if (!floor) {
-          c.fillStyle = wall ? art.shade(BASE, -0.42) : BASE;
+          c.fillStyle = BASE;
           sector(c, m, r0, r1, 0, TWO_PI - 0.0001);
         } else {
           var gapEnd = (floor.gapStart + floor.gapSize) * RAD;
@@ -72,7 +74,6 @@
             }
           }
         }
-        if (wall) return;
         // سایه‌ی ملایم کنار ستون و برق لبه‌ی بیرونی (فقط روی خود سکو)
         c.globalCompositeOperation = "source-atop";
         var g = c.createRadialGradient(m, m, r0, m, m, r1);
@@ -85,13 +86,11 @@
         c.globalCompositeOperation = "source-over";
       };
     }
-    function floorSprite(state, k, wall) {
-      var key = "helix:floor:" + k + (wall ? ":w" : "");
+    function floorSprite(state, k) {
+      var key = "helix:floor:" + k;
       made[key] = k;
       var floor = k <= state.count ? state.floors[k - 1] : null;
-      var scale = wall ? WALL_SCALE : 1;
-      var size = (R_OUT * 2) / scale;
-      return env.sprite(key, size, size, paintFloor(floor, theme().plat, wall, scale), 1);
+      return env.sprite(key, R_OUT * 2, R_OUT * 2, paintFloor(floor, theme().plat), 1);
     }
     function forgetFloors(keep) {
       for (var key in made) {
@@ -129,6 +128,58 @@
         env.dropShadow(c, 2, 1.5, 0.35);
         art.sphere(c, 12, 12, 11.5, fire ? "#ffb703" : color);
       };
+    }
+
+    function mod(v) { return ((v % core.CIRCLE) + core.CIRCLE) % core.CIRCLE; }
+    /* نیمه‌ی جلویی دیواره‌ی بیرونی: کمان‌های رنگی بین بیضی بالا و همان بیضی به اندازه‌ی ضخامت پایین‌تر.
+       زاویه‌ی صفحه‌ی ۰ تا π (جلوی برج) از زاویه‌ی محلی ‎-rot شروع می‌شود. */
+    function frontWall(c, floor, cx, y, rot, plat) {
+      var start = mod(-rot), cuts = [0, HALF];
+      var bounds = floor ? [floor.gapStart, floor.gapStart + floor.gapSize] : [];
+      if (floor) for (var r = 0; r < floor.reds.length; r++) bounds.push(floor.reds[r][0], floor.reds[r][0] + floor.reds[r][1]);
+      for (var b = 0; b < bounds.length; b++) {
+        var off = mod(bounds[b] - start);
+        if (off > 0 && off < HALF) cuts.push(off);
+      }
+      cuts.sort(function (p, q) { return p - q; });
+      var from = 0, kind = -1;
+      for (var i = 0; i < cuts.length; i++) {
+        var here = i < cuts.length - 1 ? (floor ? core.sector(floor, mod(start + (cuts[i] + cuts[i + 1]) / 2)) : 1) : -2;
+        if (here === kind) continue; // بخش‌های پشت سر هم با یک رنگ یک کمان‌اند
+        if (kind > 0 && cuts[i] > from) {
+          var color = kind === 2 ? RED : floor ? plat : BASE;
+          c.fillStyle = wallColors[color] || (wallColors[color] = art.shade(color, -0.42));
+          c.beginPath();
+          c.ellipse(cx, y, R_OUT, R_OUT * TILT, 0, from * RAD, cuts[i] * RAD);
+          c.ellipse(cx, y + THICK, R_OUT, R_OUT * TILT, 0, cuts[i] * RAD, from * RAD, true);
+          c.closePath();
+          c.fill();
+        }
+        kind = here;
+        from = cuts[i];
+      }
+    }
+
+    /* سطح بریده‌ی دو لبه‌ی شکاف: فقط لبه‌ای که رو به دوربین (پایین صفحه) است دیده می‌شود */
+    function cutFaces(c, floor, cx, y, rotRad, plat) {
+      var end = (floor.gapStart + floor.gapSize) % core.CIRCLE;
+      for (var e = 0; e < 2; e++) {
+        var edge = e === 0 ? floor.gapStart : end, side = e === 0 ? 1 : -1;
+        var a = edge * RAD + rotRad, cos = Math.cos(a), sin = Math.sin(a);
+        if (cos * side <= 0) continue;
+        // رنگ همان بخشی که کنار شکاف است (قرمز یا رنگ سکو)
+        var next = (((edge - side * 500) % core.CIRCLE) + core.CIRCLE) % core.CIRCLE;
+        var color = core.sector(floor, next) === 2 ? RED : plat;
+        c.fillStyle = cutColors[color] || (cutColors[color] = art.shade(color, -0.3));
+        var x1 = cx + cos * R_IN, y1 = y + sin * R_IN * TILT, x2 = cx + cos * R_OUT, y2 = y + sin * R_OUT * TILT;
+        c.beginPath();
+        c.moveTo(x1, y1);
+        c.lineTo(x2, y2);
+        c.lineTo(x2, y2 + THICK);
+        c.lineTo(x1, y1 + THICK);
+        c.closePath();
+        c.fill();
+      }
     }
 
     /* یک حلقه با چرخش برج و فشرده‌سازی عمودی (نمای مایل) */
@@ -274,9 +325,9 @@
           var y = floorScreenY(k);
           if (y > H + 70 || y < -70) continue;
           if (!(floor && floor.broken)) {
-            var wall = floorSprite(state, k, true);
-            for (var d = THICK; d > 0; d -= 2.5) ring(c, wall, cx, y + d, rotRad, WALL_SCALE);
-            ring(c, floorSprite(state, k, false), cx, y, rotRad, 1);
+            frontWall(c, floor, cx, y, state.rot, th.plat);
+            if (floor) cutFaces(c, floor, cx, y, rotRad, th.plat);
+            ring(c, floorSprite(state, k), cx, y, rotRad, 1);
             // رد رنگ توپ روی این سکو
             for (var s = 0; s < splats.length; s++) {
               var splat = splats[s];
