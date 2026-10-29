@@ -12,6 +12,10 @@
 کسی که قبلاً حرکت کرده فقط می‌تواند کال یا فولد کند، مگر مجموع افزایش‌ها به یک رِیز کامل برسد (قاعده‌ی TDA).
 در بازی دونفره دیلر بلایند کوچک را می‌گذارد و قبل از فلاپ اول حرف می‌زند. مهلت هر حرکت ``MOVE_SECONDS``
 است؛ اگر تمام شود چک (اگر ممکن باشد) وگرنه فولد می‌شود.
+
+وقتی همه آل‌این شده‌اند بقیه‌ی کارت‌ها بدون شرط‌بندی باز می‌شوند؛ ``result["runout"]`` شماره‌ی اولین
+کارت وسطی است که این‌طور آمده تا مینی‌اپ کارت‌ها را مثل میز واقعی یکی‌یکی باز کند (وقفه‌ی بعد از دست
+به همین اندازه بلندتر می‌شود). خلاصه‌ی دست قبل در ``last_hand`` می‌ماند.
 """
 
 from games.chess.live import LiveError
@@ -24,11 +28,12 @@ BLIND_UP_HANDS = 4
 HAND_LIMIT = 10
 MOVE_SECONDS = 30
 PAUSE_SECONDS = 6
+RUNOUT_SECONDS = 1.3  # مکث برای باز شدن هر خیابان در آل‌این
 MIN_PLAYERS = 2
 MAX_PLAYERS = 8
 STREETS = ("preflop", "flop", "turn", "river")
 ACTIONS = ("fold", "check", "call", "raise", "allin")
-LOG_SIZE = 24  # حرکت‌های دست فعلی که نگه داشته می‌شود
+LOG_SIZE = 48  # حرکت‌های دست فعلی که نگه داشته می‌شود
 
 
 # ------------------------------------------------------------------ ساخت میز
@@ -157,6 +162,8 @@ def _can_raise(state: dict, seat: int) -> bool:
 
 # ------------------------------------------------------------------ چرخه‌ی دست
 def _start_hand(state: dict, now: float) -> None:
+    if state.get("result"):
+        state["last_hand"] = {"hand": state["hand"], "board": list(state["board"]), **state["result"]}
     contenders = _contenders(state)
     if len(contenders) <= 1 or state["hand"] >= state["hand_limit"]:
         _finish_game(state, "chips" if len(contenders) <= 1 else "limit")
@@ -177,6 +184,7 @@ def _start_hand(state: dict, now: float) -> None:
     state["board"] = []
     state["hole"] = [[] for _ in range(n)]
     state["result"] = None
+    state["runout"] = None
     state["last_action"] = None
     state["log"] = []
     deck = shuffled_deck(f"{state['seed']}:{state['hand']}")
@@ -223,12 +231,15 @@ def _next_street(state: dict, now: float) -> None:
             _showdown(state, now)
             return
         state["street"] = STREETS[STREETS.index(state["street"]) + 1]
-        _deal(state, 3 if state["street"] == "flop" else 1)
+        count = 3 if state["street"] == "flop" else 1
+        _deal(state, count)
         can_act = [i for i in _live(state) if not state["allin"][i]]
         if len(can_act) >= 2:
             state["to_act"] = _next_seat(state, state["dealer"], lambda i: _needs_action(state, i))
             state["deadline"] = now + state["move_seconds"]
             return
+        if state.get("runout") is None:  # کسی برای شرط بستن نمانده: بقیه‌ی کارت‌ها پشت سر هم
+            state["runout"] = len(state["board"]) - count
 
 
 def _after_action(state: dict, now: float) -> None:
@@ -285,6 +296,7 @@ def _showdown(state: dict, now: float) -> None:
             won[i] = won.get(i, 0) + share + (extra if i == first else 0)
     for seat, amount in won.items():
         state["chips"][seat] += amount
+    runout = state.get("runout")
     state["result"] = {
         "reveal": {str(i): state["hole"][i] for i in live},
         "hands": {str(i): describe(scores[i][0]) for i in live},
@@ -292,16 +304,19 @@ def _showdown(state: dict, now: float) -> None:
             {"seat": i, "amount": amount, "hand": describe(scores[i][0]), "cards": scores[i][1]}
             for i, amount in sorted(won.items())
         ],
+        "runout": runout,
     }
-    _end_hand(state, now)
+    # در آل‌این هر خیابان (فلاپ، ترن، ریور) جدا باز می‌شود؛ وقفه به همان اندازه بیشتر است
+    streets = {0: 3, 3: 2, 4: 1}.get(runout, 0)
+    _end_hand(state, now, streets * RUNOUT_SECONDS)
 
 
-def _end_hand(state: dict, now: float) -> None:
+def _end_hand(state: dict, now: float, extra: float = 0.0) -> None:
     state["phase"] = "pause"
     state["to_act"] = None
     state["contrib"] = [0] * len(state["seats"])
     state["bet"] = [0] * len(state["seats"])
-    state["deadline"] = now + PAUSE_SECONDS
+    state["deadline"] = now + PAUSE_SECONDS + extra
 
 
 def _finish_game(state: dict, reason: str) -> None:
@@ -453,6 +468,14 @@ def offer_draw(state: dict, user_id: int) -> bool:
 
 
 # ------------------------------------------------------------------ نمایش
+def contested_pots(state: dict) -> list[int]:
+    """پات اصلی و پات‌های جانبی که دست‌کم دو نفر سرشان رقابت می‌کنند (فقط وقتی بیش از یکی است)."""
+    if state["phase"] != "betting" or not any(state["allin"]):
+        return []
+    pots = [amount for amount, eligible in side_pots(state) if len(eligible) >= 2]
+    return pots if len(pots) > 1 else []
+
+
 def view(state: dict, viewer_id: int | None, now: float) -> dict:
     you = seat_of(state, viewer_id) if viewer_id is not None else None
     reveal = (state["result"] or {}).get("reveal", {}) if state["phase"] == "pause" else {}
@@ -486,6 +509,7 @@ def view(state: dict, viewer_id: int | None, now: float) -> dict:
         "you": you,
         "board": state["board"],
         "pot": pot(state),
+        "pots": contested_pots(state),
         "street": state["street"],
         "phase": state["phase"],
         "to_act": state["to_act"],
@@ -497,10 +521,11 @@ def view(state: dict, viewer_id: int | None, now: float) -> dict:
         "sb": state["sb"],
         "bb": state["bb"],
         "last_action": state["last_action"],
-        "log": state.get("log", [])[-8:],
+        "log": state.get("log", []),
         # قدرت دست خود بیننده (کارت‌های خودش + کارت‌های وسط)
         "my_hand": describe_cards(mine + state["board"]) if mine and not state["folded"][you] else "",
         "result": state["result"] if state["phase"] in ("pause", "over") else None,
+        "last_hand": state.get("last_hand"),
         "seconds_left": int(left),
         "left_ms": int(left * 1000),
         "move_seconds": state["move_seconds"],

@@ -16,9 +16,10 @@
     <div class="title">
       <b>🃏 پوکر</b>
       <span class="chip" id="hand-chip"></span>
-      <span class="chip blinds" id="blind-chip"></span>
     </div>
     <div class="tools">
+      <button class="icon-btn" id="ranks-btn" type="button" aria-label="رتبه‌ی دست‌ها" title="رتبه‌ی دست‌ها">🏅</button>
+      <button class="icon-btn" id="history-btn" type="button" aria-label="تاریخچه‌ی دست" title="تاریخچه‌ی دست">📜</button>
       <button class="icon-btn" id="sound-btn" type="button" aria-label="صدا" title="صدا">🔊</button>
       <button class="icon-btn" id="resign-btn" type="button" aria-label="ترک میز" title="ترک میز">🚪</button>
     </div>
@@ -29,8 +30,10 @@
       <div class="felt-logo">WINZON</div>
       <div id="center">
         <div id="pot"><i class="chip-ico"></i><span>پات</span> <b id="pot-amount">۰</b></div>
+        <div id="side-pots" class="hidden"></div>
         <div id="board-cards"></div>
         <div id="street"></div>
+        <span class="chip blinds" id="blind-chip"></span>
       </div>
     </div>
     <div id="layer"></div>
@@ -49,6 +52,14 @@
   <div id="log" aria-live="polite"></div>
 
   <p id="status" aria-live="polite"></p>
+
+  <!-- حرکت از پیش، مثل اپ‌های پوکر: وقتی نوبت برسد خودکار انجام می‌شود -->
+  <section id="pre" class="hidden" aria-label="حرکت از پیش">
+    <button type="button" class="pre-btn" data-pre="checkfold"><i></i><span>چک/فولد</span></button>
+    <button type="button" class="pre-btn" data-pre="check"><i></i><span>چک</span></button>
+    <button type="button" class="pre-btn" data-pre="call"><i></i><span>کال</span></button>
+    <button type="button" class="pre-btn" data-pre="callany"><i></i><span>کال هر مبلغ</span></button>
+  </section>
 
   <section id="controls" class="hidden">
     <div id="sizing" class="hidden">
@@ -82,6 +93,22 @@
     <ol id="result-list"></ol>
     <button id="result-close" class="btn go" type="button">برگشت</button>
     <button id="result-view" class="btn violet" type="button">دیدن میز</button>
+  </div>
+</section>
+<section id="history" class="overlay sheet hidden" role="dialog" aria-label="تاریخچه‌ی دست">
+  <div class="card">
+    <h2>📜 تاریخچه</h2>
+    <div id="history-body"></div>
+    <button class="btn violet sheet-close" type="button">بستن</button>
+  </div>
+</section>
+
+<section id="ranks" class="overlay sheet hidden" role="dialog" aria-label="رتبه‌ی دست‌ها">
+  <div class="card">
+    <h2>🏅 رتبه‌ی دست‌ها</h2>
+    <p class="muted">از قوی‌ترین به ضعیف‌ترین؛ بهترین ۵ کارت از ۷ کارت (۲ کارت خودت و ۵ کارت وسط) حساب می‌شود.</p>
+    <ol id="ranks-list"></ol>
+    <button class="btn violet sheet-close" type="button">بستن</button>
   </div>
 </section>
 <div id="confetti" aria-hidden="true"></div>

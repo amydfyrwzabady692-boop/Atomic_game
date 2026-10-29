@@ -141,6 +141,52 @@ def test_all_in_runs_out_the_board_and_side_pot():
     assert sum(w["amount"] for w in s["result"]["winners"]) > 0
 
 
+def test_all_in_runout_is_staged_and_the_last_hand_is_kept():
+    s = table(2)
+    d = s["dealer"]
+    poker.act(s, uid(s, d), "allin", 0, 1)
+    poker.act(s, uid(s, 1 - d), "call", 0, 2)
+    # همه آل‌این: فلاپ، ترن و ریور بدون شرط‌بندی باز شدند و وقفه برای سه خیابان بلندتر است
+    assert s["phase"] == "pause" and len(s["board"]) == 5 and s["result"]["runout"] == 0
+    assert s["deadline"] == 2 + poker.PAUSE_SECONDS + 3 * poker.RUNOUT_SECONDS
+    assert set(poker.view(s, uid(s, d), 3)["result"]["reveal"]) == {"0", "1"}
+    board, winners = list(s["board"]), s["result"]["winners"]
+    poker.check_timeout(s, s["deadline"] + 1)
+    assert s["last_hand"]["hand"] == 1 and s["last_hand"]["board"] == board and s["last_hand"]["winners"] == winners
+    assert poker.view(s, None, s["deadline"] or 0)["last_hand"]["runout"] == 0
+
+    # آل‌این روی فلاپ: فقط ترن و ریور خودکار می‌آیند
+    s = table(2)
+    d = s["dealer"]
+    poker.act(s, uid(s, d), "call", 0, 1)
+    poker.act(s, uid(s, 1 - d), "check", 0, 2)
+    assert s["street"] == "flop" and s["runout"] is None
+    first = s["to_act"]
+    poker.act(s, uid(s, first), "allin", 0, 3)
+    poker.act(s, uid(s, 1 - first), "call", 0, 4)
+    assert s["result"]["runout"] == 3 and s["deadline"] == 4 + poker.PAUSE_SECONDS + 2 * poker.RUNOUT_SECONDS
+
+    # دستی که با فولد تمام شود وقفه‌ی معمولی دارد
+    s = table(2)
+    poker.act(s, uid(s, s["dealer"]), "fold", 0, 1)
+    assert s["deadline"] == 1 + poker.PAUSE_SECONDS and "runout" not in s["result"]
+
+
+def test_side_pots_are_shown_while_an_all_in_player_waits():
+    s = table(3, chips=[100, 1000, 1000])
+    assert s["dealer"] == 0 and s["to_act"] == 0
+    poker.act(s, uid(s, 0), "allin", 0, 1)
+    poker.act(s, uid(s, 1), "call", 0, 2)
+    poker.act(s, uid(s, 2), "call", 0, 3)
+    assert s["street"] == "flop" and poker.view(s, None, 3)["pots"] == []  # همه به یک اندازه گذاشته‌اند
+    poker.act(s, uid(s, 1), "raise", 200, 4)
+    assert poker.view(s, None, 4)["pots"] == []  # شرطی که هنوز کال نشده پات جانبی نیست
+    poker.act(s, uid(s, 2), "call", 0, 5)
+    view = poker.view(s, None, 5)
+    assert s["street"] == "turn" and view["pots"] == [300, 400] and view["pot"] == 700
+    assert [e["kind"] for e in view["log"]] == ["sb", "bb", "allin", "call", "call", "raise", "call"]
+
+
 def test_short_all_in_does_not_reopen_the_betting():
     """قاعده‌ی رِیز ناقص (TDA): آل‌اینِ کمتر از یک رِیز کامل، به کسی که قبلاً حرکت کرده فقط حق کال/فولد می‌دهد."""
     s = table(3, chips=[1000, 1000, 150])
