@@ -297,7 +297,7 @@ async def test_game_menu_flow_creates_lobby_and_only_creator_can_use_it(app):
     # سازنده خودکار عضو شده و ورودی‌اش کسر شده
     assert (await get_user(61)).coins == START_COINS - 250
     manager = app.bot_data["manager"]
-    assert manager.active[GROUP_ID].match_id == match.pk
+    assert manager.in_chat(GROUP_ID)[0].match_id == match.pk
 
     # نفر دوم با دکمه‌ی «شرکت» وارد می‌شود؛ کلیک دوباره هزینه‌ای ندارد
     joined = await click(app, 62, f"j:{match.pk}", menu_id, group.join_callback)
@@ -306,9 +306,15 @@ async def test_game_menu_flow_creates_lobby_and_only_creator_can_use_it(app):
     assert "قبلاً" in twice.answers[0][0]
     assert (await get_user(62)).coins == START_COINS - 250
 
-    # تا وقتی مسابقه فعال است منوی جدید باز نمی‌شود
-    blocked, _ = await open_game_menu(app, 62)
-    assert "در جریان است" in blocked.replies[0]["text"]
+    # محدودیتی در تعداد مسابقه‌های هم‌زمان نیست: نفر دوم کنار همین لابی، لابی خودش را می‌سازد
+    second_menu, second_menu_id = await open_game_menu(app, 62)
+    assert any("حساب سریع" in b.text for b in buttons_of(second_menu.replies[0]["reply_markup"]))
+    for data in ("n:g:quick_math", "n:f:100", "n:s:100", "n:t:30"):
+        await click(app, 62, data, second_menu_id)
+    lobbies = manager.in_chat(GROUP_ID)
+    assert [a.lobby_message_id for a in lobbies] == [menu_id, second_menu_id]
+    assert (await get_user(62)).coins == START_COINS - 250 - 100
+    assert await sync_to_async(Match.objects.filter(status=MatchStatus.LOBBY).count)() == 2
     assert await sync_to_async(find_mismatches)() == []
 
 
@@ -389,7 +395,7 @@ async def test_group_text_routes_only_valid_player_messages(app):
     match = await sync_to_async(Match.objects.get)()
     await click(app, 102, f"j:{match.pk}", menu_id, group.join_callback)
     manager = app.bot_data["manager"]
-    active = manager.active[GROUP_ID]
+    active = manager.in_chat(GROUP_ID)[0]
     await app.job_queue.fire("lobby_close")
     answer = str(active.game.answer)
 
@@ -405,6 +411,54 @@ async def test_group_text_routes_only_valid_player_messages(app):
     assert sum(active.game.scores.values()) == 0
     await say(102, answer)
     assert active.game.scores[(await get_user(102)).pk] == 10
+
+
+async def test_many_games_at_once_in_one_group(app):
+    """چند نفر هم‌زمان چند بازی در یک گروه: هر لابی جدا لغو و شروع می‌شود و پیام هر بازیکن به همه‌ی
+    بازی‌هایی می‌رسد که در آن‌ها بازی می‌کند (و هر بازی فقط جواب خودش را می‌پذیرد)."""
+    for tg_id in (121, 122, 123):
+        await start_user(app, tg_id)
+    menus = []
+    for creator in (121, 122, 123):
+        _, menu_id = await open_game_menu(app, creator)
+        for data in ("n:g:quick_math", "n:f:0", "n:s:100", "n:t:30"):
+            await click(app, creator, data, menu_id)
+        menus.append(menu_id)
+    manager = app.bot_data["manager"]
+    first, second, third = manager.in_chat(GROUP_ID)
+    assert [a.creator_tg_id for a in (first, second, third)] == [121, 122, 123]
+
+    # /cancel با ریپلای روی یک لابی فقط همان را لغو می‌کند
+    update, context = make_update(app, 123, chat_id=GROUP_ID, chat_type="supergroup", text="/cancel")
+    update.effective_message.reply_to_message = SimpleNamespace(message_id=menus[2])
+    await group.cancel(update, context)
+    assert [a.match_id for a in manager.in_chat(GROUP_ID)] == [first.match_id, second.match_id]
+    assert (await sync_to_async(Match.objects.get)(pk=third.match_id)).status == MatchStatus.CANCELLED
+    # دکمه‌ی «شرکت» یک لابیِ لغوشده دیگر کسی را عضو نمی‌کند
+    late = await click(app, 121, f"j:{third.match_id}", menus[2], group.join_callback)
+    assert late.answers[0][0] == texts.LOBBY_CLOSED
+
+    await click(app, 122, f"j:{first.match_id}", menus[0], group.join_callback)
+    await click(app, 121, f"j:{second.match_id}", menus[1], group.join_callback)
+    await app.job_queue.fire(f"m{first.match_id}:lobby_close")
+    await app.job_queue.fire(f"m{second.match_id}:lobby_close")
+    assert first.phase == second.phase == "running"
+    second.game.answer = first.game.answer + 1  # دو مسئله‌ی متفاوت
+
+    async def say(tg_id, text):
+        update, context = make_update(app, tg_id, chat_id=GROUP_ID, chat_type="supergroup", text=text)
+        await group.group_text(update, context)
+
+    await say(122, str(first.game.answer))
+    await say(121, str(second.game.answer))
+    u121, u122 = (await get_user(121)).pk, (await get_user(122)).pk
+    assert first.game.scores.get(u122) == 10 and not first.game.scores.get(u121)
+    assert second.game.scores.get(u121) == 10 and not second.game.scores.get(u122)
+
+    # دکمه‌های بازی با شناسه‌ی مسابقه مسیریابی می‌شوند؛ دکمه‌ی مسابقه‌ی لغوشده «تمام شده» جواب می‌گیرد
+    stale = await click(app, 121, f"g:{third.match_id}:x", menus[2], group.game_callback)
+    assert stale.answers[0][0] == texts.GAME_OVER
+    await app.bot_data["manager"].edits.close()
 
 
 # ====================================================================== تنظیمات گروه
@@ -819,7 +873,7 @@ async def test_started_match_cannot_be_cancelled_from_the_group(app):
     await group.cancel(update, context)
     assert update.replies[0]["text"] == texts.CANCEL_STARTED
     assert (await sync_to_async(Match.objects.get)()).status == MatchStatus.RUNNING
-    assert GROUP_ID in manager_of_app(app).active
+    assert manager_of_app(app).in_chat(GROUP_ID)
 
 
 def manager_of_app(app):

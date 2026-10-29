@@ -29,7 +29,6 @@ MENU_IDLE_SECONDS = 30
 STEPS = ["variant", "fee", "split", "window", "join"]
 
 ERROR_TEXTS = {
-    "active_match_exists": texts.ACTIVE_MATCH_EXISTS,
     "game_disabled": texts.GAME_DISABLED,
     "fee_not_allowed": texts.FEE_NOT_ALLOWED,
     "lobby_closed": texts.LOBBY_CLOSED,
@@ -92,8 +91,8 @@ def _arm_menu_timeout(context, chat_id: int, message_id: int) -> None:
         # فقط اگر هنوز منو است: پیش‌نویس هست و این پیام به لابی تبدیل نشده
         if await get_redis().get(_draft_key(chat_id, message_id)) is None:
             return
-        active = application.bot_data["manager"].active.get(chat_id) if "manager" in application.bot_data else None
-        if active is not None and active.lobby_message_id == message_id:
+        manager = application.bot_data.get("manager")
+        if manager is not None and any(a.lobby_message_id == message_id for a in manager.in_chat(chat_id)):
             return
         await get_redis().delete(_draft_key(chat_id, message_id))
         await tg_call(application.bot.delete_message, chat_id, message_id)
@@ -197,10 +196,7 @@ def step_screen(step: str, draft: dict, info: GameInfo, group: TelegramGroup):
 async def game(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser):
     chat = update.effective_chat
     group = await ensure_group(chat)
-    manager = manager_of(context)
-    if chat.id in manager.active:
-        await reply(update, texts.ACTIVE_MATCH_EXISTS)
-        return
+    # هر تعداد مسابقه‌ی هم‌زمان در گروه مجاز است؛ هر لابی دکمه‌ها و صفحه‌ی خودش را دارد
     if not group.allow_user_created_games and not await is_group_admin(context.bot, chat.id, user.tg_id):
         await reply(update, texts.USERS_CANNOT_CREATE)
         return

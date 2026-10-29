@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 
 from django.conf import settings
-from django.db import IntegrityError, transaction
+from django.db import transaction
 from django.utils import timezone
 
 from core.models import TelegramGroup, TelegramUser
@@ -59,27 +59,20 @@ def create_match(
     max_players: int,
     options: dict | None = None,
 ) -> Match:
+    """لابی تازه. یک گروه هر تعداد مسابقه‌ی هم‌زمان می‌تواند داشته باشد."""
     if not group.fee_allowed(entry_fee):
         raise MatchError("fee_not_allowed")
-    try:
-        with transaction.atomic():
-            return Match.objects.create(
-                group=group,
-                creator=creator,
-                game_type=game_type,
-                entry_fee=entry_fee,
-                prize_split=list(prize_split),
-                join_deadline=timezone.now() + timedelta(seconds=join_seconds),
-                min_players=min_players,
-                max_players=max_players,
-                options=options or {},
-            )
-    except IntegrityError as exc:
-        raise MatchError("active_match_exists") from exc
-
-
-def get_active_match(group_id: int) -> Match | None:
-    return Match.objects.filter(group_id=group_id, status__in=ACTIVE_STATUSES).first()
+    return Match.objects.create(
+        group=group,
+        creator=creator,
+        game_type=game_type,
+        entry_fee=entry_fee,
+        prize_split=list(prize_split),
+        join_deadline=timezone.now() + timedelta(seconds=join_seconds),
+        min_players=min_players,
+        max_players=max_players,
+        options=options or {},
+    )
 
 
 def join_match(match_id: int, user: TelegramUser) -> Match:

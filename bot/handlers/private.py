@@ -116,7 +116,7 @@ async def _join_from_link(update: Update, context, user: TelegramUser, match_id:
     from .flow import error_text
 
     manager = manager_of(context)
-    active = next((a for a in manager.active.values() if a.match_id == match_id), None)
+    active = manager.get(match_id)
     if active is None or active.phase != "lobby":
         await reply(update, texts.JOIN_LINK_CLOSED)
         return

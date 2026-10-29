@@ -22,7 +22,6 @@ from arcade import board as live_board
 from arcade import services as arcade_services
 from core import texts
 from core.models import TelegramUser
-from core.redis import get_redis
 from core.texts import fa_num
 from games import config as game_config
 from games import gridlive
@@ -174,7 +173,20 @@ class MatchManager:
         self.bot = application.bot
         self.jobs = application.job_queue
         self.edits = EditQueue(self.bot)
-        self.active: dict[int, ActiveMatch] = {}  # chat_id → مسابقه‌ی فعال
+        # match_id → مسابقه‌ی فعال. هر گروه هر تعداد مسابقه‌ی هم‌زمان می‌تواند داشته باشد و هر لابی،
+        # صفحه و دکمه شناسه‌ی مسابقه‌ی خودش را دارد؛ ترتیب dict همان ترتیب ساخت است.
+        self.matches: dict[int, ActiveMatch] = {}
+
+    def get(self, match_id: int, chat_id: int | None = None) -> ActiveMatch | None:
+        """مسابقه‌ی فعال با این شناسه (و اگر ``chat_id`` داده شود، فقط اگر مال همان گروه باشد)."""
+        active = self.matches.get(match_id)
+        if active is None or (chat_id is not None and active.chat_id != chat_id):
+            return None
+        return active
+
+    def in_chat(self, chat_id: int) -> list[ActiveMatch]:
+        """همه‌ی مسابقه‌های فعال یک گروه، به ترتیب ساخت."""
+        return [active for active in self.matches.values() if active.chat_id == chat_id]
 
     @property
     def username(self) -> str:
@@ -237,36 +249,26 @@ class MatchManager:
         options: dict,
         menu_message_id: int | None = None,
     ) -> ActiveMatch:
-        """مسابقه را می‌سازد و پیام لابی را نمایش می‌دهد. قفل Redis جلوی ساخت همزمان را می‌گیرد."""
-        redis = get_redis()
-        lock_key = f"lock:create:{group.chat_id}"
-        if not await redis.set(lock_key, "1", nx=True, ex=15):
-            raise MatchError("active_match_exists")
-        try:
-            if group.chat_id in self.active:
-                raise MatchError("active_match_exists")
-            # تعداد شرکت‌کننده و فعال بودن بازی همین لحظه از تنظیمات پنل ادمین خوانده می‌شود
-            await db(game_config.reload)()
-            info = get_info(info.key) or info
-            if not info.enabled:
-                raise MatchError("game_disabled")
-            match = await db(services.create_match)(
-                group,
-                creator,
-                info.key,
-                entry_fee=fee,
-                prize_split=split,
-                join_seconds=join_seconds,
-                min_players=info.min_players,
-                max_players=info.max_players,
-                options=options,
-            )
-            active = ActiveMatch(
-                match.pk, group.chat_id, info, creator.tg_id, group_title=group.title or "", token=match.token
-            )
-            self.active[group.chat_id] = active
-        finally:
-            await redis.delete(lock_key)
+        """مسابقه را می‌سازد و پیام لابی را نمایش می‌دهد. محدودیتی در تعداد مسابقه‌های هم‌زمان یک گروه
+        نیست؛ هر کس هر تعداد لابی بخواهد می‌سازد و هر مسابقه جدا از بقیه جلو می‌رود."""
+        # تعداد شرکت‌کننده و فعال بودن بازی همین لحظه از تنظیمات پنل ادمین خوانده می‌شود
+        await db(game_config.reload)()
+        info = get_info(info.key) or info
+        if not info.enabled:
+            raise MatchError("game_disabled")
+        match = await db(services.create_match)(
+            group,
+            creator,
+            info.key,
+            entry_fee=fee,
+            prize_split=split,
+            join_seconds=join_seconds,
+            min_players=info.min_players,
+            max_players=info.max_players,
+            options=options,
+        )
+        active = ActiveMatch(match.pk, group.chat_id, info, creator.tg_id, group_title=group.title or "", token=match.token)
+        self.matches[match.pk] = active
 
         text = render.lobby_text(match, info, [], join_seconds, group.prize_note)
         keyboard = render.lobby_keyboard(match.pk, self.username, info.key)
@@ -412,7 +414,7 @@ class MatchManager:
         was_lobby = active.phase == "lobby"
         active.phase = "done"
         self._cancel_all_jobs(active)
-        self.active.pop(active.chat_id, None)
+        self.matches.pop(active.match_id, None)
         match, refunded = await db(services.cancel_match)(active.match_id, reason)
         # اگر لغو قبلاً در دیتابیس انجام شده (پنل ادمین)، ورودی‌ها همان‌جا برگشته‌اند
         refund_note = any(e.paid_fee for e in refunded) or (reason == "admin" and match.entry_fee > 0)
@@ -490,7 +492,7 @@ class MatchManager:
     async def _finalize_text_game(self, active: ActiveMatch) -> None:
         active.phase = "done"
         self._cancel_all_jobs(active)
-        self.active.pop(active.chat_id, None)
+        self.matches.pop(active.match_id, None)
         standings = await active.game.finish()
         await self._payout(active, standings)
 
@@ -594,7 +596,7 @@ class MatchManager:
                 return
             active.phase = "done"
             self._cancel_all_jobs(active)
-            self.active.pop(active.chat_id, None)
+            self.matches.pop(active.match_id, None)
             match, standings, _ = await self._arcade_snapshot(active.match_id)
             if active.board_message_id:
                 self.edits.forget(active.chat_id, active.board_message_id)
@@ -790,7 +792,7 @@ class MatchManager:
                 return
             active.phase = "done"
             self._cancel_all_jobs(active)
-            self.active.pop(active.chat_id, None)
+            self.matches.pop(active.match_id, None)
             await self._edit_live(active, state, final=True)
             now = time.time()
             standings = [
@@ -830,7 +832,7 @@ class MatchManager:
             token=match.token,
         )
         if match.status == MatchStatus.LOBBY:
-            self.active[chat_id] = active
+            self.matches[match.pk] = active
             remaining = (match.join_deadline - now).total_seconds()
             if remaining <= 0:
                 await self.close_lobby(active)
@@ -845,7 +847,7 @@ class MatchManager:
             }
             active.phase = "running"
             active.board_message_id = (match.state or {}).get("board_message_id")
-            self.active[chat_id] = active
+            self.matches[match.pk] = active
             remaining = (match.play_deadline - now).total_seconds()
             if remaining <= 0:
                 await self.finish_arcade(active)
@@ -861,7 +863,7 @@ class MatchManager:
             }
             active.phase = "running"
             active.board_message_id = match.state.get("board_message_id")
-            self.active[chat_id] = active
+            self.matches[match.pk] = active
             self._arm_live(active)
             logger.info("live match recovered", extra={"match_id": match.pk})
             return

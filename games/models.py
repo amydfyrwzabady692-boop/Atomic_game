@@ -56,14 +56,8 @@ class Match(models.Model):
     class Meta:
         verbose_name = "مسابقه"
         verbose_name_plural = "مسابقات"
-        constraints = [
-            models.UniqueConstraint(
-                fields=["group"],
-                condition=Q(status__in=["LOBBY", "RUNNING"]),
-                name="one_active_match_per_group",
-            ),
-            models.CheckConstraint(condition=Q(pot__gte=0), name="match_pot_non_negative"),
-        ]
+        # یک گروه هر تعداد مسابقه‌ی هم‌زمان (لابی یا در حال اجرا) می‌تواند داشته باشد
+        constraints = [models.CheckConstraint(condition=Q(pot__gte=0), name="match_pot_non_negative")]
         indexes = [models.Index(fields=["status"]), models.Index(fields=["group", "-finished_at"])]
 
     def __str__(self) -> str:

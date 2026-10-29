@@ -87,7 +87,7 @@ async def test_full_match_lifecycle_pays_winner():
         await app.job_queue.fire("game:gap")
 
     assert active.phase == "done"
-    assert CHAT_ID not in manager.active
+    assert not manager.in_chat(CHAT_ID)
     assert await match_status(active.match_id) == MatchStatus.FINISHED
     result_text = app.bot.sent[-1]["text"]
     assert "پایان حساب سریع" in result_text and "🥇" in result_text
@@ -109,17 +109,45 @@ async def test_lobby_without_enough_players_is_cancelled_and_refunded():
     assert await match_status(active.match_id) == MatchStatus.CANCELLED
     assert await coins_of(users) == [1000, 1000, 1000]
     assert "بازیکن کافی نیامد" in app.bot.all_text(CHAT_ID)
-    assert CHAT_ID not in manager.active
+    assert not manager.in_chat(CHAT_ID)
     assert await sync_to_async(find_mismatches)() == []
 
 
-async def test_only_one_active_match_per_group():
-    group, users = await setup_world()
-    manager = MatchManager(FakeApplication())
-    await open_lobby(manager, group, users[0])
-    with pytest.raises(MatchError) as err:
-        await open_lobby(manager, group, users[1])
-    assert err.value.code == "active_match_exists"
+async def test_many_matches_run_side_by_side_in_one_group():
+    """هر تعداد مسابقه‌ی هم‌زمان در یک گروه: هر کدام جدا عضو می‌گیرد، جدا شروع، لغو و پرداخت می‌شود."""
+    group, users = await setup_world(n_users=4)
+    app = FakeApplication()
+    manager = MatchManager(app)
+    first = await open_lobby(manager, group, users[0], rounds=1)
+    second = await open_lobby(manager, group, users[1], rounds=1)
+    third = await open_lobby(manager, group, users[2], rounds=1)
+    assert [a.match_id for a in manager.in_chat(CHAT_ID)] == [first.match_id, second.match_id, third.match_id]
+    assert manager.get(second.match_id, CHAT_ID) is second and manager.get(second.match_id, -1) is None
+    for active, players in ((first, users[:2]), (second, users[1:3]), (third, users[3:])):
+        for user in players:
+            await manager.join(active, user)
+    assert await coins_of(users) == [900, 800, 900, 900]
+
+    # لغو یکی به بقیه کاری ندارد
+    assert await manager.cancel(third, "manual", only_lobby=True)
+    await app.job_queue.fire(f"m{first.match_id}:lobby_close")
+    await app.job_queue.fire(f"m{second.match_id}:lobby_close")
+    assert first.phase == second.phase == "running"
+    assert [a.match_id for a in manager.in_chat(CHAT_ID)] == [first.match_id, second.match_id]
+
+    # بازیکن ۱ در هر دو بازی است و هر دو را می‌برد
+    p1 = first.players_by_tg[users[1].tg_id]
+    await manager.on_message(first, p1, str(first.game.answer), 1, timezone.now().timestamp())
+    await app.job_queue.fire(f"m{first.match_id}:game:gap")
+    await manager.on_message(second, second.players_by_tg[users[1].tg_id], str(second.game.answer), 2, timezone.now().timestamp())
+    await app.job_queue.fire(f"m{second.match_id}:game:gap")
+    assert first.phase == second.phase == "done" and not manager.in_chat(CHAT_ID)
+    assert await match_status(first.match_id) == await match_status(second.match_id) == MatchStatus.FINISHED
+    assert await match_status(third.match_id) == MatchStatus.CANCELLED
+    coins = await coins_of(users)
+    assert coins[3] == 1000  # ورودی لابی لغوشده برگشت
+    assert coins[1] > 800 + 200  # دو جایزه‌ی ۲۰۰ سکه‌ای (به‌علاوه‌ی دستاوردها)
+    assert await sync_to_async(find_mismatches)() == []
 
 
 async def test_join_errors_surface_as_match_errors():
@@ -206,7 +234,7 @@ async def test_recover_resumes_lobby_and_refunds_running_text_game():
     await manager.recover()
 
     # لابی ادامه پیدا می‌کند و تایمرش دوباره مسلح شده
-    assert manager.active[CHAT_ID].match_id == lobby.pk
+    assert manager.in_chat(CHAT_ID)[0].match_id == lobby.pk
     assert app.job_queue.pending(f"m{lobby.pk}:lobby_close")
     # بازی متنیِ نیمه‌کاره لغو و ورودی‌ها برگشته
     assert await match_status(running.pk) == MatchStatus.CANCELLED
@@ -232,7 +260,7 @@ async def test_recover_closes_expired_lobby():
     await manager.recover()
     assert await match_status(match.pk) == MatchStatus.CANCELLED
     assert await coins_of(users) == [1000, 1000, 1000]
-    assert CHAT_ID not in manager.active
+    assert not manager.in_chat(CHAT_ID)
     assert await sync_to_async(CoinTransaction.objects.filter(type=TxType.REFUND).count)() == 1
 
 
@@ -248,7 +276,7 @@ async def test_watchdog_stops_lobby_cancelled_from_admin_panel():
     assert await coins_of(users) == [1000, 1000, 1000]
 
     await app.job_queue.fire("watchdog")
-    assert active.phase == "done" and CHAT_ID not in manager.active
+    assert active.phase == "done" and not manager.in_chat(CHAT_ID)
     assert not app.job_queue.pending("lobby_close")
     text = app.bot.all_text(CHAT_ID)
     assert "توسط مدیریت لغو شد" in text and "برگشت" in text

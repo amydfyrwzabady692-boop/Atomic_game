@@ -25,9 +25,9 @@ from .flow import error_text
 @callback
 async def join_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser, query):
     manager = manager_of(context)
-    active = manager.active.get(update.effective_chat.id)
     match_id = int(query.data.split(":")[1])
-    if active is None or active.match_id != match_id:
+    active = manager.get(match_id, update.effective_chat.id)
+    if active is None:
         await answer(query, texts.LOBBY_CLOSED)
         return
     try:
@@ -50,9 +50,8 @@ async def _can_cancel(context, active, chat_id: int, user: TelegramUser) -> bool
 async def cancel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser, query):
     manager = manager_of(context)
     chat_id = update.effective_chat.id
-    active = manager.active.get(chat_id)
-    match_id = int(query.data.split(":")[1])
-    if active is None or active.match_id != match_id:
+    active = manager.get(int(query.data.split(":")[1]), chat_id)
+    if active is None:
         await answer(query, texts.NOTHING_TO_CANCEL)
         return
     if not await _can_cancel(context, active, chat_id, user):
@@ -65,16 +64,36 @@ async def cancel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, us
 
 @command(group=True)
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser):
+    """/cancel: اگر روی پیام یک لابی ریپلای شده همان لابی، وگرنه لابی‌های خود فرستنده و برای ادمین گروه
+    (اگر خودش لابی‌ای ندارد) همه‌ی لابی‌های باز گروه لغو می‌شوند. مسابقه‌ی شروع‌شده لغو نمی‌شود."""
     manager = manager_of(context)
     chat_id = update.effective_chat.id
-    active = manager.active.get(chat_id)
-    if active is None:
+    matches = manager.in_chat(chat_id)
+    if not matches:
         await reply(update, texts.NOTHING_TO_CANCEL)
         return
-    if not await _can_cancel(context, active, chat_id, user):
-        await reply(update, texts.CANCEL_NOT_ALLOWED)
-        return
-    if not await manager.cancel(active, "manual", only_lobby=True):
+    replied = update.effective_message.reply_to_message if update.effective_message else None
+    if replied is not None:
+        targets = [a for a in matches if replied.message_id in (a.lobby_message_id, a.board_message_id)]
+        if not targets:
+            await reply(update, texts.NOTHING_TO_CANCEL)
+            return
+        if not await _can_cancel(context, targets[0], chat_id, user):
+            await reply(update, texts.CANCEL_NOT_ALLOWED)
+            return
+    else:
+        lobbies = [a for a in matches if a.phase == "lobby"]
+        targets = [a for a in lobbies if a.creator_tg_id == user.tg_id]
+        if not targets and lobbies:
+            if not await is_group_admin(context.bot, chat_id, user.tg_id):
+                await reply(update, texts.CANCEL_NOT_ALLOWED)
+                return
+            targets = lobbies
+        if not targets:
+            await reply(update, texts.CANCEL_STARTED)
+            return
+    cancelled = [a for a in targets if await manager.cancel(a, "manual", only_lobby=True)]
+    if not cancelled:
         await reply(update, texts.CANCEL_STARTED)
 
 
@@ -84,20 +103,23 @@ async def group_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message, tg_user = update.effective_message, update.effective_user
     if message is None or tg_user is None or tg_user.is_bot:
         return
-    active = manager_of(context).active.get(update.effective_chat.id)
-    if active is None or active.phase != "running" or active.game is None:
+    manager = manager_of(context)
+    # پیام به همه‌ی بازی‌های متنیِ در جریان این گروه می‌رسد که فرستنده بازیکنشان است؛ هر بازی خودش
+    # تشخیص می‌دهد که پیام جواب او هست یا نه (چند بازی هم‌زمان در یک گروه مشکلی ندارد)
+    targets = [
+        (active, active.players_by_tg[tg_user.id])
+        for active in manager.in_chat(update.effective_chat.id)
+        if active.phase == "running" and active.game is not None and tg_user.id in active.players_by_tg
+    ]
+    if not targets:
         return
     # پیام فورواردی یا ارسال‌شده از طریق ربات‌ها (inline) قبول نیست
     if message.forward_origin is not None or message.via_bot is not None:
         return
-    player = active.players_by_tg.get(tg_user.id)
-    if player is None:
-        return
     if not await ratelimit.allow_message(tg_user.id):
         return
-    await manager_of(context).on_message(
-        active, player, message.text or "", message.message_id, message.date.timestamp()
-    )
+    for active, player in targets:
+        await manager.on_message(active, player, message.text or "", message.message_id, message.date.timestamp())
 
 
 async def game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -112,9 +134,9 @@ async def game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await answer_fn(texts.TOO_FAST)
         return
     manager = manager_of(context)
-    active = manager.active.get(update.effective_chat.id)
     _, match_id, data = query.data.split(":", 2)
-    if active is None or str(active.match_id) != match_id or active.phase != "running":
+    active = manager.get(int(match_id), update.effective_chat.id) if match_id.isdigit() else None
+    if active is None or active.phase != "running":
         # دکمه‌ی یک بازیِ تمام‌شده (مثلاً صفحه‌ی دوز قبلی)
         await answer_fn(texts.GAME_OVER)
         return
@@ -311,8 +333,7 @@ async def my_chat_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await tg_call(context.bot.send_message, chat.id, texts.GROUP_WELCOME, parse_mode="HTML")
     elif status in (ChatMemberStatus.LEFT, ChatMemberStatus.BANNED):
         manager = manager_of(context)
-        active = manager.active.get(chat.id)
-        if active is not None:
+        for active in manager.in_chat(chat.id):
             await manager.cancel(active, "admin")
         await deactivate_group(chat.id)
 
@@ -329,7 +350,6 @@ async def migrated(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if message is None or not message.migrate_to_chat_id:
         return
     manager = manager_of(context)
-    active = manager.active.get(message.chat_id)
-    if active is not None:
+    for active in manager.in_chat(message.chat_id):
         await manager.cancel(active, "admin")
     await _migrate_group(message.chat_id, message.migrate_to_chat_id)

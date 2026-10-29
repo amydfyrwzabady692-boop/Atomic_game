@@ -127,7 +127,7 @@ async def test_arcade_match_window_live_board_and_payout():
     assert "رکورد زد" in active.flash
 
     await app.job_queue.fire("arcade_end")
-    assert active.phase == "done" and CHAT_ID not in manager.active
+    assert active.phase == "done" and not manager.in_chat(CHAT_ID)
     assert (await match_row(active.match_id)).status == MatchStatus.FINISHED
     result = [m for m in app.bot.sent if m["chat_id"] == CHAT_ID][-1]["text"]
     assert "پایان سیخ‌زن" in result and "گیمر0" in result
@@ -202,7 +202,7 @@ async def test_running_arcade_match_survives_restart():
     app = FakeApplication()
     manager = MatchManager(app)
     await manager.recover()
-    active = manager.active[CHAT_ID]
+    active = manager.in_chat(CHAT_ID)[0]
     assert active.phase == "running" and active.info.is_arcade
     assert app.job_queue.pending("arcade_end")
     # امتیاز ثبت‌شده‌ی قبل از ری‌استارت حفظ شده و مسابقه عادی تمام می‌شود
@@ -232,4 +232,4 @@ async def test_expired_arcade_match_is_settled_on_recover():
     manager = MatchManager(FakeApplication())
     await manager.recover()
     assert (await match_row(match.pk)).status == MatchStatus.FINISHED
-    assert CHAT_ID not in manager.active
+    assert not manager.in_chat(CHAT_ID)

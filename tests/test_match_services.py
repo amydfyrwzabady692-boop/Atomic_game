@@ -87,14 +87,16 @@ def test_join_after_deadline_or_when_full(group, make_user):
     assert err.value.code == "lobby_closed"
 
 
-def test_only_one_active_match_per_group(group, make_user):
-    a = make_user(500)
-    match = new_match(group, a)
-    with pytest.raises(MatchError) as err:
-        new_match(group, a)
-    assert err.value.code == "active_match_exists"
-    services.cancel_match(match.pk)
-    new_match(group, a)
+def test_a_group_can_have_many_active_matches(group, make_user):
+    a, b = make_user(500), make_user(500)
+    first, second, third = new_match(group, a), new_match(group, a), new_match(group, b)
+    services.join_match(first.pk, a)
+    services.join_match(second.pk, a)
+    services.join_match(third.pk, b)
+    assert Match.objects.filter(group=group, status=MatchStatus.LOBBY).count() == 3
+    services.cancel_match(second.pk)
+    assert Match.objects.filter(group=group, status=MatchStatus.LOBBY).count() == 2
+    assert find_mismatches() == []
 
 
 def test_fee_outside_group_limits_rejected(group, make_user):

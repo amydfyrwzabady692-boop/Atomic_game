@@ -275,4 +275,4 @@ async def test_bot_refuses_to_create_a_disabled_game(_fresh_redis):
     with pytest.raises(MatchError) as blocked:
         await open_lobby(manager, group, users[0], info)
     assert blocked.value.code == "game_disabled"
-    assert group.chat_id not in manager.active
+    assert not manager.in_chat(group.chat_id)

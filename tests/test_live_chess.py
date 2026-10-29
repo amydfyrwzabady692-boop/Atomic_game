@@ -274,7 +274,7 @@ async def test_bot_runs_chess_through_the_mini_app_and_pays_the_winner(_fresh_re
         active.match_id, lambda s: live.apply_move(s, by_side["b"], sq("d8"), sq("h4"), "", time.time())
     )
     await manager.poll_live(active)
-    assert active.phase == "done" and CHAT_ID not in manager.active
+    assert active.phase == "done" and not manager.in_chat(CHAT_ID)
     assert "کیش و مات" in app.bot.edits[-1]["text"]
     assert "پایان شطرنج" in app.bot.sent[-1]["text"] and "🥇" in app.bot.sent[-1]["text"]
     match = await sync_to_async(Match.objects.get)(pk=active.match_id)
@@ -290,7 +290,7 @@ async def test_live_chess_times_out_and_survives_a_restart(_fresh_redis):
     # ری‌استارت ربات: بازی از دیتابیس ادامه پیدا می‌کند
     restarted = MatchManager(FakeApplication())
     await restarted.recover()
-    resumed = restarted.active[CHAT_ID]
+    resumed = restarted.in_chat(CHAT_ID)[0]
     assert resumed.phase == "running" and resumed.board_message_id == active.board_message_id
     assert len(resumed.players_by_tg) == 2
 
