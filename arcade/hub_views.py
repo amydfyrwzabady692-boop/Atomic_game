@@ -21,6 +21,7 @@ from games.catalog import get_info
 from games.models import Duel, MatchPlayer
 from leaderboard.progress import xp_for_level
 from leaderboard.queries import profile_stats, top_players
+from membership.web import join_required_response, joined_required
 from shop import services as shop
 from wallet import economy
 from wallet.models import CoinTransaction, TxType
@@ -63,6 +64,10 @@ def _game(key: str) -> dict:
 @rate_limited("hub", 120, 10)
 @authenticated
 def me(request, user, payload):
+    # جوین اجباری: تا عضو کانال‌های ربات نشود صفحه‌ی اصلی فهرست کانال‌ها را نشان می‌دهد («✅ عضو شدم» با fresh)
+    blocked = join_required_response(user, fresh=bool(payload.get("fresh")))
+    if blocked is not None:
+        return blocked
     stats = profile_stats(user)
     config = economy.get_settings()
     # جایزه‌ی دعوت با استارت دوست پرداخت می‌شود؛ پیشرفت هم بر اساس همه‌ی دعوت‌شده‌هاست
@@ -147,6 +152,7 @@ def history(request, user, payload):
 @require_POST
 @rate_limited("hub_daily", 10, 60)
 @authenticated
+@joined_required
 def daily(request, user, payload):
     result = economy.claim_daily(user)
     user.refresh_from_db()
@@ -201,6 +207,7 @@ def _item_id(payload) -> int:
 @require_POST
 @rate_limited("hub_shop", 20, 10)
 @authenticated
+@joined_required
 def shop_buy(request, user, payload):
     try:
         shop.buy_item(user, _item_id(payload))
@@ -316,6 +323,7 @@ def duel_state(request, user, payload):
 @require_POST
 @rate_limited("duel_act", 20, 10)
 @authenticated
+@joined_required
 def duel_search(request, user, payload):
     return _duel_call(user, lambda: duels.search(user, str(payload.get("game") or ""), _int_or_none(payload.get("stake"))))
 
@@ -339,6 +347,7 @@ def _duel_id(payload) -> int:
 @require_POST
 @rate_limited("duel_act", 20, 10)
 @authenticated
+@joined_required
 def duel_offer(request, user, payload):
     return _duel_call(user, lambda: duels.offer(user, _duel_id(payload), _int_or_none(payload.get("amount"))))
 
@@ -347,6 +356,7 @@ def duel_offer(request, user, payload):
 @require_POST
 @rate_limited("duel_act", 20, 10)
 @authenticated
+@joined_required
 def duel_accept(request, user, payload):
     return _duel_call(user, lambda: duels.accept(user, _duel_id(payload)))
 

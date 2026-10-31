@@ -192,7 +192,7 @@ def step_screen(step: str, draft: dict, info: GameInfo, group: TelegramGroup):
 
 
 # ------------------------------------------------------------------ handlerها
-@command(group=True)
+@command(group=True, join_in_group=True)
 async def game(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser):
     chat = update.effective_chat
     group = await ensure_group(chat)

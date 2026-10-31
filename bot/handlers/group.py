@@ -24,11 +24,17 @@ from .flow import error_text
 # ------------------------------------------------------------------ لابی
 @callback
 async def join_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser, query):
+    from .forcejoin import allowed
+
     manager = manager_of(context)
     match_id = int(query.data.split(":")[1])
     active = manager.get(match_id, update.effective_chat.id)
     if active is None:
         await answer(query, texts.LOBBY_CLOSED)
+        return
+    if not await allowed(context, user):
+        # جوین اجباری: پیوی ربات باز می‌شود، کانال‌ها را نشان می‌دهد و بعد از «✅ عضو شدم» خودکار عضو همین مسابقه می‌شود
+        await answer(query, url=render.start_link(render.bot_username(context), render.join_payload(match_id)))
         return
     try:
         message = await manager.join(active, user)
@@ -321,6 +327,11 @@ async def rules_alert_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 # ------------------------------------------------------------------ اضافه/حذف شدن ربات
 async def my_chat_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     change, chat = update.my_chat_member, update.effective_chat
+    if change is not None and chat is not None and chat.type == ChatType.PRIVATE:
+        from .forcejoin import private_status
+
+        await private_status(update, context)  # بلاک یا آنبلاک ربات
+        return
     if change is None or chat is None or chat.type not in GROUP_TYPES + (ChatType.CHANNEL,):
         return
     status = change.new_chat_member.status

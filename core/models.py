@@ -19,6 +19,9 @@ class TelegramUser(models.Model):
     )
     referral_rewarded = models.BooleanField(verbose_name="جایزه‌ی دعوت داده شد", default=False)
     started_bot = models.BooleanField("استارت در پیوی", default=False)
+    # برای API ربات‌های دیگر: اولین /start (حتی اگر هنوز عضو کانال‌های جوین اجباری نشده) و بلاک بودن ربات
+    started_at = models.DateTimeField("زمان اولین استارت", null=True, blank=True)
+    blocked_bot = models.BooleanField("ربات را بلاک کرده", default=False)
     is_banned = models.BooleanField(verbose_name="مسدود", default=False)
     games_played = models.PositiveIntegerField(verbose_name="تعداد بازی", default=0)
     wins = models.PositiveIntegerField(verbose_name="برد", default=0)

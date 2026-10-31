@@ -78,9 +78,33 @@
     }).then(function (r) { return r.json(); })
       .catch(function () { return { ok: false, error: "network" }; })
       .then(function (data) {
+        if (data.error === "join_required") { showJoinGate(data.channels); haptic("warning"); return data; }
         if (!data.ok) { toast(errorText(data.error)); haptic("error"); }
         return data;
       });
+  }
+
+  // ------------------------------------------------------------------ جوین اجباری
+  /* تا کاربر عضو کانال‌های ربات نشود سرور «join_required» با فهرست کانال‌ها می‌دهد؛ این صفحه دکمه‌ی هر کانال
+     و «✅ عضو شدم» (بررسی دوباره بدون کش) را نشان می‌دهد. */
+  function openChannel(url) {
+    haptic("light");
+    if (tg && tg.openTelegramLink && url.indexOf("https://t.me/") === 0) {
+      try { tg.openTelegramLink(url); return; } catch (e) { /* قدیمی */ }
+    }
+    window.open(url, "_blank");
+  }
+  function showJoinGate(channels) {
+    var list = $("join-list");
+    list.textContent = "";
+    (channels || []).forEach(function (channel) {
+      if (!channel.link) return;
+      var button = el("button", "btn", "📢 " + channel.title);
+      button.type = "button";
+      button.addEventListener("click", function () { openChannel(channel.link); });
+      list.appendChild(button);
+    });
+    $("join-gate").classList.remove("hidden");
   }
   function stakeLabel(stake) {
     if (stake === null || stake === undefined) return "🤝 فرقی نمی‌کند";
@@ -481,6 +505,18 @@
       if (tg.disableVerticalSwipes) tg.disableVerticalSwipes();
     } catch (e) { /* نسخه‌های قدیمی */ }
   }
+  $("join-check").addEventListener("click", function () {
+    var button = this;
+    button.disabled = true;
+    api("hub/me", { fresh: true }).then(function (data) {
+      button.disabled = false;
+      if (!data.ok) return;
+      $("join-gate").classList.add("hidden");
+      haptic("success");
+      toast("✅ عضویتت تأیید شد");
+      loadMe(current === "me");
+    });
+  });
   drawGames();
   if (!initData) {
     $("me-name").textContent = "این صفحه باید از داخل تلگرام باز شود.";

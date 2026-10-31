@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     "leaderboard",
     "shop",
     "arcade",
+    "membership",
     "bot",
 ]
 
@@ -127,6 +128,8 @@ GROUP_EDITS_PER_MINUTE = env.int("GROUP_EDITS_PER_MINUTE", default=40)
 TELEGRAM_POOL_SIZE = env.int("TELEGRAM_POOL_SIZE", default=64)
 # فقط اگر سرور به api.telegram.org دسترسی ندارد (مثلاً سرور داخل ایران): http://host:port یا socks5://host:port
 TELEGRAM_PROXY = env("TELEGRAM_PROXY", default="")
+# وب‌هوک ربات‌های دیگر (API جوین اجباری) معمولاً مستقیم فرستاده می‌شود؛ اگر سرور به آن‌ها دسترسی ندارد پروکسی بدهید
+PARTNER_HTTP_PROXY = env("PARTNER_HTTP_PROXY", default="")
 
 # ---------------------------------------------------------------- Mini App
 MINIAPP_SHORT_NAME = env("MINIAPP_SHORT_NAME", default="arcade")

@@ -34,6 +34,21 @@ def group(db):
 
 
 @pytest.fixture(autouse=True)
+def hook_events(monkeypatch):
+    """رویدادهای وب‌هوک ربات‌های دیگر به‌جای ارسال واقعی این‌جا جمع می‌شوند: ``[(event, fields), ...]``."""
+    from bot import partner_hooks
+    from membership import checks
+
+    events = []
+    monkeypatch.setattr(partner_hooks, "emit", lambda application, event, **fields: events.append((event, fields)))
+    checks.forget_channels()
+    partner_hooks.forget_targets()
+    yield events
+    checks.forget_channels()
+    partner_hooks.forget_targets()
+
+
+@pytest.fixture(autouse=True)
 def fresh_board_profiles():
     """سطح بازیکن‌های صفحه‌ی بازی زنده که چند ثانیه نگه داشته می‌شود بین تست‌ها نشت نکند."""
     from arcade import board_views

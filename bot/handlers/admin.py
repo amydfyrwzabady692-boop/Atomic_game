@@ -333,9 +333,9 @@ async def admin_panel_screen(user: TelegramUser):
     if "games" in perms:
         buttons.append(_btn(texts.ADMIN_GAMES_BTN, "adm:games", ui.PRIMARY))
     if "settings" in perms:
-        buttons.append(_btn(texts.ADMIN_SETTINGS_BTN, "adm:settings", ui.PRIMARY))
+        buttons += [_btn(texts.ADMIN_SETTINGS_BTN, "adm:settings", ui.PRIMARY), _btn(texts.ADMIN_FJ_BTN, "adm:fj:list", ui.PRIMARY)]
     if "admins" in perms:
-        buttons.append(_btn(texts.ADMIN_ADMINS_BTN, "adm:admins:list", ui.PRIMARY))
+        buttons += [_btn(texts.ADMIN_ADMINS_BTN, "adm:admins:list", ui.PRIMARY), _btn(texts.ADMIN_API_BTN, "adm:api:list", ui.PRIMARY)]
     if "stats" in perms:
         buttons += [_btn(texts.ADMIN_STATS_BTN, "adm:stats:show", ui.PRIMARY), _btn(texts.ADMIN_AUDIT_BTN, "adm:audit", ui.PRIMARY)]
     if "support" in perms:
@@ -1082,6 +1082,10 @@ STEP_PERMISSION = {
     "find_user": None,  # با «کاربران» یا «سکه»
     "grant_amount": "coins",
     "grant_confirm": "coins",
+    # جوین اجباری و کلیدهای API (membership_admin)
+    "fj_add": "settings",
+    "api_name": "admins",
+    "api_hook": "admins",
 }
 
 
@@ -1109,6 +1113,11 @@ async def admin_private_message(update: Update, context: ContextTypes.DEFAULT_TY
         context.user_data.pop("admin_flow", None)
         await reply(update, texts.ADMIN_FLOW_CANCELLED, panel)
         return True
+
+    from . import membership_admin
+
+    if step in membership_admin.STEPS:
+        return await membership_admin.flow_message(update, context, user, flow)
 
     if step == "sell_receipt":
         file_id = message.photo[-1].file_id if message.photo else (message.document.file_id if message.document else None)

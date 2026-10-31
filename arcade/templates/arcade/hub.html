@@ -148,6 +148,17 @@
   <button type="button" data-tab="me"><span>👤</span>من</button>
 </nav>
 
+<!-- جوین اجباری: تا عضو کانال‌های ربات نشود همین صفحه می‌آید -->
+<section id="join-gate" class="gate hidden" role="dialog" aria-label="عضویت در کانال‌ها">
+  <div class="card center">
+    <div class="gate-icon" aria-hidden="true">🔒</div>
+    <b class="gate-title">اول عضو کانال‌های ربات شو</b>
+    <p class="muted small">بعد از عضویت دکمه‌ی «✅ عضو شدم» را بزن.</p>
+    <div id="join-list" class="gate-list"></div>
+    <button class="btn go wide" id="join-check" type="button">✅ عضو شدم</button>
+  </div>
+</section>
+
 <div id="toast" class="hidden" role="alert"></div>
 
 {{ games|json_script:"games-data" }}

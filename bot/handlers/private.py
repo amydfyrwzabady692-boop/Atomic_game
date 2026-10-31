@@ -71,11 +71,41 @@ def _first_start(user: TelegramUser, payload: str):
     return referrer, bonus, economy.get_settings().daily_enabled, referral
 
 
-@command()
+@db
+def _mark_started(user: TelegramUser) -> bool:
+    """زمان اولین استارت و آنبلاک (برای API ربات‌های دیگر). ``True`` یعنی اولین بار است."""
+    first = user.started_at is None and not user.started_bot
+    fields = []
+    if user.started_at is None:
+        user.started_at = timezone.now()
+        fields.append("started_at")
+    if user.blocked_bot:
+        user.blocked_bot = False
+        fields.append("blocked_bot")
+    if fields:
+        user.save(update_fields=fields)
+    return first
+
+
+@command(join=False)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser):
+    """/start: استارت همان لحظه ثبت و به ربات‌های دیگر (وب‌هوک API) اعلام می‌شود؛ بعد اگر جوین اجباری
+    باشد، تا عضویت در کانال‌ها بقیه‌ی کار (خوش‌آمد، هدیه، دعوت، شرکت در مسابقه) منتظر می‌ماند."""
+    from .. import partner_hooks, ratelimit
+    from . import forcejoin
+
     if update.effective_chat.type != ChatType.PRIVATE:
         return
     payload = context.args[0] if context.args else ""
+    first = await _mark_started(user)
+    if first or await ratelimit.allow(f"hook:start:{user.tg_id}", 1, 30):
+        partner_hooks.emit(context.application, "start", user_id=user.tg_id, first=first)
+    if not await forcejoin.gate(update, context, user, payload):
+        return
+    await continue_start(update, context, user, payload)
+
+
+async def continue_start(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser, payload: str) -> None:
     name = escape(user.display_name)
     is_new = not user.started_bot
     if not user.started_bot:

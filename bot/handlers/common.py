@@ -109,9 +109,20 @@ async def reply(update: Update, text: str, reply_markup=None):
     )
 
 
-def command(*, private: bool = False, group: bool = False, superadmin: bool = False, permission: str | None = None):
+def command(
+    *,
+    private: bool = False,
+    group: bool = False,
+    superadmin: bool = False,
+    permission: str | None = None,
+    join: bool = True,
+    join_in_group: bool = False,
+):
     """handler دستور: ``async def fn(update, context, user)``. ``superadmin`` یعنی فقط مدیران ربات و
-    ``permission`` یعنی فقط مدیرانی که همین دسترسی را دارند (برای بقیه دستور بی‌صدا نادیده گرفته می‌شود)."""
+    ``permission`` یعنی فقط مدیرانی که همین دسترسی را دارند (برای بقیه دستور بی‌صدا نادیده گرفته می‌شود).
+
+    جوین اجباری: هر دستور پیوی (مگر ``join=False``) و دستورهای گروهی با ``join_in_group`` اول عضویت در
+    کانال‌های ربات را می‌خواهند (``forcejoin``)."""
 
     def decorator(fn):
         @wraps(fn)
@@ -138,6 +149,16 @@ def command(*, private: bool = False, group: bool = False, superadmin: bool = Fa
                 if chat.type == ChatType.PRIVATE:
                     await reply(update, texts.BANNED)
                 return
+            if join and not superadmin and not permission and chat.type == ChatType.PRIVATE:
+                from .forcejoin import gate
+
+                if not await gate(update, context, user):
+                    return
+            if join_in_group and chat.type in GROUP_TYPES:
+                from .forcejoin import gate_in_group
+
+                if not await gate_in_group(update, context, user):
+                    return
             await fn(update, context, user)
 
         return wrapper
@@ -166,6 +187,13 @@ def callback(fn):
             if user.is_banned:
                 await answer(query, texts.BANNED, alert=True)
                 return
+            chat = update.effective_chat
+            # دکمه‌های پیوی هم جوین اجباری می‌خواهند؛ «✅ عضو شدم» و پنل مدیریت نه
+            if chat is not None and chat.type == ChatType.PRIVATE and not (query.data or "").startswith(("fj:", "adm:")):
+                from .forcejoin import gate
+
+                if not await gate(update, context, user):
+                    return
             await fn(update, context, user, query)
         finally:
             if query.id not in _answered:

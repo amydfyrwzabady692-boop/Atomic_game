@@ -35,14 +35,27 @@ from . import render
 from .concurrency import PerChatUpdateProcessor
 from .db import db
 from .duels import DuelRunner
-from .handlers import admin, arcade, duel, flow, group, group_settings, private, shop, wallet
+from .handlers import (
+    admin,
+    arcade,
+    duel,
+    flow,
+    forcejoin,
+    group,
+    group_settings,
+    membership_admin,
+    private,
+    shop,
+    wallet,
+)
 from .ratelimiter import GroupGameRateLimiter
 from .runner import MatchManager
 from .tg import tg_call
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_UPDATES = ["message", "callback_query", "my_chat_member", "pre_checkout_query"]
+# chat_member: ورود و خروج کاربرها در کانال‌هایی که ربات ادمینشان است (جوین اجباری و وب‌هوک API)
+ALLOWED_UPDATES = ["message", "callback_query", "my_chat_member", "chat_member", "pre_checkout_query"]
 TEHRAN = ZoneInfo("Asia/Tehran")
 GAME_SETTINGS_REFRESH_SECONDS = 15
 
@@ -198,9 +211,12 @@ def register_handlers(application: Application) -> None:
     add(CallbackQueryHandler(wallet.admin_topup_callback, pattern=r"^adm:top:"))
     add(CallbackQueryHandler(wallet.admin_sell_callback, pattern=r"^adm:sell:"))
     add(CallbackQueryHandler(admin.admin_dm_callback, pattern=r"^adm:dm:"))
+    add(CallbackQueryHandler(membership_admin.panel_callback, pattern=r"^adm:(?:fj|api):"))
     add(CallbackQueryHandler(admin.admin_callback, pattern=r"^adm:"))
+    add(CallbackQueryHandler(forcejoin.check_callback, pattern=r"^fj:ok$"))
 
     add(ChatMemberHandler(group.my_chat_member, ChatMemberHandler.MY_CHAT_MEMBER))
+    add(ChatMemberHandler(forcejoin.chat_member, ChatMemberHandler.CHAT_MEMBER))
     add(MessageHandler(filters.StatusUpdate.MIGRATE, group.migrated))
     # دریافت رسید یا ورودی‌های کیف پول در پیوی
     add(

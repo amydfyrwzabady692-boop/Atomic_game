@@ -1304,4 +1304,115 @@ DUEL_ERRORS = {
 }
 
 
+# ---------------------------------------------------------------- جوین اجباری
+FJ_PROMPT = (
+    "🔒 <b>برای استفاده از ربات اول عضو این {count} شو:</b>\n\n{channels}\n\n"
+    "بعد از عضویت دکمه‌ی «✅ عضو شدم» را بزن."
+)
+FJ_COUNT_ONE = "کانال"
+FJ_COUNT_MANY = "{n} کانال"
+FJ_JOIN_BTN = "📢 عضویت در {title}"
+FJ_CHECK_BTN = "✅ عضو شدم"
+FJ_ALERT = "🔒 اول عضو کانال‌های ربات شو."
+FJ_STILL_MISSING = "❗️ هنوز عضو این‌ها نشده‌ای:\n{channels}"
+FJ_VERIFIED = "✅ <b>عضویتت تأیید شد.</b> خوش آمدی!"
+FJ_GROUP_NEED = "🔒 {name}، برای بازی اول باید عضو کانال‌های ربات شوی."
+FJ_GROUP_BTN = "📢 عضویت در کانال‌ها"
+
+# ---------------------------------------------------------------- پنل: جوین اجباری
+ADMIN_FJ_BTN = "📢 جوین اجباری"
+ADMIN_FJ = (
+    "📢 <b>جوین اجباری</b>\n\n"
+    "کاربرها تا عضو کانال‌های فعال نشوند از ربات (پیوی، شرکت در مسابقه و مینی‌اپ) نمی‌توانند استفاده کنند؛ "
+    "مدیران ربات مستثنا هستند. ربات باید در هر کانال <b>ادمین</b> باشد تا عضویت را ببیند.\n\n{rows}"
+)
+ADMIN_FJ_EMPTY = "هنوز کانالی اضافه نشده؛ جوین اجباری خاموش است."
+ADMIN_FJ_ROW = "{n}. {state} {title} — <code>{handle}</code>"
+ADMIN_FJ_ADD_BTN = "➕ افزودن کانال"
+ADMIN_FJ_ASK = (
+    "📢 <b>افزودن کانال جوین اجباری</b>\n\n"
+    "۱) اول ربات را در کانال <b>ادمین</b> کن.\n"
+    "۲) یوزرنیم کانال (مثل <code>@mychannel</code>)، لینک <code>t.me/…</code> یا آیدی عددی‌اش (<code>-100…</code>) را بفرست، "
+    "یا یک پیام متنی از همان کانال را این‌جا فوروارد کن.\n\nبرای انصراف «لغو» را بفرست."
+)
+ADMIN_FJ_BAD_REF = "❗️ کانالی با این مشخصات پیدا نشد. یوزرنیم، لینک یا آیدی عددی کانال را بفرست."
+ADMIN_FJ_NOT_FOUND = "❗️ ربات به این کانال دسترسی ندارد. اول ربات را در کانال ادمین کن و دوباره بفرست."
+ADMIN_FJ_NOT_ADMIN = "❗️ ربات در «{title}» ادمین نیست؛ بدون ادمین بودن عضویت کاربرها را نمی‌بیند. ادمینش کن و دوباره بفرست."
+ADMIN_FJ_NO_LINK = (
+    "❗️ «{title}» کانال خصوصی است و ربات نتوانست لینک دعوت بسازد. به ربات دسترسی «دعوت کاربران با لینک» بده "
+    "و دوباره بفرست."
+)
+ADMIN_FJ_BAD_TYPE = "❗️ فقط کانال یا گروه را می‌شود جوین اجباری گذاشت."
+ADMIN_FJ_ADDED = "✅ «{title}» به جوین اجباری اضافه شد."
+ADMIN_FJ_EXISTS = "ℹ️ «{title}» از قبل در فهرست است."
+ADMIN_FJ_DETAIL = (
+    "📢 <b>{title}</b>\n\n"
+    "شناسه: <code>{chat_id}</code>\n"
+    "لینک: {link}\n"
+    "وضعیت: {state}\n"
+    "ربات در کانال: {bot}\n"
+    "اعضا: {members}"
+)
+ADMIN_FJ_ACTIVE = "✅ فعال"
+ADMIN_FJ_PAUSED = "⏸ غیرفعال"
+ADMIN_FJ_BOT_ADMIN = "✅ ادمین است"
+ADMIN_FJ_BOT_NOT_ADMIN = "⛔️ ادمین نیست — عضویت بررسی نمی‌شود و کاربرها گیر نمی‌افتند"
+ADMIN_FJ_UNKNOWN = "نامعلوم"
+ADMIN_FJ_PAUSE_BTN = "⏸ غیرفعال کن"
+ADMIN_FJ_RESUME_BTN = "▶️ فعال کن"
+ADMIN_FJ_RECHECK_BTN = "🔄 بررسی دوباره"
+ADMIN_FJ_DEL_BTN = "🗑 حذف"
+ADMIN_FJ_DEL_SURE = "«{title}» از جوین اجباری حذف شود؟"
+ADMIN_FJ_REMOVED = "🗑 حذف شد."
+ADMIN_FJ_TOGGLED = "{state} شد."
+
+# ---------------------------------------------------------------- پنل: API ربات‌های دیگر
+ADMIN_API_BTN = "🔑 API ربات‌ها"
+ADMIN_API = (
+    "🔑 <b>API برای ربات‌های دیگر</b>\n\n"
+    "رباتی که استارت این ربات یا عضویت یک کانال را جوین اجباری گذاشته، با کلید خودش می‌پرسد کاربر ربات را "
+    "استارت کرده یا عضو کانال شده؛ اگر وب‌هوک بدهد، استارت، بلاک و عضویت همان لحظه برایش فرستاده می‌شود.\n\n"
+    "آدرس پایه: <code>{base}</code>\n\n{rows}"
+)
+ADMIN_API_NO_BASE = "MINIAPP_BASE_URL در .env تنظیم نشده (آدرس https دامنه)"
+ADMIN_API_EMPTY = "هنوز کلیدی ساخته نشده."
+ADMIN_API_ROW = "{n}. {state} <b>{name}</b> — آخرین استفاده: {used}{hook}"
+ADMIN_API_ROW_HOOK = " — وب‌هوک ✅"
+ADMIN_API_NEW_BTN = "➕ کلید تازه"
+ADMIN_API_ASK_NAME = "🔑 یک نام برای کلید تازه بفرست (مثلاً نام رباتی که از این API استفاده می‌کند).\n\nبرای انصراف «لغو» را بفرست."
+ADMIN_API_BAD_NAME = "❗️ نام باید بین ۲ تا ۶۴ نویسه باشد."
+ADMIN_API_DETAIL = (
+    "🔑 <b>{name}</b> ({state})\n\n"
+    "کلید (به ربات طرف مقابل بده؛ جای دیگری نفرست):\n<code>{key}</code>\n\n"
+    "وب‌هوک: {hook}\n"
+    "آخرین ارسال وب‌هوک: {last}\n"
+    "آخرین استفاده: {used}\n\n"
+    "<b>نمونه:</b>\n"
+    "<code>{base}user?user_id=123&amp;key=…</code>\n"
+    "<code>{base}check?user_id=123&amp;channels=@channel&amp;key=…</code>\n\n"
+    "راهنمای کامل: docs/forced-join-api.md"
+)
+ADMIN_API_NO_HOOK = "ندارد"
+ADMIN_API_NEVER = "هنوز نه"
+ADMIN_API_HOOK_BTN = "🔗 تنظیم وب‌هوک"
+ADMIN_API_UNHOOK_BTN = "✂️ حذف وب‌هوک"
+ADMIN_API_TEST_BTN = "🧪 تست وب‌هوک"
+ADMIN_API_PAUSE_BTN = "⏸ غیرفعال کن"
+ADMIN_API_RESUME_BTN = "▶️ فعال کن"
+ADMIN_API_ROTATE_BTN = "♻️ کلید تازه"
+ADMIN_API_DEL_BTN = "🗑 حذف کلید"
+ADMIN_API_ASK_HOOK = (
+    "🔗 آدرس وب‌هوک ربات طرف مقابل را بفرست (با https://).\n"
+    "رویدادهای start، block، unblock، join و leave با بدنه‌ی JSON به این آدرس POST می‌شوند و هدر X-Signature "
+    "امضای HMAC-SHA256 بدنه با همین کلید است.\n\nبرای انصراف «لغو» را بفرست."
+)
+ADMIN_API_BAD_HOOK = "❗️ آدرس باید با https:// شروع شود و کامل باشد."
+ADMIN_API_SAVED = "✅ ذخیره شد."
+ADMIN_API_TEST_RESULT = "🧪 جواب وب‌هوک: {status}"
+ADMIN_API_ROTATE_SURE = "کلید «{name}» عوض شود؟ کلید فعلی همان لحظه از کار می‌افتد و باید کلید تازه را به ربات طرف مقابل بدهی."
+ADMIN_API_ROTATE_SURE_BTN = "♻️ بله، عوض کن"
+ADMIN_API_DEL_SURE = "کلید «{name}» حذف شود؟ ربات طرف مقابل دیگر به API دسترسی ندارد."
+ADMIN_API_REMOVED = "🗑 کلید حذف شد."
+
+
 _apply_currency_name()
