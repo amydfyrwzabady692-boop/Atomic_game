@@ -47,6 +47,10 @@ body[data-theme="violet"] {
   --light: #ece6fb; --dark: #9583c9; --frame: #34265e; --frame-hi: #57449a; --frame-lo: #1c1438;
   --coord-light: rgba(98, 78, 160, .9); --coord-dark: rgba(246, 242, 255, .9); --grain: .04;
 }
+body[data-theme="marble"] {
+  --light: #ebe8e3; --dark: #7d8592; --frame: #2a2d34; --frame-hi: #4b505c; --frame-lo: #131519;
+  --coord-light: rgba(70, 76, 90, .9); --coord-dark: rgba(246, 246, 246, .9); --grain: .05;
+}
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body {
@@ -196,6 +200,38 @@ html, body {
   background: linear-gradient(100deg, rgba(255, 255, 255, var(--grain)), transparent 40%, rgba(0, 0, 0, calc(var(--grain) * .7)) 75%, transparent);
   pointer-events: none;
 }
+/* رگه‌ی واقعی چوب (تخته‌ی چوبی): خط‌های نازک با فاصله‌ی نامنظم؛ خانه‌های تیره رگه‌ی افقی دارند و هر خانه
+   تکه‌ی دیگری از رگه را نشان می‌دهد تا تکراری دیده نشود. فقط لایه‌ی رویی عوض می‌شود؛ رنگ خانه و هایلایت‌ها همان می‌مانند. */
+body:not([data-theme]) .sq::before, body[data-theme="wood"] .sq::before {
+  background:
+    repeating-linear-gradient(91deg, rgba(110, 66, 28, .09) 0 1px, transparent 1px 6px, rgba(110, 66, 28, .06) 6px 8px,
+      transparent 8px 15px, rgba(255, 240, 210, .12) 15px 17px, transparent 17px 23px, rgba(110, 66, 28, .05) 23px 26px, transparent 26px 34px),
+    linear-gradient(100deg, rgba(255, 255, 255, .14), transparent 40%, rgba(0, 0, 0, .07) 75%, transparent);
+}
+body:not([data-theme]) .sq.dark::before, body[data-theme="wood"] .sq.dark::before {
+  background:
+    repeating-linear-gradient(1deg, rgba(58, 28, 8, .17) 0 1px, transparent 1px 5px, rgba(58, 28, 8, .1) 5px 7px,
+      transparent 7px 13px, rgba(255, 214, 165, .08) 13px 15px, transparent 15px 22px, rgba(58, 28, 8, .08) 22px 25px, transparent 25px 31px),
+    linear-gradient(100deg, rgba(255, 255, 255, .1), transparent 40%, rgba(0, 0, 0, .12) 75%, transparent);
+}
+/* سنگ مرمر: رگه‌های مورب روشن و تیره با نور نرم */
+body[data-theme="marble"] .sq::before {
+  background:
+    linear-gradient(118deg, transparent 22%, rgba(150, 156, 170, .16) 29%, transparent 37%, transparent 58%, rgba(255, 255, 255, .5) 63%, transparent 69%),
+    linear-gradient(36deg, transparent 40%, rgba(150, 156, 170, .1) 47%, transparent 55%),
+    radial-gradient(120% 90% at 18% 12%, rgba(255, 255, 255, .3), transparent 62%);
+}
+body[data-theme="marble"] .sq.dark::before {
+  background:
+    linear-gradient(122deg, transparent 16%, rgba(255, 255, 255, .14) 23%, transparent 31%, transparent 54%, rgba(16, 20, 30, .2) 60%, transparent 67%),
+    linear-gradient(30deg, transparent 32%, rgba(255, 255, 255, .09) 39%, transparent 47%),
+    radial-gradient(120% 90% at 18% 12%, rgba(255, 255, 255, .16), transparent 62%);
+}
+body[data-theme="wood"] .sq:nth-child(2n)::before, body:not([data-theme]) .sq:nth-child(2n)::before { background-position: 11px 5px, 0 0; }
+body[data-theme="wood"] .sq:nth-child(3n)::before, body:not([data-theme]) .sq:nth-child(3n)::before { background-position: 19px 13px, 0 0; }
+body[data-theme="wood"] .sq:nth-child(5n)::before, body:not([data-theme]) .sq:nth-child(5n)::before { background-position: 7px 21px, 0 0; }
+body[data-theme="marble"] .sq:nth-child(2n)::before { transform: scaleX(-1); }
+body[data-theme="marble"] .sq:nth-child(3n)::before { transform: scaleY(-1); }
 .sq.last { box-shadow: inset 0 0 0 100px rgba(255, 214, 80, .42); }
 .sq.selected { box-shadow: inset 0 0 0 100px rgba(80, 190, 255, .5); }
 .sq.check { background-image: radial-gradient(circle, rgba(255, 40, 60, .95) 0%, rgba(231, 20, 40, .6) 32%, rgba(169, 0, 0, 0) 72%); }

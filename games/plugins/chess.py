@@ -23,7 +23,10 @@ class ChessGame(BaseGame):
     key = "chess"
     title_fa = "شطرنج"
     emoji = "♟"
-    description_fa = "شطرنج دونفره با صفحه‌ی گرافیکی واقعی و ساعت شطرنج بین‌المللی (مثل \u200e۳+۲ یا \u200e۱۵+۱۰)؛ مات کن تا ببری."
+    description_fa = (
+        "شطرنج دونفره با صفحه‌ی گرافیکی واقعی و ساعت مسابقه‌های رسمی: \u200e۳+۲ قهرمانی برق‌آسای جهان، \u200e۱۵+۱۰ قهرمانی"
+        " سریع جهان و کلاسیک فیده \u200e۹۰+۳۰ (بعد از حرکت ۴۰، ۳۰ دقیقه‌ی اضافه)؛ مات کن تا ببری."
+    )
     min_players = 2
     max_players = 2
     players_ceiling = 2
@@ -35,7 +38,7 @@ class ChessGame(BaseGame):
         "ساعت شطرنج بین‌المللی: \u200e۳+۲ یعنی ۳ دقیقه و ۲ ثانیه اضافه بعد از هر حرکت.",
         "مات، تسلیم، تمام شدن ساعت یا مساوی، بازی را تمام می‌کند.",
     ]
-    style_fa = "نوبتی با ساعت شطرنج: از بولت \u200e۲+۱ تا کلاسیک \u200e۳۰+۲۰، اولین حرکت تا {first_move_seconds} ثانیه."
+    style_fa = "نوبتی با ساعت شطرنج: از بولت \u200e۲+۱ تا کلاسیک فیده \u200e۹۰+۳۰، اولین حرکت تا {first_move_seconds} ثانیه."
     max_plies = live.MAX_PLIES
 
     async def start(self) -> None:
@@ -202,7 +205,8 @@ class ChessGame(BaseGame):
         side = self.position.turn
         if not self.first_move:
             spent = now - self.turn_at
-            self.clock[side] = round(max(0.0, self.clock[side] - spent) + self.increment, 3)
+            bonus = live.move_bonus(self.control, self.plies // 2 + 1)  # ۳۰ دقیقه بعد از حرکت ۴۰ (کلاسیک فیده)
+            self.clock[side] = round(max(0.0, self.clock[side] - spent) + self.increment + bonus, 3)
         self.turn_at = now
         self.last_san = self.position.san(move)
         self.position = self.position.push(move)

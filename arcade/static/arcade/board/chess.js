@@ -17,8 +17,8 @@
   var START_COUNT = { p: 8, n: 2, b: 2, r: 2, q: 1 };
   var VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9 };
   var FIGURINES = { K: "♔", Q: "♕", R: "♖", B: "♗", N: "♘" };
-  var THEMES = ["wood", "green", "blue", "violet"];
-  var THEME_NAMES = { wood: "چوبی", green: "سبز مسابقه", blue: "آبی", violet: "بنفش" };
+  var THEMES = ["wood", "green", "marble", "blue", "violet"];
+  var THEME_NAMES = { wood: "چوب گردو", green: "سبز مسابقه", marble: "سنگ مرمر", blue: "آبی", violet: "بنفش" };
   var LEVEL_NAMES = { easy: "آسان", medium: "متوسط", hard: "سخت" };
   var ERRORS = {
     not_your_turn: "نوبت تو نیست.",
@@ -136,10 +136,22 @@
     return san.replace(/[KQRBN]/g, function (letter) { return FIGURINES[letter]; });
   }
   // نام کنترل زمانی با همان مرزهای سایت‌های شطرنج: زمان تخمینی = پایه + ۴۰ × افزایش
-  function controlLabel(base, inc) {
+  function controlLabel(base, inc, bonus) {
     var estimate = base + 40 * inc;
     var kind = estimate < 180 ? "🚀 بولت" : estimate < 480 ? "⚡️ برق‌آسا" : estimate < 1500 ? "⏱ سریع" : "🏛 کلاسیک";
+    if (bonus) kind = "🏆 کلاسیک فیده"; // ۹۰ دقیقه تا حرکت ۴۰، بعد ۳۰ دقیقه‌ی اضافه (المپیاد و کاندیداها)
     return kind + " ‎" + fa(Math.round(base / 60)) + "+" + fa(inc); // بدون نشانه‌ی چپ‌به‌راست «۳+۲» برعکس می‌شود
+  }
+  // کلاسیک فیده: همین حرکت، چهلمین حرکتِ یک طرف بود و ساعتش ۳۰ دقیقه اضافه گرفت (هر کدام فقط یک بار)
+  var bonusShown = 0;
+  function bonusNote(previous) {
+    var bonus = state.bonus;
+    if (!bonus || !previous || bonusShown === state.plies || state.plies < 2) return;
+    if (Math.floor((state.plies - 1) / 2) + 1 !== bonus[0]) return;
+    bonusShown = state.plies;
+    var side = state.plies % 2 === 1 ? "w" : "b";
+    var who = state.you === side ? "تو" : state.you ? "حریف" : (side === "w" ? "سفید" : "سیاه");
+    toast("⏰ +" + fa(Math.round(bonus[1] / 60)) + " دقیقه برای " + who + " (بعد از حرکت " + fa(bonus[0]) + ")", true);
   }
 
   // ------------------------------------------------------------------ صدا (common/sfx.js)
@@ -558,7 +570,7 @@
       chip.textContent = "🤖 سطح " + (LEVEL_NAMES[state.level] || "");
     } else {
       $("title").textContent = state.you ? "شطرنج" : "شطرنج · تماشا";
-      chip.textContent = state.base ? controlLabel(state.base, state.inc) : "";
+      chip.textContent = state.base ? controlLabel(state.base, state.inc, state.bonus) : "";
     }
     chip.classList.toggle("hidden", !chip.textContent);
   }
@@ -687,6 +699,7 @@
     status();
     buttons();
     if (previous && previous.plies !== state.plies && state.you === state.turn && !state.over) haptic("medium");
+    if (!state.over) bonusNote(previous);
     if (state.over) showResult();
     if (premove && !state.over && state.turn === state.you && !busy) {
       var queued = premove;

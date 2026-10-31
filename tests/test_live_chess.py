@@ -155,6 +155,37 @@ def test_chess_clock_runs_like_international_time_controls():
     assert live.view(untimed, 1, 10**9)["clock"] is None
 
 
+def test_fide_classical_adds_thirty_minutes_after_move_forty():
+    """کلاسیک استاندارد فیده (المپیاد، کاندیداها): ۹۰ دقیقه + ۳۰ ثانیه از حرکت اول، و بعد از حرکت ۴۰ هر طرف
+    یک‌باره ۳۰ دقیقه‌ی دیگر می‌گیرد."""
+    import random
+
+    assert live.TIME_CONTROLS["fide"] == (5400, 30) and live.MOVE_BONUS["fide"] == (40, 1800)
+    assert live.move_bonus("fide", 40) == 1800.0 and live.move_bonus("fide", 39) == live.move_bonus("fide", 41) == 0.0
+    assert live.move_bonus("classic", 40) == 0.0 and live.move_bonus(None, 40) == 0.0
+    for seed in range(60):  # یک بازی تصادفی ۸۰ نیم‌حرکتی که زودتر تمام نشود
+        rng, now = random.Random(seed), 0.0
+        state = live.new_state(1, 2, now, control="fide")
+        clocks = []
+        for _ in range(80):
+            position = live.position_of(state)
+            move = rng.choice(position.legal_moves())
+            now += 5.0
+            live.apply_move(state, state[position.turn], move.src, move.dst, move.promo, now)
+            clocks.append(dict(state["clock"]))
+            if state["over"]:
+                break
+        if not state["over"]:
+            break
+    assert not state["over"]
+    # هر حرکت (جز اولی) ۵ ثانیه وقت می‌گیرد و ۳۰ ثانیه اضافه می‌شود: +۲۵؛ حرکت ۴۰ = +۲۵ و ۳۰ دقیقه
+    assert clocks[76]["w"] == 5400 + 38 * 25 and clocks[78]["w"] == 5400 + 39 * 25 + 1800  # حرکت ۳۹ و ۴۰ سفید
+    assert clocks[77]["b"] == 5400 + 38 * 25 and clocks[79]["b"] == 5400 + 39 * 25 + 1800  # حرکت ۳۹ و ۴۰ سیاه
+    view = live.view(state, 1, now)
+    assert view["bonus"] == (40, 1800) and view["base"] == 5400 and view["inc"] == 30
+    assert live.view(live.new_state(1, 2, 0.0, control="blitz3"), 1, 0.0)["bonus"] is None
+
+
 def test_flag_fall_against_a_lone_king_is_a_draw():
     """قانون ۶.۹ فیده: اگر حریف فقط شاه دارد و با هیچ حرکتی نمی‌تواند مات کند، پایان وقت مساوی است."""
     state = live.new_state(1, 2, 0.0, control="bullet")

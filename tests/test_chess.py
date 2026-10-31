@@ -194,6 +194,26 @@ async def test_in_chat_chess_uses_the_chosen_time_control():
     assert ctx.ended and game.scores[game.white.user_id] == 1 and "وقت" in ctx.edits[-1]["text"]
 
 
+async def test_in_chat_fide_classical_gives_thirty_minutes_after_move_forty():
+    ctx = FakeContext(n_players=2, options={"variant": "fide"})
+    game = ChessGame(ctx)
+    await game.start()
+    white, black = ctx.players.index(game.white), ctx.players.index(game.black)
+    assert "کلاسیک فیده \u200e۹۰+۳۰" in ctx.sent[0]["text"] and "۱:۳۰:۰۰" in ctx.sent[0]["text"]
+    await move(ctx, game, white, "e2", "e4")
+    await move(ctx, game, black, "e7", "e5")
+    game.plies = 78  # انگار ۳۹ حرکت هر طرف بازی شده؛ حرکت بعدی سفید چهلمین است
+    ctx.clock += 60
+    await move(ctx, game, white, "g1", "f3")
+    assert game.clock["w"] == 5400 - 60 + 30 + 1800
+    ctx.clock += 10
+    await move(ctx, game, black, "b8", "c6")  # چهلمین حرکت سیاه
+    assert game.clock["b"] == 5400 - 10 + 30 + 1800
+    ctx.clock += 10
+    await move(ctx, game, white, "f1", "c4")  # حرکت ۴۱: فقط افزایش
+    assert game.clock["w"] == 5400 - 60 + 30 + 1800 - 10 + 30
+
+
 def test_time_control_labels_never_flip_in_right_to_left_text():
     """بدون نشانه‌ی چپ‌به‌راست، «۳+۲» بعد از حرف فارسی برعکس («۲+۳») نمایش داده می‌شود."""
     import re

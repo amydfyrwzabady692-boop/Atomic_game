@@ -10,6 +10,10 @@
 بازیکن نوبت دارد کم می‌شود. مثل سایت‌های شطرنج آنلاین، اولین حرکت هر طرف از ساعتش کم نمی‌شود و فقط
 مهلت جداگانه‌ی ``FIRST_MOVE_SECONDS`` دارد (تا بازیکن فرصت باز کردن صفحه را داشته باشد). تمام شدن
 ساعت یعنی باخت، مگر حریف با هیچ رشته حرکتی نتواند مات کند (فقط شاه دارد) که مساوی است (قانون ۶.۹).
+
+کنترل‌ها همان‌هایی‌اند که در مسابقه‌های رسمی بازی می‌شوند: ۳+۲ قهرمانی برق‌آسای جهان، ۱۵+۱۰ قهرمانی
+سریع جهان و کلاسیک استاندارد فیده (المپیاد و کاندیداها): ۹۰ دقیقه برای ۴۰ حرکت، بعد ۳۰ دقیقه‌ی اضافه
+تا آخر بازی، با ۳۰ ثانیه افزایش از حرکت اول (``MOVE_BONUS``).
 """
 
 from .engine import START_FEN, Move, Position, parse_square
@@ -21,8 +25,11 @@ TIME_CONTROLS = {
     "blitz5": (300, 3),  # ۵+۳
     "rapid10": (600, 5),  # ۱۰+۵
     "rapid15": (900, 10),  # ۱۵+۱۰ قهرمانی شطرنج سریع جهان (فیده)
-    "classic": (1800, 20),  # ۳۰+۲۰
+    "classic": (1800, 20),  # ۳۰+۲۰ کلاسیک کوتاه سایت‌های شطرنج
+    "fide": (5400, 30),  # ۹۰+۳۰ و ۳۰ دقیقه بعد از حرکت ۴۰: استاندارد فیده (المپیاد، کاندیداها)
 }
+# زمان اضافه‌ی یک‌باره: کلید ← (بعد از چندمین حرکتِ هر طرف، چند ثانیه)
+MOVE_BONUS = {"fide": (40, 1800)}
 DEFAULT_CONTROL = "blitz5"
 FIRST_MOVE_SECONDS = 60
 MAX_PLIES = 600
@@ -117,6 +124,12 @@ def other(side: str) -> str:
     return "b" if side == "w" else "w"
 
 
+def move_bonus(control: str | None, move_number: int) -> float:
+    """ثانیه‌هایی که بعد از ``move_number``اُمین حرکت یک طرف یک‌باره به ساعتش اضافه می‌شود."""
+    bonus = MOVE_BONUS.get(control or "")
+    return float(bonus[1]) if bonus and move_number == bonus[0] else 0.0
+
+
 def in_first_move(state: dict) -> bool:
     """هنوز در اولین حرکت یکی از دو طرف هستیم (ساعت شروع نشده)."""
     return len(state["moves"]) < 2
@@ -204,7 +217,8 @@ def apply_move(state: dict, user_id: int, src: int, dst: int, promo: str, now: f
     clock = state["clock"]
     if clock is not None and not in_first_move(state):
         # وقت مصرف‌شده کم و افزایش این کنترل زمانی اضافه می‌شود (اولین حرکت هر طرف مجانی است)
-        clock[side] = round(max(0.0, clock[side] - (now - state["turn_at"])) + state["inc"], 3)
+        bonus = move_bonus(state["control"], len(state["moves"]) // 2 + 1)
+        clock[side] = round(max(0.0, clock[side] - (now - state["turn_at"])) + state["inc"] + bonus, 3)
     san = position.san(move)
     position = position.push(move)
     state["fen"] = position.fen()
@@ -305,6 +319,7 @@ def view(state: dict, viewer_id: int | None, now: float) -> dict:
         "control": state["control"],
         "base": state["base"],
         "inc": state["inc"],
+        "bonus": MOVE_BONUS.get(state["control"] or ""),  # [حرکت، ثانیه] برای کلاسیک فیده
         "clock": {k: int(v * 1000) for k, v in remaining.items()} if remaining else None,
         "running": position.turn if remaining and not state["over"] and not first else None,
         "first_move": first,
