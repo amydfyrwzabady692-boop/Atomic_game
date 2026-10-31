@@ -2,6 +2,7 @@
 
 from html import escape
 
+from django.db import transaction
 from telegram import InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
@@ -85,10 +86,29 @@ def games_screen(group: TelegramGroup):
     return texts.SETTINGS_GAMES_HEADER, InlineKeyboardMarkup(rows)
 
 
+# هر تنظیم فقط ستون خودش را ذخیره می‌کند؛ کلیک هم‌زمان دو ادمین یا غیرفعال شدن گروه وسط کار گم نمی‌شود
+APPLY_FIELDS = {
+    "min": "min_entry",
+    "max": "max_entry",
+    "join": "default_join_seconds",
+    "users": "allow_user_created_games",
+    "promo": "promo_enabled",
+    "tg": "enabled_games",
+}
+
+
 @db
 def _apply(group_id: int, action: str, value: str) -> tuple[TelegramGroup, str]:
     """تغییر را اعمال می‌کند. ``(group, خطا)`` برمی‌گرداند."""
-    group = TelegramGroup.objects.get(pk=group_id)
+    with transaction.atomic():
+        group = TelegramGroup.objects.select_for_update().get(pk=group_id)
+        error = _change(group, action, value)
+        if not error and action in APPLY_FIELDS:
+            group.save(update_fields=[APPLY_FIELDS[action]])
+    return group, error
+
+
+def _change(group: TelegramGroup, action: str, value: str) -> str:
     if action == "min":
         group.min_entry = _cycle([c for c in MIN_CHOICES if c <= group.max_entry] or [0], group.min_entry)
     elif action == "max":
@@ -102,18 +122,17 @@ def _apply(group_id: int, action: str, value: str) -> tuple[TelegramGroup, str]:
     elif action == "tg":
         all_keys = list(catalog())
         if value not in all_keys:
-            return group, ""
+            return ""
         enabled = [k for k in all_keys if group.game_enabled(k)]
         if value in enabled:
             if len(enabled) == 1:
-                return group, texts.SETTINGS_LAST_GAME
+                return texts.SETTINGS_LAST_GAME
             enabled.remove(value)
         else:
             enabled.append(value)
         # لیست خالی یعنی «همه فعال»
         group.enabled_games = [] if len(enabled) == len(all_keys) else [k for k in all_keys if k in enabled]
-    group.save()
-    return group, ""
+    return ""
 
 
 @command(group=True)

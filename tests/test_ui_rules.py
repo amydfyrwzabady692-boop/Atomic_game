@@ -9,7 +9,7 @@ import pytest
 from telegram import InlineKeyboardMarkup
 
 from bot import render, ui
-from bot.concurrency import PerChatUpdateProcessor
+from bot.concurrency import PerChatUpdateProcessor, update_key
 from bot.tg import EditQueue
 from core import texts
 from core.textutils import fa_date, to_jalali
@@ -224,6 +224,88 @@ async def test_a_failing_update_does_not_block_its_chat():
     await processor.process_update(chat_update(5), fine())
     await processor.process_update(SimpleNamespace(effective_chat=None), fine())
     assert seen == ["ok", "ok"] and processor._locks == {}
+
+
+def group_click(chat_id, message_id):
+    return SimpleNamespace(
+        effective_chat=SimpleNamespace(id=chat_id, type="supergroup"),
+        callback_query=SimpleNamespace(message=SimpleNamespace(message_id=message_id)),
+    )
+
+
+async def test_a_busy_chat_never_takes_the_slots_of_other_chats():
+    """۲۰ پیام پشت هم در یک گروه شلوغ فقط یک جای پردازش را می‌گیرند؛ پیوی‌ها و گروه‌های دیگر معطل نمی‌مانند."""
+    processor = PerChatUpdateProcessor(2)
+    log = []
+    release = asyncio.Event()
+
+    async def slow(name):
+        log.append(name)
+        await release.wait()
+
+    async def quick(name):
+        log.append(name)
+
+    busy = [asyncio.create_task(processor.process_update(chat_update(-1), slow(f"g{i}"))) for i in range(20)]
+    await asyncio.sleep(0.02)
+    await asyncio.wait_for(processor.process_update(chat_update(7), quick("pv")), 1)
+    await asyncio.wait_for(processor.process_update(chat_update(-2), quick("other")), 1)
+    assert log == ["g0", "pv", "other"] and processor.current_concurrent_updates == 1
+    release.set()
+    await asyncio.gather(*busy)
+    assert log[3:] == [f"g{i}" for i in range(1, 20)] and processor._locks == {}
+
+
+async def test_clicks_on_different_games_in_one_group_do_not_wait_for_each_other():
+    processor = PerChatUpdateProcessor(8)
+    log = []
+    release = asyncio.Event()
+
+    async def slow(name):
+        log.append(f"{name}:start")
+        await release.wait()
+        log.append(f"{name}:end")
+
+    async def quick(name):
+        log.append(name)
+
+    tasks = [
+        asyncio.create_task(processor.process_update(group_click(-5, 10), slow("lobby-a"))),
+        asyncio.create_task(processor.process_update(group_click(-5, 10), quick("lobby-a-again"))),
+        asyncio.create_task(processor.process_update(group_click(-5, 11), quick("board-b"))),
+        asyncio.create_task(processor.process_update(chat_update(-5), quick("message"))),
+    ]
+    await asyncio.sleep(0.05)
+    # کلیک بعدی روی همان لابی صبر می‌کند؛ صفحه‌ی بازی دیگر و پیام‌های گروه نه
+    assert log == ["lobby-a:start", "board-b", "message"]
+    release.set()
+    await asyncio.gather(*tasks)
+    assert log[-2:] == ["lobby-a:end", "lobby-a-again"] and processor._locks == {}
+    # در پیوی کلیک‌ها هم مثل پیام‌ها به ترتیب کل چت‌اند
+    private = SimpleNamespace(effective_chat=SimpleNamespace(id=9, type="private"), callback_query=SimpleNamespace(message=SimpleNamespace(message_id=3)))
+    assert update_key(private) == 9 and update_key(group_click(-5, 10)) == (-5, 10)
+
+
+async def test_cancelled_while_waiting_does_not_leak():
+    processor = PerChatUpdateProcessor(1)
+    release = asyncio.Event()
+
+    async def slow():
+        await release.wait()
+
+    async def never():
+        raise AssertionError("must not run")
+
+    first = asyncio.create_task(processor.process_update(chat_update(1), slow()))
+    await asyncio.sleep(0.01)
+    waiting = asyncio.create_task(processor.process_update(chat_update(2), never()))  # منتظر سهمیه
+    await asyncio.sleep(0.01)
+    waiting.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await waiting
+    release.set()
+    await first
+    assert processor._locks == {} and processor._users == {} and processor.current_concurrent_updates == 0
 
 
 # ------------------------------------------------------------------ صف ویرایش

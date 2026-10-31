@@ -793,16 +793,21 @@ async def admin_sell_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         await _finish_review(update, context, user, query, "sell", review, texts.ADMIN_STATUS_REFUNDED, panel)
 
 
-async def notify_sell_paid(context, req: SellRequest, receipt_file_id: str | None = None) -> None:
+async def notify_sell_paid(context, req: SellRequest, receipt_file_id: str | None = None, as_document: bool = False) -> None:
+    """خبر واریز برای فروشنده، همراه رسید ادمین اگر فرستاده باشد. رسیدی که فایل است (مثلاً PDF بانک)
+    با sendPhoto نمی‌رود؛ پس اول با نوع خودش و بعد با نوع دیگر امتحان می‌شود و آخر سر فقط متن."""
     text = texts.WALLET_SELL_PAID_USER.format(
         id=fa_num(req.pk), amount=fa_num(req.amount_toman), card=escape(_spaced(req.card_number))
     )
     if receipt_file_id:
-        sent = await tg_call(
-            context.bot.send_photo, req.user.tg_id, photo=receipt_file_id, caption=text + texts.WALLET_SELL_RECEIPT_NOTE, parse_mode="HTML"
-        )
-        if sent is not None:
-            return
+        bot = context.bot
+        senders = [(bot.send_photo, "photo"), (bot.send_document, "document")]
+        for send, field in reversed(senders) if as_document else senders:
+            sent = await tg_call(
+                send, req.user.tg_id, caption=text + texts.WALLET_SELL_RECEIPT_NOTE, parse_mode="HTML", **{field: receipt_file_id}
+            )
+            if sent is not None:
+                return
     await tg_call(context.bot.send_message, req.user.tg_id, text, parse_mode="HTML")
 
 

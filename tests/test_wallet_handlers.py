@@ -257,6 +257,39 @@ async def test_admin_refunds_a_sell_request_once(app):
     assert await audit() == []
 
 
+async def test_admin_payout_receipt_reaches_the_seller_as_photo_or_file(app):
+    await start_user(app, 345, name="فروشنده")
+    await start_user(app, ADMIN, name="مدیر")
+    await give(345, 500)
+    reqs = []
+    for _ in range(2):
+        await press(app, 345, "wal:sell:p:100")
+        await send_private(app, 345, "6037991234567893 علی")
+        await press(app, 345, "wal:sell:ok")
+        reqs.append(await sync_to_async(SellRequest.objects.order_by("-pk").first)())
+
+    # رسید بانکی به‌صورت فایل PDF
+    await press(app, ADMIN, f"adm:sell:receipt:{reqs[0].pk}", handler=wallet_handlers.admin_sell_callback)
+    update, context = make_update(app, ADMIN, text="")
+    update.effective_message.photo = []
+    update.effective_message.document = SimpleNamespace(file_id="PDF-RECEIPT")
+    update.effective_message.caption = None
+    context.user_data = user_data(app, ADMIN)
+    await wallet_handlers.private_message(update, context)
+    got = [m for m in app.bot.sent if m["chat_id"] == 345 and m.get("document") == "PDF-RECEIPT"]
+    assert got and "واریز شد" in got[0]["text"]
+
+    # رسید به‌صورت عکس
+    await press(app, ADMIN, f"adm:sell:receipt:{reqs[1].pk}", handler=wallet_handlers.admin_sell_callback)
+    sent = await send_private(app, ADMIN, photo="PHOTO-RECEIPT")
+    assert "رسید برای کاربر رفت" in sent.replies[-1]["text"]
+    got = [m for m in app.bot.sent if m["chat_id"] == 345 and m.get("photo") == "PHOTO-RECEIPT"]
+    assert got and "واریز شد" in got[0]["text"]
+    statuses = await sync_to_async(lambda: set(SellRequest.objects.values_list("status", flat=True)))()
+    assert statuses == {SellRequest.Status.PAID} and (await get_user(345)).coins == 300
+    assert await audit() == []
+
+
 # ====================================================================== شارژ با رسید
 async def test_topup_receipt_reaches_admins_and_is_credited_once(app):
     await start_user(app, 351, name="خریدار")

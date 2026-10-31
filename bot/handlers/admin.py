@@ -1091,7 +1091,7 @@ STEP_PERMISSION = {
 
 
 async def admin_private_message(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser) -> bool:
-    from .wallet import notify_sell_paid, update_all_admin_alerts
+    from .wallet import message_is_document, notify_sell_paid, update_all_admin_alerts
 
     flow = context.user_data.get("admin_flow")
     if not flow:
@@ -1138,7 +1138,7 @@ async def admin_private_message(update: Update, context: ContextTypes.DEFAULT_TY
         if not review.changed:
             await reply(update, texts.ADMIN_ALREADY_REVIEWED.format(status=req.get_status_display()), panel)
             return True
-        await notify_sell_paid(context, req, receipt_file_id=file_id)
+        await notify_sell_paid(context, req, receipt_file_id=file_id, as_document=message_is_document(update))
         summary = texts.ADMIN_SELL_SUMMARY.format(
             id=fa_num(req.pk), name=escape(req.user.display_name), tg_id=req.user.tg_id, coins=fa_num(req.coins),
             toman=fa_num(req.amount_toman),
