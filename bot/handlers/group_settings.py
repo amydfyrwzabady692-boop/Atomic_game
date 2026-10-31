@@ -37,6 +37,7 @@ def home_screen(group: TelegramGroup):
         users=yes_no,
         enabled=fa_num(enabled),
         total=fa_num(len(games)),
+        promo=texts.YES if group.promo_enabled else texts.NO,
     )
     keyboard = InlineKeyboardMarkup(
         [
@@ -55,6 +56,13 @@ def home_screen(group: TelegramGroup):
                     texts.SETTINGS_USERS_BTN.format(v=yes_no),
                     "set:users",
                     style=ui.SUCCESS if group.allow_user_created_games else ui.DANGER,
+                )
+            ],
+            [
+                ui.button(
+                    texts.SETTINGS_PROMO_BTN.format(v=texts.YES if group.promo_enabled else texts.NO),
+                    "set:promo",
+                    style=ui.SUCCESS if group.promo_enabled else ui.DANGER,
                 )
             ],
             [ui.button(texts.CLOSE_BTN, "set:close", style=ui.DANGER)],
@@ -89,6 +97,8 @@ def _apply(group_id: int, action: str, value: str) -> tuple[TelegramGroup, str]:
         group.default_join_seconds = _cycle(JOIN_CHOICES, group.default_join_seconds)
     elif action == "users":
         group.allow_user_created_games = not group.allow_user_created_games
+    elif action == "promo":
+        group.promo_enabled = not group.promo_enabled
     elif action == "tg":
         all_keys = list(catalog())
         if value not in all_keys:
@@ -129,7 +139,7 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     if action == "close":
         await tg_call(query.message.delete)
         return
-    if action in ("min", "max", "join", "users", "tg"):
+    if action in ("min", "max", "join", "users", "promo", "tg"):
         group, error = await _apply(group.pk, action, value)
         if error:
             await answer(query, error, alert=True)

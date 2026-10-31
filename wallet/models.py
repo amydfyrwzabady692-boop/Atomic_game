@@ -88,6 +88,12 @@ class EconomySettings(models.Model):
     coin_sell_price_toman = models.PositiveIntegerField(
         verbose_name="قیمت فروش هر سکه (تومان)", default=1000, help_text="مبلغ پرداختی به کاربر به ازای هر سکه در فروش (۱۰۰۰ تومان)"
     )
+    promo_enabled = models.BooleanField(
+        verbose_name="دعوت به بازی در گروه‌ها",
+        default=True,
+        help_text="هر چند دقیقه یک پیام بی‌صدا با دکمه‌های بازی در گروه‌ها (پیام قبلی پاک می‌شود).",
+    )
+    promo_minutes = models.PositiveIntegerField(verbose_name="فاصله‌ی پیام دعوت (دقیقه)", default=15)
     updated_at = models.DateTimeField(verbose_name="آخرین تغییر", auto_now=True)
 
     class Meta:

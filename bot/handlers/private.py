@@ -130,12 +130,35 @@ async def continue_start(update: Update, context: ContextTypes.DEFAULT_TYPE, use
             await reply(update, text, main_menu(context, daily=daily_on))
         await wallet_handlers.open_section(update, context, user, payload)
         return
+    shortcut = _shortcut(payload)
+    if shortcut is not None:
+        # دکمه‌های لینک‌دار پیام دعوت گروه و پست‌های کانال (?start=duel و …): همان بخش مستقیم باز می‌شود
+        if is_new:
+            await reply(update, text, main_menu(context, daily=daily_on))
+        await shortcut.__wrapped__(update, context, user)
+        return
     if payload == "join":
         text += "\n\n" + texts.START_JOIN_HINT
     await reply(update, text, main_menu(context, daily=daily_on))
     match_id = payload[len(render.JOIN_PAYLOAD_PREFIX) :]
     if payload.startswith(render.JOIN_PAYLOAD_PREFIX) and match_id.isdigit():
         await _join_from_link(update, context, user, int(match_id))
+
+
+def _shortcut(payload: str):
+    from . import arcade as arcade_handlers
+    from . import duel as duel_handlers
+    from . import group as group_handlers
+
+    return {
+        "duel": duel_handlers.duel,
+        "daily": daily,
+        "help": help_cmd,
+        "invite": invite,
+        "arcade": arcade_handlers.arcade,
+        "rules": group_handlers.rules,
+        "support": support_cmd,
+    }.get(payload)
 
 
 async def _join_from_link(update: Update, context, user: TelegramUser, match_id: int) -> None:

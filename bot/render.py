@@ -134,6 +134,12 @@ def miniapp_link(username: str, token: str) -> str:
     return f"https://t.me/{username}?startapp={token}"
 
 
+def miniapp_home_link(username: str) -> str:
+    """لینک صفحه‌ی اصلی مینی‌اپ برای دکمه‌های گروه و کانال (همان مینی‌اپ BotFather، بدون مسابقه‌ی خاص)."""
+    short = (settings.MINIAPP_SHORT_NAME or "").strip()
+    return f"https://t.me/{username}/{short}" if short else f"https://t.me/{username}?startapp"
+
+
 OPEN_PAYLOAD_PREFIX = "p_"
 
 

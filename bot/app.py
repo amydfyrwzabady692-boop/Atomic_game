@@ -45,6 +45,7 @@ from .handlers import (
     group_settings,
     membership_admin,
     private,
+    promo,
     shop,
     wallet,
 )
@@ -139,6 +140,8 @@ async def post_init(application: Application) -> None:
     application.job_queue.run_repeating(
         game_settings_job, interval=GAME_SETTINGS_REFRESH_SECONDS, name="game_settings"
     )
+    # پیام دعوت به بازی در گروه‌ها (هر چند دقیقه؛ از پنل /admin ← «📣 تبلیغ و کانال»)
+    application.job_queue.run_repeating(promo.promo_job, interval=promo.CHECK_SECONDS, first=90, name="group_promo")
     if settings.BACKUP_INTERVAL_MINUTES > 0:
         from .backup import backup_job
 
@@ -212,8 +215,10 @@ def register_handlers(application: Application) -> None:
     add(CallbackQueryHandler(wallet.admin_sell_callback, pattern=r"^adm:sell:"))
     add(CallbackQueryHandler(admin.admin_dm_callback, pattern=r"^adm:dm:"))
     add(CallbackQueryHandler(membership_admin.panel_callback, pattern=r"^adm:(?:fj|api):"))
+    add(CallbackQueryHandler(promo.panel_callback, pattern=r"^adm:(?:promo|post):"))
     add(CallbackQueryHandler(admin.admin_callback, pattern=r"^adm:"))
     add(CallbackQueryHandler(forcejoin.check_callback, pattern=r"^fj:ok$"))
+    add(CallbackQueryHandler(promo.promo_callback, pattern=r"^promo:(?:game|help)$"))
 
     add(ChatMemberHandler(group.my_chat_member, ChatMemberHandler.MY_CHAT_MEMBER))
     add(ChatMemberHandler(forcejoin.chat_member, ChatMemberHandler.CHAT_MEMBER))

@@ -56,6 +56,9 @@ class TelegramGroup(models.Model):
     max_entry = models.PositiveIntegerField(verbose_name="حداکثر ورودی", default=1000)
     default_join_seconds = models.PositiveIntegerField(verbose_name="زمان عضوگیری پیش‌فرض", default=60)
     allow_user_created_games = models.BooleanField(verbose_name="ساخت بازی توسط همه", default=True)
+    promo_enabled = models.BooleanField(
+        verbose_name="پیام دعوت به بازی", default=True, help_text="ادمین گروه با /settings خاموشش می‌کند."
+    )
     prize_note = models.CharField(
         verbose_name="جایزه‌ی ویژه",
         max_length=120,

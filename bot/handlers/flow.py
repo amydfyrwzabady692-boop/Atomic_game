@@ -194,6 +194,11 @@ def step_screen(step: str, draft: dict, info: GameInfo, group: TelegramGroup):
 # ------------------------------------------------------------------ handlerها
 @command(group=True, join_in_group=True)
 async def game(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser):
+    await open_menu(update, context, user)
+
+
+async def open_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser) -> None:
+    """منوی ساخت مسابقه (دستور /game یا دکمه‌ی «🎮 ساخت بازی» زیر پیام دعوت ربات)."""
     chat = update.effective_chat
     group = await ensure_group(chat)
     # هر تعداد مسابقه‌ی هم‌زمان در گروه مجاز است؛ هر لابی دکمه‌ها و صفحه‌ی خودش را دارد

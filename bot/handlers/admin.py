@@ -341,7 +341,7 @@ async def admin_panel_screen(user: TelegramUser):
     if "support" in perms:
         buttons.append(_btn(texts.ADMIN_MSG_BTN, "adm:msg:start", ui.PRIMARY))
     if "broadcast" in perms:
-        buttons.append(_btn(texts.ADMIN_BROADCAST_BTN, "adm:bcast:prompt", ui.PRIMARY))
+        buttons += [_btn(texts.ADMIN_BROADCAST_BTN, "adm:bcast:prompt", ui.PRIMARY), _btn(texts.ADMIN_PROMO_BTN, "adm:promo:home", ui.PRIMARY)]
     rows = _pairs(buttons)
     rows.append([_btn(texts.ADMIN_REFRESH_BTN, "adm:home"), _btn(texts.ADMIN_CLOSE_BTN, "adm:close", ui.DANGER)])
     return text, InlineKeyboardMarkup(rows)
@@ -1086,6 +1086,7 @@ STEP_PERMISSION = {
     "fj_add": "settings",
     "api_name": "admins",
     "api_hook": "admins",
+    "post_channel": "broadcast",  # ارسال پست آماده به کانال دیگر (promo)
 }
 
 
@@ -1118,6 +1119,10 @@ async def admin_private_message(update: Update, context: ContextTypes.DEFAULT_TY
 
     if step in membership_admin.STEPS:
         return await membership_admin.flow_message(update, context, user, flow)
+    if step == "post_channel":
+        from . import promo
+
+        return await promo.flow_message(update, context, user, flow)
 
     if step == "sell_receipt":
         file_id = message.photo[-1].file_id if message.photo else (message.document.file_id if message.document else None)
