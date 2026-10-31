@@ -1495,6 +1495,7 @@ ADMIN_PROMO_NOW_BTN = "📤 ارسال همین حالا"
 ADMIN_PROMO_NOW_SURE = "پیام دعوت همین حالا به {groups} گروه فرستاده شود؟"
 ADMIN_PROMO_NOW_SURE_BTN = "📤 بله، بفرست"
 ADMIN_PROMO_SENT = "📤 به {sent} گروه فرستاده شد ({skipped} گروه رد شد: مسابقه داشتند یا ربات اجازه‌ی ارسال نداشت)."
+ADMIN_PROMO_BUSY = "⏳ همین حالا یک دور پیام دعوت در حال ارسال است؛ چند دقیقه‌ی دیگر دوباره امتحان کن."
 ADMIN_PROMO_NEVER = "هنوز نه"
 ADMIN_POSTS_BTN = "📰 پست‌های آماده‌ی کانال"
 ADMIN_POSTS = (

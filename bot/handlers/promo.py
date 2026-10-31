@@ -179,6 +179,18 @@ async def run_promo(application) -> tuple[int, int]:
     return sent, skipped
 
 
+async def run_promo_once(application) -> tuple[int, int] | None:
+    """یک دور پیام دعوت، فقط اگر دور دیگری (زمان‌بندی یا «ارسال همین حالا»، در هر پروسه‌ای) در جریان نباشد.
+    وگرنه ``None``؛ تا هیچ گروهی دو پیام دعوت هم‌زمان نگیرد."""
+    redis = get_redis()
+    if not await redis.set("promo:running", "1", ex=900, nx=True):
+        return None
+    try:
+        return await run_promo(application)
+    finally:
+        await redis.delete("promo:running")
+
+
 async def promo_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     """هر دقیقه: اگر روشن است و وقتش رسیده، یک دور پیام دعوت (فقط یک پروسه در هر لحظه)."""
     redis = get_redis()
@@ -188,12 +200,7 @@ async def promo_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     last = float(await redis.get("promo:last_run") or 0)
     if time.time() - last < max(5, eco.promo_minutes) * 60 - 5:
         return
-    if not await redis.set("promo:running", "1", ex=900, nx=True):
-        return
-    try:
-        await run_promo(context.application)
-    finally:
-        await redis.delete("promo:running")
+    await run_promo_once(context.application)
 
 
 # ================================================================== پنل: تبلیغ و کانال
@@ -305,9 +312,13 @@ async def panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, use
             )
             return
         elif action == "nowok":
-            await answer(query, texts.ADMIN_PROMO_NOW_BTN)
-            sent, skipped = await run_promo(context.application)
-            await tg_call(context.bot.send_message, update.effective_chat.id, texts.ADMIN_PROMO_SENT.format(sent=fa_num(sent), skipped=fa_num(skipped)))
+            result = await run_promo_once(context.application)
+            if result is None:  # همین حالا یک دور در حال ارسال است
+                await answer(query, texts.ADMIN_PROMO_BUSY, alert=True)
+            else:
+                await answer(query, texts.ADMIN_PROMO_NOW_BTN)
+                sent, skipped = result
+                await tg_call(context.bot.send_message, update.effective_chat.id, texts.ADMIN_PROMO_SENT.format(sent=fa_num(sent), skipped=fa_num(skipped)))
         else:
             await answer(query)
         text, markup, _ = await _promo_screen()

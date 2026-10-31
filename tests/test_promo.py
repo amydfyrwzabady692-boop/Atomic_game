@@ -191,6 +191,16 @@ async def test_admin_controls_invites_and_publishes_channel_posts(app, settings)
     assert preview.answers and sent_to(app, OWNER)[-1]["reply_markup"]
     await panel(app, OWNER, "adm:promo:nowok")
     assert len(sent_to(app, -2001)) == 1  # «ارسال همین حالا» حتی وقتی خاموش است
+    # وقتی یک دور (زمان‌بندی‌شده یا در پروسه‌ی دیگر) در جریان است، ارسال دستی دور دوم نمی‌سازد
+    await get_redis().set("promo:running", "1", ex=60)
+    busy = await panel(app, OWNER, "adm:promo:nowok")
+    assert busy.answers[-1] == (texts.ADMIN_PROMO_BUSY, True) and len(sent_to(app, -2001)) == 1
+    await sync_to_async(EconomySettings.objects.update)(promo_enabled=True)
+    await get_redis().set("promo:last_run", 0)
+    await promo.promo_job(SimpleNamespace(application=app, bot=app.bot))
+    assert len(sent_to(app, -2001)) == 1  # زمان‌بندی هم صبر می‌کند
+    await get_redis().delete("promo:running")
+    await sync_to_async(EconomySettings.objects.update)(promo_enabled=False)
 
     posts = await panel(app, OWNER, "adm:post:list")
     keys = [b.callback_data for b in buttons_of(posts.edits[-1]["reply_markup"])]
