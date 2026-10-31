@@ -106,6 +106,16 @@ class FakeBot:
     async def set_my_commands(self, *args, **kwargs):
         return True
 
+    async def get_chat_member_count(self, chat_id, **kwargs):
+        return 42
+
+    async def get_chat(self, chat_id, **kwargs):
+        username = chat_id[1:] if isinstance(chat_id, str) and chat_id.startswith("@") else None
+        return SimpleNamespace(id=chat_id if isinstance(chat_id, int) else -100777, type="channel", title="کانال", username=username, invite_link=None)
+
+    async def export_chat_invite_link(self, chat_id, **kwargs):
+        return "https://t.me/+invite"
+
     def texts_to(self, chat_id) -> list[str]:
         return [m["text"] for m in self.sent if m["chat_id"] == chat_id]
 
