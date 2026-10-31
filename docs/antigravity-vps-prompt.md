@@ -84,7 +84,7 @@ bot (ربات تلگرام). سرویس web موقع بالا آمدن خودش 
      curl -sS -w " [%{http_code}]\n" https://<دامنه>/api/v1/me   ← باید {"ok": false, "error": "bad_key"} [401] بدهد
        (یعنی API بالا است و فقط کلید ندارد؛ اگر 404 یا صفحه‌ی HTML آمد، reverse proxy آدرس /api/ را نمی‌رساند)
      docker compose exec web python manage.py shell -c "from membership.checks import telegram; print('telegram from web:', (telegram('getMe') or {}).get('ok'))"
-       ← باید True چاپ کند؛ اگر False بود، کانتینر web به تلگرام دسترسی ندارد (TELEGRAM_PROXY را ببین). در این حالت جوین
+       ← باید True چاپ کند؛ None یعنی کانتینر web به تلگرام دسترسی ندارد (TELEGRAM_PROXY را ببین) و False یعنی BOT_TOKEN را قبول نکرد. در این حالت جوین
        اجباری فقط در خود ربات کار می‌کند و API عضویت کانال را «نامعلوم» برمی‌گرداند؛ گزارش بده.
    - فقط اگر دیتابیس تازه و خالی است: docker compose exec web python manage.py seed_content
 
