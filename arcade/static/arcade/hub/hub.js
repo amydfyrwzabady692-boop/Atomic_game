@@ -455,15 +455,47 @@
 
   // ------------------------------------------------------------------ فروشگاه
   function loadShop() { api("hub/shop").then(drawShop); }
+  /* خرید سکه: بسته‌ها و قیمت‌ها از سرور (همان منوی شارژ ربات). زدن هر بسته پیوی ربات را با همان بسته باز
+     می‌کند: شماره کارت، مبلغ دقیق، ارسال رسید و تأیید مدیر همان‌جا انجام می‌شود. */
+  function drawCoinShop(shop, coins) {
+    var box = $("coin-shop");
+    if (!shop || !BOOT.botUsername) { box.classList.add("hidden"); return; }
+    box.classList.remove("hidden");
+    $("coin-shop-balance").textContent = "موجودی: " + money(coins) + " 🪙";
+    $("coin-shop-note").textContent = shop.ready
+      ? "هر سکه " + money(shop.price) + " تومان" + (shop.fee_percent ? " + " + fa(shop.fee_percent) + "٪ کارمزد" : "")
+      : "خرید سکه به‌زودی فعال می‌شود.";
+    var packs = $("coin-packs");
+    packs.textContent = "";
+    shop.packs.forEach(function (pack) {
+      var card = el("button", "pack");
+      card.type = "button";
+      card.disabled = !shop.ready;
+      card.appendChild(el("b", "", money(pack.coins)));
+      card.appendChild(el("small", "unit", "سکه"));
+      card.appendChild(el("span", "price", money(pack.total) + " تومان"));
+      card.addEventListener("click", function () { openBot(pack.start); });
+      packs.appendChild(card);
+    });
+    $("coin-custom").disabled = !shop.ready;
+    $("coin-sell-note").textContent = "💰 فروش: حداقل " + money(shop.min_sell) + " سکه، هر سکه " + money(shop.sell_price) +
+      " تومان؛ واریز به کارت خودت بعد از بررسی مدیر.";
+  }
+  $("coin-custom").addEventListener("click", function () { openBot("topup_custom"); });
+  $("coin-sell").addEventListener("click", function () { openBot("sell"); });
+
   function drawShop(data) {
     if (!data.ok) return;
     setCoins(data.coins);
+    drawCoinShop(data.coin_shop, data.coins);
     var box = $("shop-kinds");
     box.textContent = "";
+    var any = data.kinds.some(function (kind) { return kind.items.length; });
+    if (!any) box.appendChild(el("p", "small muted soon", "🎨 آیتم‌های ظاهری به‌زودی اضافه می‌شوند."));
     data.kinds.forEach(function (kind) {
+      if (!kind.items.length) return; // دسته‌ی خالی نشان داده نمی‌شود
       box.appendChild(el("h2", "", kind.title));
       var items = el("div", "items");
-      if (!kind.items.length) items.appendChild(el("p", "small muted", "فعلاً آیتمی نیست."));
       kind.items.forEach(function (item) {
         var card = el("div", "item" + (item.equipped ? " equipped" : ""));
         card.appendChild(el("b", "", item.value));

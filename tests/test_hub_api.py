@@ -67,6 +67,24 @@ def test_shop_buy_and_equip(client, make_user):
     assert not UserItem.objects.get(user=rich, item=item).equipped
 
 
+def test_shop_sells_coin_packs_with_the_bot_top_up_prices(client, make_user, economy_settings):
+    """بخش «خرید سکه»ی فروشگاه همان بسته‌ها، قیمت و کارمزد منوی شارژ ربات را دارد و هر بسته پیوی ربات را با
+    /start topup_<تعداد> باز می‌کند؛ بدون شماره کارت، خرید غیرفعال است."""
+    from wallet.services import TOPUP_PACKAGES, topup_quote
+
+    eco = economy_settings(card_number="6037991234567893", coin_price_toman=1000, topup_fee_percent=10, min_sell_coins=100)
+    status, data = post(client, "hub/shop", make_user(30))
+    shop = data["coin_shop"]
+    assert status == 200 and shop["ready"] and shop["fee_percent"] == 10 and shop["min_sell"] == 100
+    assert [p["coins"] for p in shop["packs"]] == list(TOPUP_PACKAGES)
+    hundred = next(p for p in shop["packs"] if p["coins"] == 100)
+    assert (hundred["amount"], hundred["fee"], hundred["total"], hundred["start"]) == (100_000, 10_000, 110_000, "topup_100")
+    assert all(p["total"] == topup_quote(p["coins"], eco).total for p in shop["packs"])
+    assert "6037991234567893" not in str(data)  # شماره کارت فقط در پیوی ربات نشان داده می‌شود
+    economy_settings(card_number="")
+    assert post(client, "hub/shop", make_user())[1]["coin_shop"]["ready"] is False
+
+
 def test_duel_through_the_mini_app(client, make_user):
     a, b = make_user(1000), make_user(1000)
     status, data = post(client, "duel/state", a)

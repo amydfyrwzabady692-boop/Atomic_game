@@ -681,7 +681,17 @@ async def test_game_menu_shows_every_game_on_one_screen(app):
     for title in ("هیزم‌شکن", "موش‌زن", "مار کلاسیک", "شطرنج", "دوز چهارتایی", "کوییز"):
         assert title in labels
     assert "۱۳ بازی گروهی" in menu.replies[0]["text"] and "۱۴ بازی آرکید" in menu.replies[0]["text"]
-    # دکمه‌ی عنوان بخش آرکید فقط توضیح می‌دهد و منو را عوض نمی‌کند
+    # مرتب بر اساس نوع: هر دسته یک ردیف عنوان و بعد بازی‌هایش به ترتیب محبوبیت
+    order = [b.callback_data for b in buttons if b.callback_data != "n:x"]
+    assert order[:5] == ["n:h:board", "n:g:chess", "n:g:poker", "n:g:tictactoe", "n:g:connect4"]
+    assert order[5:11] == ["n:h:word", "n:g:quiz", "n:g:anagram", "n:g:hangman", "n:g:emoji_guess", "n:g:word_chain"]
+    assert order[11:16] == ["n:h:speed", "n:g:quick_math", "n:g:typing_race", "n:g:guess_number", "n:g:dice_games"]
+    assert order[16:18] == ["n:h:arcade", "n:g:arcade_snake"] and len(order) == 31
+    # ردیف عنوان هر دسته فقط توضیح کوتاهی می‌دهد و منو را عوض نمی‌کند (و «n:h» منوهای قبلی هم کار می‌کند)
+    for section in ("board", "word", "speed", "arcade"):
+        header = await click(app, 251, f"n:h:{section}", menu_id)
+        note = texts.GAME_MENU_SECTION_NOTES[section]
+        assert header.answers[0] == (note, True) and header.edits == [] and len(note) <= 200
     header = await click(app, 251, "n:h", menu_id)
     assert header.answers[0] == (texts.ARCADE_HEADER_NOTE, True) and header.edits == []
     assert len(texts.ARCADE_HEADER_NOTE) <= 200
@@ -691,12 +701,35 @@ async def test_game_menu_shows_every_game_on_one_screen(app):
     assert len(buttons_of(back.edits[-1]["reply_markup"])) == len(buttons)
 
 
+async def test_each_step_shows_its_number_and_the_choices_so_far(app):
+    await start_user(app, 255)
+    _, menu_id = await open_game_menu(app, 255)
+    fee = await click(app, 255, "n:g:quick_math", menu_id)
+    assert "مرحله‌ی ۲ از ۴" in fee.edits[-1]["text"] and "✅" not in fee.edits[-1]["text"]
+    split = await click(app, 255, "n:f:100", menu_id)
+    assert "مرحله‌ی ۳ از ۴" in split.edits[-1]["text"] and "ورودی: ۱۰۰" in split.edits[-1]["text"]
+    join = await click(app, 255, "n:s:60-30-10", menu_id)
+    assert "مرحله‌ی ۴ از ۴" in join.edits[-1]["text"] and "تقسیم: ۶۰ - ۳۰ - ۱۰" in join.edits[-1]["text"]
+    # بازی رایگان مرحله‌ی تقسیم جایزه ندارد؛ شمارش هم کم می‌شود
+    await click(app, 255, "n:b", menu_id)
+    back = await click(app, 255, "n:b", menu_id)
+    assert "مرحله‌ی ۲ از ۴" in back.edits[-1]["text"]  # برگشت تا انتخاب ورودی
+    free = await click(app, 255, "n:f:0", menu_id)
+    assert "مرحله‌ی ۳ از ۳" in free.edits[-1]["text"] and "ورودی: رایگان" in free.edits[-1]["text"]
+    # گزینه‌ی بازی (کنترل زمان شطرنج) هم در خلاصه می‌آید
+    _, chess_menu = await open_game_menu(app, 255)
+    variant = await click(app, 255, "n:g:chess", chess_menu)
+    assert "مرحله‌ی ۲ از ۴" in variant.edits[-1]["text"]
+    fee = await click(app, 255, "n:v:blitz3", chess_menu)
+    assert "مرحله‌ی ۳ از ۴" in fee.edits[-1]["text"] and "کنترل زمان: ⚡️ برق‌آسا" in fee.edits[-1]["text"]
+
+
 async def test_arcade_games_are_not_offered_until_the_mini_app_is_set_up(app, settings):
     settings.MINIAPP_BASE_URL = ""
     await start_user(app, 261)
     menu, menu_id = await open_game_menu(app, 261)
     data = [b.callback_data for b in buttons_of(menu.replies[0]["reply_markup"])]
-    assert not any((d or "").startswith("n:g:arcade_") for d in data) and "n:h" not in data
+    assert not any((d or "").startswith("n:g:arcade_") for d in data) and "n:h:arcade" not in data and "n:h:board" in data
     assert "راه‌اندازی مینی‌اپ" in menu.replies[0]["text"] and "۱۳ بازی گروهی" in menu.replies[0]["text"]
     stale = await click(app, 261, "n:g:arcade_timber", menu_id)
     assert stale.answers[0] == (texts.MENU_EXPIRED, True)

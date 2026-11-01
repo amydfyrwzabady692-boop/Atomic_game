@@ -1,4 +1,4 @@
-"""پیام دعوت به بازی در گروه‌ها (هر چند دقیقه، با دکمه)، دکمه‌های آن، خاموش کردنش در گروه، لینک‌های ?start=…
+"""پیام دعوت به بازی در گروه‌ها (هر ۲ ساعت، با دکمه)، دکمه‌های آن، خاموش کردنش در گروه، لینک‌های ?start=…
 و پست‌های آماده‌ی کانال در پنل مدیریت."""
 
 import time
@@ -69,15 +69,19 @@ def test_invite_texts_and_buttons(settings):
     settings.MINIAPP_BASE_URL = "https://arcade.example"
     text, markup = promo.promo_message(0, "winzon_bot", daily=True)
     data = {b.text: (b.callback_data or b.url) for b in buttons_of(markup)}
-    assert text == texts.PROMO_VARIANTS[0][0]
+    assert text.split("\n")[0] == texts.PROMO_VARIANTS[0][0].split("\n")[0]
+    assert "روی هم ۱۳ بازی گروهی" in text and "{" not in text  # تعداد واقعی بازی‌ها
     assert data[texts.PROMO_GAME_BTN] == "promo:game" and data[texts.PROMO_HELP_BTN] == "promo:help"
     assert data[texts.PROMO_DUEL_BTN] == "https://t.me/winzon_bot?start=duel"
     assert data[texts.PROMO_DAILY_BTN] == "https://t.me/winzon_bot?start=daily"
     assert data[texts.PROMO_MINIAPP_BTN].startswith("https://t.me/winzon_bot")
     # بدون مینی‌اپ و جایزه‌ی روزانه: متن‌ها و دکمه‌های مربوط نمی‌آیند
     settings.MINIAPP_BASE_URL = ""
-    shown = {promo.promo_message(i, "winzon_bot", daily=False)[0] for i in range(12)}
-    assert all(need == "" for text, need in texts.PROMO_VARIANTS if text in shown) and len(shown) == 3
+    shown = {promo.promo_message(i, "winzon_bot", daily=False)[0] for i in range(30)}
+    always = [text for text, need in texts.PROMO_VARIANTS if need == ""]
+    assert len(shown) == len(always) >= 5 and not any("مینی‌اپ" in t and "🕹" in t.split("\n")[0] for t in shown)
+    every_variant = {promo.promo_message(i, "winzon_bot", daily=True)[0] for i in range(60)}
+    assert len(every_variant) == len(texts.PROMO_VARIANTS) or not promo.render.arcade_ready()
     labels = [b.text for b in buttons_of(promo.promo_message(1, "winzon_bot", daily=False)[1])]
     assert texts.PROMO_DUEL_BTN not in labels and texts.PROMO_DAILY_BTN not in labels
     assert len(texts.PROMO_HELP_ALERT) <= 200
@@ -101,9 +105,12 @@ async def test_invites_go_out_on_schedule_replace_the_last_one_and_skip_busy_gro
     assert not (await sync_to_async(TelegramGroup.objects.get)(chat_id=-1002)).is_active  # ربات بیرون شده بود
 
     await promo.promo_job(context)
-    assert len(sent_to(app, -1001)) == 1  # هنوز ۱۵ دقیقه نگذشته
+    assert len(sent_to(app, -1001)) == 1  # هنوز ۲ ساعت نگذشته
+    await get_redis().set("promo:last_run", int(time.time()) - 100 * 60)
+    await promo.promo_job(context)
+    assert len(sent_to(app, -1001)) == 1  # ۱۰۰ دقیقه هم کافی نیست
 
-    await get_redis().set("promo:last_run", int(time.time()) - 16 * 60)
+    await get_redis().set("promo:last_run", int(time.time()) - 121 * 60)
     await promo.promo_job(context)
     second = sent_to(app, -1001)
     assert len(second) == 2 and second[1]["text"] != second[0]["text"]  # متن بعدی
@@ -149,6 +156,7 @@ async def test_invite_buttons_open_the_game_menu_and_explain_how_to_play(app):
 async def test_group_admin_can_turn_invites_off(app):
     await start_user(app, 420)
     app.bot.admins.add((GROUP_ID, 420))
+    await get_redis().set(f"promo:msg:{GROUP_ID}", 4321)  # آخرین پیام دعوت در همین گروه
     update, context = make_update(app, 420, chat_id=GROUP_ID, chat_type="supergroup", text="/settings")
     await group_settings.settings_cmd(update, context)
     assert "پیام دعوت" in update.replies[-1]["text"]
@@ -157,6 +165,7 @@ async def test_group_admin_can_turn_invites_off(app):
     await group_settings.settings_callback(click_update, click_context)
     group = await sync_to_async(TelegramGroup.objects.get)(chat_id=GROUP_ID)
     assert not group.promo_enabled
+    assert (GROUP_ID, 4321) in app.bot.deleted and await get_redis().get(f"promo:msg:{GROUP_ID}") is None
 
 
 async def test_start_links_open_the_right_section(app):
@@ -182,9 +191,10 @@ async def test_admin_controls_invites_and_publishes_channel_posts(app, settings)
     await start_user(app, OWNER, name="مالک")
     await make_groups((-2001, True))
     home = await panel(app, OWNER, "adm:promo:home")
-    assert "هر <b>۱۵ دقیقه</b>" in shown(home) and "گروه‌های فعال: ۱" in shown(home)
-    await panel(app, OWNER, "adm:promo:every")
-    assert (await sync_to_async(EconomySettings.load)()).promo_minutes == 30
+    assert "هر <b>۲ ساعت</b>" in shown(home) and "گروه‌های فعال: ۱" in shown(home)
+    every = await panel(app, OWNER, "adm:promo:every")
+    assert (await sync_to_async(EconomySettings.load)()).promo_minutes == 180 and "۳ ساعت" in every.answers[-1][0]
+    assert promo.next_every(360) == 5 and promo.fa_every(90) == "۹۰ دقیقه" and promo.fa_every(240) == "۴ ساعت"
     await panel(app, OWNER, "adm:promo:toggle")
     assert not (await sync_to_async(EconomySettings.load)()).promo_enabled
     preview = await panel(app, OWNER, "adm:promo:preview")

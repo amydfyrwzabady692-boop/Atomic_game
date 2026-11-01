@@ -117,7 +117,26 @@
 
   <!-- ------------------------------------------------------------ فروشگاه -->
   <section class="tab hidden" id="tab-shop">
-    <p class="muted small">آیتم‌ها فقط ظاهری‌اند و با سکه‌ی مجازی خریده می‌شوند؛ خرید قابل برگشت نیست.</p>
+    <!-- خرید سکه: همان بسته‌ها و قیمت منوی شارژ ربات؛ پرداخت و رسید در پیوی ربات (/start topup_<تعداد>) -->
+    <div class="card coinshop hidden" id="coin-shop">
+      <div class="coinshop-top">
+        <div><b>🪙 خرید سکه</b><small id="coin-shop-note"></small></div>
+        <span class="coinshop-balance" id="coin-shop-balance"></span>
+      </div>
+      <div class="packs" id="coin-packs"></div>
+      <div class="row">
+        <button class="btn line" type="button" id="coin-custom">✍️ مقدار دلخواه</button>
+        <button class="btn violet" type="button" id="coin-sell">💰 فروش سکه</button>
+      </div>
+      <ol class="steps">
+        <li>بسته را بزن؛ پیوی ربات با شماره کارت و مبلغ دقیق باز می‌شود.</li>
+        <li>مبلغ را کارت‌به‌کارت کن و عکس یا فایل رسید را همان‌جا بفرست.</li>
+        <li>بعد از تأیید مدیر، سکه به کیف پولت اضافه می‌شود و خبرش را می‌گیری.</li>
+      </ol>
+      <p class="muted small" id="coin-sell-note"></p>
+    </div>
+    <h2>🎨 آیتم‌های ظاهری</h2>
+    <p class="muted small">عنوان، ایموجی و قاب کنار نامت؛ با سکه خریده می‌شوند و قابل برگشت نیستند.</p>
     <div id="shop-kinds"></div>
   </section>
 

@@ -37,7 +37,7 @@ from .common import answer, callback, command, get_all_admin_ids, has_permission
 
 logger = logging.getLogger(__name__)
 
-TOPUP_PACKAGES = (50, 100, 200, 500)
+TOPUP_PACKAGES = services.TOPUP_PACKAGES
 SELL_PACKAGES = (100, 200, 500)
 TRANSFER_TTL = 120  # ثانیه؛ دکمه‌ی تأیید انتقال بعد از این مدت منقضی می‌شود
 ALERTS_TTL = 7 * 86400
@@ -143,12 +143,38 @@ def _sell_amount_error(user: TelegramUser, eco: EconomySettings, coins) -> str |
 
 # ------------------------------------------------------------------ دستورات و دکمه‌ها
 SECTIONS = ("wallet", "topup", "sell", "transfer")
+TOPUP_LINK_PREFIX = "topup_"  # /start topup_100: همان صفحه‌ی پرداخت بسته‌ی ۱۰۰ سکه (فروشگاه مینی‌اپ)
+
+
+def topup_link_coins(section: str) -> int | None:
+    """تعداد سکه‌ی لینک «topup_<تعداد>» اگر معتبر باشد (همان بازه‌ی مقدار دلخواه شارژ)."""
+    if not section.startswith(TOPUP_LINK_PREFIX):
+        return None
+    coins = parse_int(section[len(TOPUP_LINK_PREFIX) :])
+    return coins if coins is not None and 0 < coins <= services.MAX_REQUEST_COINS else None
+
+
+def is_section(payload: str) -> bool:
+    return payload in SECTIONS or payload == "topup_custom" or topup_link_coins(payload) is not None
 
 
 async def open_section(update: Update, context, user: TelegramUser, section: str) -> None:
-    """یک بخش کیف پول را با پیام تازه باز می‌کند (دکمه‌های کیف پول مینی‌اپ: /start topup و …)."""
+    """یک بخش کیف پول را با پیام تازه باز می‌کند (دکمه‌های کیف پول و فروشگاه مینی‌اپ: /start topup، topup_100 و …)."""
     context.user_data.pop("wallet_flow", None)
     context.user_data.pop("support_flow", None)
+    coins = topup_link_coins(section)
+    if coins is not None:
+        # بسته‌ای که در فروشگاه مینی‌اپ انتخاب شد: مستقیم اطلاعات واریز و انتظار رسید (همان منطق منوی شارژ)
+        eco = await db(EconomySettings.load)()
+        text, keyboard, flow = topup_pay_screen(coins, eco)
+        if flow:
+            context.user_data["wallet_flow"] = flow
+        await reply(update, text, keyboard)
+        return
+    if section == "topup_custom":
+        context.user_data["wallet_flow"] = {"step": "topup_custom"}
+        await reply(update, texts.WALLET_TOPUP_ASK_CUSTOM.format(max=fa_num(services.MAX_REQUEST_COINS)), _cancel("wal:topup:cancel"))
+        return
     if section == "transfer":
         context.user_data["wallet_flow"] = {"step": "transfer_target"}
         await reply(update, texts.WALLET_TRANSFER_ASK_TARGET, _cancel("wal:home"))

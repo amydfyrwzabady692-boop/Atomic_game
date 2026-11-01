@@ -91,9 +91,11 @@ class EconomySettings(models.Model):
     promo_enabled = models.BooleanField(
         verbose_name="دعوت به بازی در گروه‌ها",
         default=True,
-        help_text="هر چند دقیقه یک پیام بی‌صدا با دکمه‌های بازی در گروه‌ها (پیام قبلی پاک می‌شود).",
+        help_text="هر چند ساعت یک پیام بی‌صدا با دکمه‌های بازی در گروه‌ها (پیام قبلی همان گروه پاک می‌شود).",
     )
-    promo_minutes = models.PositiveIntegerField(verbose_name="فاصله‌ی پیام دعوت (دقیقه)", default=15)
+    promo_minutes = models.PositiveIntegerField(
+        verbose_name="فاصله‌ی پیام دعوت (دقیقه)", default=120, help_text="پیش‌فرض ۱۲۰ دقیقه، یعنی هر ۲ ساعت یک بار."
+    )
     updated_at = models.DateTimeField(verbose_name="آخرین تغییر", auto_now=True)
 
     class Meta:

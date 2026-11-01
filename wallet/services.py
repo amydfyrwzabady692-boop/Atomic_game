@@ -18,6 +18,8 @@ from .models import CoinTransaction, EconomySettings, SellRequest, TopUpRequest,
 
 # سقف تعداد سکه‌ی هر درخواست شارژ/فروش (مبلغ تومانی در ستون ۶۴ بیتی ذخیره می‌شود)
 MAX_REQUEST_COINS = 100_000
+# بسته‌های شارژ؛ هم منوی کیف پول ربات و هم بخش «خرید سکه»ی فروشگاه مینی‌اپ همین‌ها را نشان می‌دهند
+TOPUP_PACKAGES = (50, 100, 200, 500)
 
 
 class InsufficientFunds(Exception):

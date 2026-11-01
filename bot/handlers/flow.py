@@ -108,20 +108,56 @@ def _disarm_menu_timeout(chat_id: int, message_id: int) -> None:
 
 
 # ------------------------------------------------------------------ صفحه‌ها
+# بازی‌های منو بر اساس نوع و به ترتیب محبوبیت؛ هر دسته یک ردیف عنوان دارد. بازی تازه‌ای که این‌جا نیست
+# خودکار در «بازی‌های دیگر» (یا ته بازی‌های آرکید) می‌آید، پس هیچ بازی‌ای از منو جا نمی‌ماند.
+MENU_SECTIONS = (
+    ("board", ("chess", "poker", "tictactoe", "connect4")),
+    ("word", ("quiz", "anagram", "hangman", "emoji_guess", "word_chain")),
+    ("speed", ("quick_math", "typing_race", "guess_number", "dice_games")),
+)
+ARCADE_ORDER = (
+    "snake", "g2048", "breakout", "flappy", "tiles", "stack", "helix",
+    "runner", "jumper", "timber", "pins", "colorswitch", "whack", "timing",
+)  # fmt: skip
+
+
+def menu_sections(games: dict[str, GameInfo]) -> list[tuple[str, list[GameInfo]]]:
+    """[(دسته، بازی‌ها)] به ترتیب منو؛ دسته‌ی خالی (مثلاً همه‌ی بازی‌هایش در گروه خاموش) نمی‌آید."""
+    placed: set[str] = set()
+    sections = []
+    for section, keys in MENU_SECTIONS:
+        items = [games[k] for k in keys if k in games]
+        placed.update(k for k in keys if k in games)
+        if items:
+            sections.append((section, items))
+    others = [g for k, g in games.items() if k not in placed and not g.is_arcade]
+    if others:
+        sections.append(("other", others))
+    arcade_keys = [f"arcade_{k}" for k in ARCADE_ORDER if f"arcade_{k}" in games]
+    arcade_keys += [k for k, g in games.items() if g.is_arcade and k not in arcade_keys]
+    if arcade_keys:
+        sections.append(("arcade", [games[k] for k in arcade_keys]))
+    return sections
+
+
 def main_menu(group: TelegramGroup):
-    """همه‌ی بازی‌ها روی یک صفحه: بازی‌های گروهی (آبی) و زیر آن همه‌ی بازی‌های آرکید (سبز)."""
+    """همه‌ی بازی‌ها روی یک صفحه و مرتب بر اساس نوع: فکری و کارتی، کلمه و اطلاعات، سرعت و شانس (آبی) و
+    بازی‌های آرکید (سبز). ردیف عنوان هر دسته با زدنش توضیح کوتاهی نشان می‌دهد."""
     games = enabled_games(group)
-    text_games = [g for g in games.values() if not g.is_arcade]
-    arcade_games = [g for g in games.values() if g.is_arcade]
-    rows = _rows([_btn(f"{g.emoji} {g.title_fa}", f"n:g:{g.key}", ui.PRIMARY) for g in text_games], 2)
+    rows = []
+    for section, items in menu_sections(games):
+        arcade = section == "arcade"
+        label = texts.ARCADE_HEADER_BTN.format(n=fa_num(len(items))) if arcade else texts.GAME_MENU_SECTIONS[section]
+        rows.append([_btn(label, f"n:h:{section}")])
+        style = ui.SUCCESS if arcade else ui.PRIMARY
+        rows += _rows([_btn(f"{g.emoji} {g.title_fa}", f"n:g:{g.key}", style) for g in items], 2)
+    text_count = sum(1 for g in games.values() if not g.is_arcade)
+    arcade_count = len(games) - text_count
     counts = []
-    if text_games:
-        counts.append(texts.GAME_MENU_TEXT_COUNT.format(n=fa_num(len(text_games))))
-    if arcade_games:
-        counts.append(texts.GAME_MENU_ARCADE_COUNT.format(n=fa_num(len(arcade_games))))
-        # این دکمه فقط عنوان بخش است؛ با زدنش توضیح کوتاهی نشان داده می‌شود
-        rows.append([_btn(texts.ARCADE_HEADER_BTN.format(n=fa_num(len(arcade_games))), "n:h")])
-        rows += _rows([_btn(f"{g.emoji} {g.title_fa}", f"n:g:{g.key}", ui.SUCCESS) for g in arcade_games], 2)
+    if text_count:
+        counts.append(texts.GAME_MENU_TEXT_COUNT.format(n=fa_num(text_count)))
+    if arcade_count:
+        counts.append(texts.GAME_MENU_ARCADE_COUNT.format(n=fa_num(arcade_count)))
     rows.append([_btn(texts.CLOSE_BTN, "n:x", ui.DANGER)])
     text = texts.GAME_MENU.format(counts="  ·  ".join(counts))
     if not render.arcade_ready():
@@ -150,8 +186,29 @@ def next_step(draft: dict, info: GameInfo) -> str | None:
     return None
 
 
+def progress_line(step: str, draft: dict, info: GameInfo) -> str:
+    """«مرحله‌ی ۳ از ۵» (انتخاب بازی مرحله‌ی اول است) و خلاصه‌ی انتخاب‌های قبلی همین منو."""
+    steps = steps_for(info, draft)
+    picked = []
+    if draft.get("variant") in info.variants:
+        picked.append(f"{info.variant_title_fa}: {info.variants[draft['variant']]}")
+    if "fee" in draft:
+        picked.append(texts.STEP_PICKED_FEE.format(value=render.fee_label(draft["fee"])))
+    if draft.get("split") in texts.SPLIT_LABELS:
+        picked.append(texts.STEP_PICKED_SPLIT.format(value=texts.SPLIT_LABELS[draft["split"]]))
+    if "window" in draft:
+        picked.append(texts.STEP_PICKED_WINDOW.format(value=fa_num(draft["window"])))
+    items = texts.STEP_PICKED.format(items="  ·  ".join(picked)) if picked else ""
+    return texts.STEP_PROGRESS.format(step=fa_num(steps.index(step) + 2), total=fa_num(len(steps) + 1), picked=items)
+
+
 def step_screen(step: str, draft: dict, info: GameInfo, group: TelegramGroup):
-    common = {"emoji": info.emoji, "title": info.title_fa, "description": info.description_fa}
+    common = {
+        "emoji": info.emoji,
+        "title": info.title_fa,
+        "description": info.description_fa,
+        "progress": progress_line(step, draft, info),
+    }
     if step == "variant":
         text = texts.CHOOSE_VARIANT.format(variant_title=info.variant_title_fa, **common)
         buttons = _rows([_btn(label, f"n:v:{value}", ui.PRIMARY) for value, label in info.variants.items()], 2)
@@ -255,7 +312,8 @@ async def new_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await _show(query, *main_menu(group))
         return
     if action == "h":
-        await answer(query, texts.ARCADE_HEADER_NOTE, alert=True)
+        # ردیف عنوان دسته («n:h» تنها از منوهای قبلی همان عنوان آرکید است)
+        await answer(query, texts.GAME_MENU_SECTION_NOTES.get(value, texts.ARCADE_HEADER_NOTE), alert=True)
         return
     if action == "g":
         if value not in games:

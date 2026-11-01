@@ -401,3 +401,33 @@ async def test_mini_app_wallet_shortcuts_open_the_right_section(app):
     # کاربر تازه اول خوش‌آمد و منو را می‌بیند، بعد همان بخش
     fresh = await start(402, "topup")
     assert "خوش آمدی" in fresh.replies[0]["text"] and "شارژ کیف پول" in fresh.replies[1]["text"]
+
+
+async def test_coin_pack_from_the_mini_app_shop_goes_straight_to_payment(app, economy_settings):
+    """فروشگاه مینی‌اپ ← بسته‌ی ۱۰۰ سکه ← /start topup_100: همان صفحه‌ی واریز منوی شارژ، و رسید همان درخواست را می‌سازد."""
+    await sync_to_async(economy_settings)(card_number="6037991234567893", coin_price_toman=1000, topup_fee_percent=10)
+
+    async def start(tg_id, payload):
+        update, context = make_update(app, tg_id, text=f"/start {payload}")
+        context.user_data = user_data(app, tg_id)
+        await private.start(update, context)
+        return update
+
+    await start_user(app, 405)
+    await start_user(app, ADMIN, name="مدیر")
+    pay = await start(405, "topup_100")
+    assert len(pay.replies) == 1 and "6037991234567893" in pay.replies[0]["text"] and "۱۱۰٬۰۰۰" in pay.replies[0]["text"]
+    assert user_data(app, 405)["wallet_flow"] == {"step": "awaiting_receipt", "coins": 100}
+    await send_private(app, 405, photo="SHOP-RECEIPT")
+    req = await sync_to_async(TopUpRequest.objects.get)()
+    assert (req.coins, req.total_toman, req.receipt_photo_id) == (100, 110_000, "SHOP-RECEIPT")
+    assert any(m.get("photo") == "SHOP-RECEIPT" for m in app.bot.sent if m["chat_id"] == ADMIN)
+
+    custom = await start(405, "topup_custom")
+    assert "چند سکه می‌خواهی بخری" in custom.replies[0]["text"]
+    assert user_data(app, 405)["wallet_flow"] == {"step": "topup_custom"}
+    # لینک خراب یا خارج از بازه: همان خوش‌آمد معمولی، بدون مرحله‌ی شارژ
+    for bad in ("topup_0", "topup_abc", "topup_999999999"):
+        user_data(app, 405).pop("wallet_flow", None)
+        plain = await start(405, bad)
+        assert len(plain.replies) == 1 and "wallet_flow" not in user_data(app, 405), bad

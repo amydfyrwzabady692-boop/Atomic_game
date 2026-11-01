@@ -169,6 +169,27 @@ def daily(request, user, payload):
 KIND_TITLES = {"title": "🏷 عنوان‌ها", "emoji": "😎 ایموجی‌ها", "frame": "🖼 قاب‌ها"}
 
 
+def _coin_shop() -> dict:
+    """بسته‌های خرید سکه با همان قیمت و کارمزد منوی شارژ ربات. خرید در پیوی ربات کامل می‌شود
+    (/start topup_<تعداد>: شماره کارت، مبلغ، ارسال رسید و تأیید مدیر)، پس منطق پرداخت فقط یک جا است."""
+    from wallet import services as wallet_services
+    from wallet.models import EconomySettings
+
+    eco = EconomySettings.load()
+    packs = []
+    for count in wallet_services.TOPUP_PACKAGES:
+        quote = wallet_services.topup_quote(count, eco)
+        packs.append({"coins": quote.coins, "amount": quote.amount, "fee": quote.fee, "total": quote.total, "start": f"topup_{count}"})
+    return {
+        "ready": bool(eco.card_number),
+        "price": eco.coin_price_toman,
+        "fee_percent": eco.topup_fee_percent,
+        "packs": packs,
+        "sell_price": eco.coin_sell_price_toman,
+        "min_sell": max(1, eco.min_sell_coins),
+    }
+
+
 def _shop_data(user) -> dict:
     user.refresh_from_db(fields=["coins"])
     kinds = []
@@ -185,7 +206,7 @@ def _shop_data(user) -> dict:
             for item, owned in shop.catalog_for(user, kind)
         ]
         kinds.append({"kind": kind, "title": title, "items": items})
-    return {"coins": user.coins, "kinds": kinds}
+    return {"coins": user.coins, "kinds": kinds, "coin_shop": _coin_shop()}
 
 
 @csrf_exempt

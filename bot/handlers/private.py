@@ -124,8 +124,8 @@ async def continue_start(update: Update, context: ContextTypes.DEFAULT_TYPE, use
         # دکمه‌ی پشتیبان زیر صفحه‌ی بازی در گروه: صفحه‌ی بازی را با دکمه‌ی web_app همین‌جا باز می‌کنیم
         await _send_open_game(update, payload[len(render.OPEN_PAYLOAD_PREFIX) :])
         return
-    if payload in wallet_handlers.SECTIONS:
-        # دکمه‌های کیف پول مینی‌اپ: همان بخش مستقیم باز می‌شود (کاربر تازه اول خوش‌آمد را هم می‌بیند)
+    if wallet_handlers.is_section(payload):
+        # دکمه‌های کیف پول و فروشگاه مینی‌اپ: همان بخش مستقیم باز می‌شود (کاربر تازه اول خوش‌آمد را هم می‌بیند)
         if is_new:
             await reply(update, text, main_menu(context, daily=daily_on))
         await wallet_handlers.open_section(update, context, user, payload)

@@ -163,6 +163,10 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         if error:
             await answer(query, error, alert=True)
             return
+        if action == "promo" and not group.promo_enabled:
+            from .promo import remove_last_promo
+
+            await remove_last_promo(context.bot, chat.id)  # پیام دعوتِ مانده در گروه هم پاک می‌شود
     screen = games_screen(group) if action in ("games", "tg") else home_screen(group)
     await tg_call(query.edit_message_text, screen[0], parse_mode="HTML", reply_markup=screen[1])
 

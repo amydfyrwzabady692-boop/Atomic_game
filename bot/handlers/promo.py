@@ -1,6 +1,6 @@
 """دعوت به بازی در گروه‌ها و پست‌های آماده‌ی کانال.
 
-- هر ``promo_minutes`` دقیقه (پیش‌فرض ۱۵؛ پنل /admin ← «📣 تبلیغ و کانال») در هر گروه فعال یک پیام بی‌صدا با
+- هر ``promo_minutes`` دقیقه (پیش‌فرض ۱۲۰، یعنی هر ۲ ساعت؛ پنل /admin ← «📣 تبلیغ و کانال») در هر گروه فعال یک پیام بی‌صدا با
   دکمه‌های بازی فرستاده می‌شود؛ متن‌ها به نوبت عوض می‌شوند، پیام قبلی همان گروه پاک می‌شود و گروهی که همان
   لحظه مسابقه دارد رد می‌شود. ادمین هر گروه با /settings خاموشش می‌کند.
 - پست‌های آماده‌ی کانال (معرفی ربات، آموزش، کیف پول، تقسیم جایزه، …) با دکمه‌های لینک‌دار از همین بخش پنل
@@ -31,21 +31,43 @@ from .common import admin_permissions, answer, callback, reply
 logger = logging.getLogger(__name__)
 
 CHECK_SECONDS = 60  # هر دقیقه بررسی می‌شود که وقت پیام بعدی رسیده یا نه
-EVERY_CHOICES = [15, 30, 60, 120, 5, 10]
+EVERY_CHOICES = [5, 15, 30, 60, 120, 180, 240, 360]  # دکمه‌ی پنل به ترتیب می‌چرخد (پیش‌فرض ۱۲۰)
 SEND_GAP = 0.06  # فاصله‌ی ارسال بین گروه‌ها (سقف کلی تلگرام حدود ۳۰ پیام در ثانیه است)
 LAST_MESSAGE_SECONDS = 7 * 24 * 3600
 POSTS = {key: (title, body) for key, title, body in texts.CHANNEL_POSTS}
 
 
 # ================================================================== متن‌ها و دکمه‌ها
+def fa_every(minutes: int) -> str:
+    """۱۲۰ ← «۲ ساعت»، ۹۰ ← «۹۰ دقیقه»."""
+    if minutes >= 60 and minutes % 60 == 0:
+        return f"{fa_num(minutes // 60)} ساعت"
+    return f"{fa_num(minutes)} دقیقه"
+
+
+def next_every(minutes: int) -> int:
+    """گزینه‌ی بعدی فاصله در پنل (بعد از بزرگ‌ترین، دوباره کوچک‌ترین)."""
+    later = [m for m in EVERY_CHOICES if m > minutes]
+    return later[0] if later else EVERY_CHOICES[0]
+
+
 def _variants(daily: bool, arcade: bool) -> list[str]:
     return [text for text, need in texts.PROMO_VARIANTS if not need or (need == "daily" and daily) or (need == "arcade" and arcade)]
+
+
+def _game_counts() -> tuple[int, int]:
+    """(تعداد بازی‌های گروهی، تعداد بازی‌های آرکید) برای پر کردن متن‌ها."""
+    from arcade.sim import all_simulators
+    from games.catalog import catalog
+
+    return sum(1 for k in catalog() if not k.startswith("arcade_")), len(all_simulators())
 
 
 def promo_message(index: int, username: str, daily: bool) -> tuple[str, InlineKeyboardMarkup]:
     arcade = render.arcade_ready()
     variants = _variants(daily, arcade)
-    text = variants[index % len(variants)]
+    games, arcade_games = _game_counts()
+    text = variants[index % len(variants)].format(games=fa_num(games), arcade=fa_num(arcade_games))
     start = lambda payload: render.start_link(username, payload)  # noqa: E731
     rows = [[ui.button(texts.PROMO_GAME_BTN, "promo:game", style=ui.SUCCESS), ui.button(texts.PROMO_HELP_BTN, "promo:help", style=ui.PRIMARY)]]
     if arcade:
@@ -64,15 +86,13 @@ def promo_message(index: int, username: str, daily: bool) -> tuple[str, InlineKe
 
 def channel_post(key: str, username: str, eco: EconomySettings) -> tuple[str, InlineKeyboardMarkup]:
     """متن و دکمه‌های یک پست آماده؛ عددها از تنظیمات فعلی."""
-    from arcade.sim import all_simulators
-    from games.catalog import catalog
-
     _, body = POSTS[key]
+    games, arcade_games = _game_counts()
     text = body.format(
         bot=username,
         coin=texts.COIN,
-        games=fa_num(sum(1 for k in catalog() if not k.startswith("arcade_"))),
-        arcade=fa_num(len(all_simulators())),
+        games=fa_num(games),
+        arcade=fa_num(arcade_games),
         price=fa_num(eco.coin_price_toman),
         fee=fa_num(eco.topup_fee_percent),
         sell_price=fa_num(eco.coin_sell_price_toman),
@@ -156,6 +176,13 @@ async def send_promo(bot, chat_id: int, text: str, markup) -> bool:
     return True
 
 
+async def remove_last_promo(bot, chat_id: int) -> None:
+    """آخرین پیام دعوت این گروه را پاک می‌کند (وقتی ادمین گروه پیام دعوت را خاموش می‌کند)."""
+    previous = await get_redis().getdel(f"promo:msg:{chat_id}")
+    if previous:
+        await tg_call(bot.delete_message, chat_id, int(previous), retries=0)
+
+
 async def run_promo(application) -> tuple[int, int]:
     """یک دور پیام دعوت در همه‌ی گروه‌ها: (فرستاده‌شده، ردشده)."""
     redis = get_redis()
@@ -225,14 +252,14 @@ async def _promo_screen():
         last_text = texts.ADMIN_PROMO_NEVER
     text = texts.ADMIN_PROMO.format(
         state=texts.ADMIN_ON if eco.promo_enabled else texts.ADMIN_OFF,
-        minutes=fa_num(eco.promo_minutes),
+        every=fa_every(eco.promo_minutes),
         groups=fa_num(data["on"]),
         off=fa_num(data["off"]),
         last=last_text,
     )
     toggle = (texts.ADMIN_PROMO_OFF_BTN, ui.DANGER) if eco.promo_enabled else (texts.ADMIN_PROMO_ON_BTN, ui.SUCCESS)
     rows = [
-        [_btn(toggle[0], "adm:promo:toggle", toggle[1]), _btn(texts.ADMIN_PROMO_EVERY_BTN.format(minutes=fa_num(eco.promo_minutes)), "adm:promo:every", ui.PRIMARY)],
+        [_btn(toggle[0], "adm:promo:toggle", toggle[1]), _btn(texts.ADMIN_PROMO_EVERY_BTN.format(every=fa_every(eco.promo_minutes)), "adm:promo:every", ui.PRIMARY)],
         [_btn(texts.ADMIN_PROMO_PREVIEW_BTN, "adm:promo:preview"), _btn(texts.ADMIN_PROMO_NOW_BTN, "adm:promo:now", ui.PRIMARY)],
         [_btn(texts.ADMIN_POSTS_BTN, "adm:post:list", ui.PRIMARY)],
         [_btn(texts.ADMIN_BACK_TO_PANEL_BTN, "adm:home")],
@@ -293,9 +320,8 @@ async def panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, use
             await answer(query, texts.ADMIN_ON if eco.promo_enabled else texts.ADMIN_OFF)
         elif action == "every":
             eco = await db(EconomySettings.load)()
-            later = [m for m in EVERY_CHOICES if m > eco.promo_minutes]
-            await _save_promo(promo_minutes=later[0] if later else EVERY_CHOICES[0])
-            await answer(query)
+            eco = await _save_promo(promo_minutes=next_every(eco.promo_minutes))
+            await answer(query, texts.ADMIN_PROMO_EVERY_BTN.format(every=fa_every(eco.promo_minutes)))
         elif action == "preview":
             eco = await db(EconomySettings.load)()
             index = int(await get_redis().get("promo:variant") or 0) + 1

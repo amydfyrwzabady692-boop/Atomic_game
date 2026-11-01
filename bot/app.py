@@ -140,7 +140,7 @@ async def post_init(application: Application) -> None:
     application.job_queue.run_repeating(
         game_settings_job, interval=GAME_SETTINGS_REFRESH_SECONDS, name="game_settings"
     )
-    # پیام دعوت به بازی در گروه‌ها (هر چند دقیقه؛ از پنل /admin ← «📣 تبلیغ و کانال»)
+    # پیام دعوت به بازی در گروه‌ها (هر ۲ ساعت؛ از پنل /admin ← «📣 تبلیغ و کانال»)
     application.job_queue.run_repeating(promo.promo_job, interval=promo.CHECK_SECONDS, first=90, name="group_promo")
     if settings.BACKUP_INTERVAL_MINUTES > 0:
         from .backup import backup_job
