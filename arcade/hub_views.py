@@ -301,6 +301,8 @@ def _duel_dict(duel: Duel, user) -> dict:
 
 def duel_state_for(user) -> dict:
     active = duels.active_duel(user.pk)
+    if active is not None and duels.close_if_expired(active):
+        active = duels.active_duel(user.pk)
     if active is not None:
         return _duel_dict(active, user)
     ticket = duels.searching_ticket(user.pk)

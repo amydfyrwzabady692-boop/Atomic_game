@@ -20,7 +20,7 @@ import random
 from datetime import timedelta
 
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import F, Q
 from django.utils import timezone
 
 from core.models import TelegramUser
@@ -82,6 +82,20 @@ def active_duel(user_id: int) -> Duel | None:
         .select_related("player_a", "player_b", "match")
         .order_by("-pk")
         .first()
+    )
+
+
+def close_if_expired(duel: Duel, now=None) -> bool:
+    """توافقی که وقتش گذشته همان لحظه‌ای که کسی آن را می‌خواند بسته می‌شود، نه فقط با کار دوره‌ای ربات؛
+    وگرنه اگر ربات چند ثانیه عقب باشد، دکمه‌های پیشنهاد سکه در مینی‌اپ بی‌اثر می‌مانند. نسخه بالا می‌رود
+    تا ربات پیام هر دو نفر را مثل همیشه به‌روز کند."""
+    now = now or timezone.now()
+    if duel.status != Duel.Status.NEGOTIATING or now < duel.expires_at:
+        return False
+    return bool(
+        Duel.objects.filter(pk=duel.pk, status=Duel.Status.NEGOTIATING).update(
+            status=Duel.Status.CANCELLED, cancel_reason="timeout", version=F("version") + 1
+        )
     )
 
 

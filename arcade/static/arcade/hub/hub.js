@@ -499,7 +499,8 @@
       box.appendChild(row);
       var post = function (text) {
         text = String(text || "").trim();
-        if (!text || !duel.state) return;
+        if (!text) { input.focus(); return; } // «ارسال» با کادر خالی: مکان‌نما به کادر پیام می‌رود
+        if (!duel.state) return;
         api("duel/chat", { duel_id: duel.state.duel_id, text: text }).then(function (res) {
           if (res.ok) { input.value = ""; applyDuel(res); }
         });

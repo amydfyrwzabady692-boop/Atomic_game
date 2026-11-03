@@ -137,5 +137,26 @@ def test_arcade_duel_and_chat_between_the_two_players(client, make_user):
     duel = Duel.objects.get()
     assert duel.stake == 75 and duel.match.pot == 150 and duel.match.token in state["url"]
     # همان لینک صفحه‌ی بازی آرکید را با توکن مسابقه باز می‌کند
+    from django.utils.html import escapejs
+
     page = client.get(state["url"]).content.decode()
-    assert "shell.js" in page and duel.match.token in page
+    # توکن داخل اسکریپت با escapejs آمده (مثلاً «-» می‌شود \u002D)؛ توکن‌ها تصادفی‌اند
+    assert "shell.js" in page and escapejs(duel.match.token) in page
+
+
+def test_expired_negotiation_closes_when_the_mini_app_reads_it(client, make_user):
+    """اگر کار دوره‌ای ربات هنوز توافقِ تاریخ‌گذشته را نبسته، مینی‌اپ دکمه‌های پیشنهاد مرده نشان نمی‌دهد."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    a, b = make_user(500), make_user(500)
+    post(client, "duel/search", a, game="tictactoe", stake=None)
+    duel_id = post(client, "duel/search", b, game="tictactoe", stake=None)[1]["state"]["duel_id"]
+    version = Duel.objects.get(pk=duel_id).version
+    Duel.objects.filter(pk=duel_id).update(expires_at=timezone.now() - timedelta(seconds=1))
+    state = post(client, "duel/state", a)[1]["state"]
+    assert state["mode"] == "idle" and state["last"]["mode"] == "cancelled" and state["last"]["reason"] == "timeout"
+    duel = Duel.objects.get(pk=duel_id)
+    # نسخه بالا رفته تا ربات پیام هر دو نفر را به‌روز کند
+    assert duel.status == Duel.Status.CANCELLED and duel.version == version + 1
