@@ -378,7 +378,7 @@ def test_hokm_table_api_hides_hands_and_checks_every_move(client, group, make_us
     )  # fmt: skip
     board.start(match.pk, board.new_state("hokm", [u.pk for u in users], time.time(), seed="api", options=match.options))
     page = client.get(f"/arcade/board/{match.token}/").content.decode()
-    assert "hokm.js" in page and 'id="hand"' in page
+    assert "hokm.js" in page and 'id="hand"' in page and "board/cards.js" in page
 
     state = Match.objects.get(pk=match.pk).state["board"]
     hakem = users[state["hakem"]]

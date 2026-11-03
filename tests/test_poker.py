@@ -412,7 +412,7 @@ def test_poker_page_and_api_hide_other_cards(client, group, make_user):
     )  # fmt: skip
     board.start(match.pk, board.new_state("poker", [a.pk, b.pk, c.pk], time.time(), seed="api"))
     page = client.get(f"/arcade/board/{match.token}/").content.decode()
-    assert "poker.js" in page and 'id="felt"' in page
+    assert "poker.js" in page and 'id="felt"' in page and "board/cards.js" in page  # روی کارت‌ها مثل کارت واقعی
 
     _, data = post(client, "board/state", a, match_token=match.token)
     view = data["state"]

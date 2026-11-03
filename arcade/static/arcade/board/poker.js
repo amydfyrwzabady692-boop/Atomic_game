@@ -175,6 +175,8 @@
     index.appendChild(el("i", "", suit));
     card.appendChild(index);
     card.appendChild(el("span", "pip", suit));
+    // روی کارت مثل کارت واقعی (تعداد نقش درست، تصویر شاه و بی‌بی و سرباز)؛ کارت‌های ریز فهرست‌ها همان برچسب ساده را دارند
+    if (window.CardFaces && !card.classList.contains("mini")) window.CardFaces.apply(card, code);
     return card;
   }
   function miniCards(codes) {

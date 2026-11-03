@@ -137,6 +137,8 @@
     index.appendChild(el("i", "", suit));
     card.appendChild(index);
     card.appendChild(el("span", "pip", suit));
+    // روی کارت مثل کارت واقعی (تعداد نقش درست، تصویر شاه و بی‌بی و سرباز)؛ کارت‌های ریز فهرست‌ها همان برچسب ساده را دارند
+    if (window.CardFaces && !card.classList.contains("mini")) window.CardFaces.apply(card, code);
     return card;
   }
   function place(node, p) {
@@ -504,7 +506,7 @@
       last.plays.forEach(function (p) {
         var row = el("div", "row" + (p[0] === last.winner ? " win" : ""));
         row.appendChild(el("b", "", (p[0] === last.winner ? "🏆 " : "") + name(p[0])));
-        row.appendChild(cardEl(p[1], ""));
+        row.appendChild(cardEl(p[1], "mini"));
         sec.appendChild(row);
       });
     }

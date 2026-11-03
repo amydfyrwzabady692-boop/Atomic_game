@@ -182,6 +182,10 @@ body::before {
 .pcard .idx i { font-style: normal; font-size: calc(var(--w) * .28); margin-top: 1px; }
 .pcard .pip { position: absolute; right: 8%; bottom: 4%; font-size: calc(var(--w) * .58); line-height: 1; }
 .pcard.red { color: #d3163c; }
+/* روی کارت: تصویر کامل کارت (cards.js) روی زمینه‌ی سفید؛ برچسب متنی فقط برای کارت‌های ریز فهرست‌هاست */
+.pcard.face { background-color: #fdfdfb; background-position: center; background-size: 100% 100%; background-repeat: no-repeat; }
+.pcard.face .idx, .pcard.face .pip { display: none; }
+
 .pcard.back {
   background:
     radial-gradient(circle at 50% 50%, rgba(255, 220, 150, .5) 0 12%, transparent 13%),
