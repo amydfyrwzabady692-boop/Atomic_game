@@ -109,6 +109,10 @@ class FakeBot:
     async def get_chat_member_count(self, chat_id, **kwargs):
         return 42
 
+    async def leave_chat(self, chat_id, **kwargs):
+        self.left = getattr(self, "left", []) + [chat_id]
+        return True
+
     async def get_chat(self, chat_id, **kwargs):
         username = chat_id[1:] if isinstance(chat_id, str) and chat_id.startswith("@") else None
         return SimpleNamespace(id=chat_id if isinstance(chat_id, int) else -100777, type="channel", title="کانال", username=username, invite_link=None)

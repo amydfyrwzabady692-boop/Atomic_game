@@ -1351,6 +1351,63 @@ FJ_GROUP_NEED = "🔒 {name}، برای بازی اول باید عضو کانا
 FJ_GROUP_BTN = "📢 عضویت در کانال‌ها"
 
 # ---------------------------------------------------------------- پنل: جوین اجباری
+# ---------------------------------------------------------------- پنل: گروه‌های ربات
+ADMIN_GROUPS_BTN = "👥 گروه‌های ربات"
+ADMIN_GROUPS = (
+    "👥 <b>گروه‌هایی که ربات در آن‌هاست</b>\n" + DIVIDER + "\n"
+    "✅ فعال: <b>{active}</b>  ·  🚪 خارج‌شده: {left}  ·  📣 پیام دعوت روشن: {promo}\n"
+    "<i>به ترتیب آخرین مسابقه؛ هر گروه را بزن تا وضعش همین حالا از تلگرام پرسیده شود.</i>\n\n"
+    "{body}\n\n<i>صفحه‌ی {page} از {pages}</i>"
+)
+ADMIN_GROUPS_LEFT_TITLE = (
+    "🚪 <b>گروه‌هایی که ربات از آن‌ها بیرون آمده</b>\n" + DIVIDER + "\n"
+    "✅ فعال: {active}  ·  🚪 خارج‌شده: <b>{left}</b>\n\n{body}\n\n<i>صفحه‌ی {page} از {pages}</i>"
+)
+ADMIN_GROUPS_ROW = "{n}. <b>{title}</b> — این هفته {week} مسابقه · آخرین: {last}"
+ADMIN_GROUPS_EMPTY = "ربات هنوز در هیچ گروهی ثبت نشده. ربات را به یک گروه اضافه کن و /game بفرست."
+ADMIN_GROUPS_NONE_LEFT = "ربات از هیچ گروهی بیرون نیامده است."
+ADMIN_GROUPS_NO_MATCH = "هنوز مسابقه‌ای نبوده"
+ADMIN_GROUPS_NO_TITLE = "(بی‌نام)"
+ADMIN_GROUPS_LEFT_BTN = "🚪 گروه‌های خارج‌شده ({n})"
+ADMIN_GROUPS_ACTIVE_BTN = "✅ گروه‌های فعال ({n})"
+ADMIN_GROUP_DETAIL = (
+    "👥 <b>{title}</b>\n" + DIVIDER + "\n"
+    "🆔 <code>{chat_id}</code>  ·  {state}\n"
+    "👤 عضو: <b>{members}</b>\n"
+    "🤖 ربات: {role}\n"
+    "🎮 مسابقه‌ی در جریان: {live}  ·  این هفته: {week}  ·  کل: {total}\n"
+    "🕒 آخرین مسابقه: {last}\n"
+    "📣 پیام دعوت: {promo}  ·  بازی‌های فعال: {games}\n"
+    "📅 اولین حضور ربات: {added}\n"
+    "🔗 {link}"
+)
+ADMIN_GROUP_ACTIVE = "✅ ربات در گروه است"
+ADMIN_GROUP_LEFT = "🚪 ربات بیرون آمده"
+ADMIN_GROUP_ALL_GAMES = "همه"
+ADMIN_GROUP_LINK = "لینک گروه در دکمه‌ی زیر است."
+ADMIN_GROUP_NO_LINK = "لینک در دسترس نیست (گروه خصوصی است و ربات ادمینِ دارای اجازه‌ی دعوت نیست)."
+ADMIN_GROUP_ROLE_ADMIN = "✅ ادمین ({rights})"
+ADMIN_GROUP_ROLE_MEMBER = "⚠️ عضو ساده — ادمینش کن تا پیام‌های بازی را ببیند"
+ADMIN_GROUP_ROLE_GONE = "⛔️ در گروه نیست"
+ADMIN_GROUP_ROLE_UNKNOWN = "نامعلوم (تلگرام جواب نداد)"
+ADMIN_GROUP_NO_RIGHTS = "بدون اجازه‌ی خاص"
+ADMIN_GROUP_RIGHTS = {
+    "can_delete_messages": "حذف پیام",
+    "can_invite_users": "دعوت",
+    "can_pin_messages": "سنجاق",
+    "can_restrict_members": "محدود کردن",
+}
+ADMIN_GROUP_OPEN_BTN = "🔗 باز کردن گروه"
+ADMIN_GROUP_LEAVE_BTN = "🚪 خروج ربات از گروه"
+ADMIN_GROUP_LEAVE_SURE = (
+    "🚪 ربات از «{title}» بیرون برود؟\n\nمسابقه‌های در جریانِ آن گروه دیگر پیامی در گروه نمی‌گیرند. "
+    "برای برگشت، دوباره ربات را به گروه اضافه کنید."
+)
+ADMIN_GROUP_LEAVE_SURE_BTN = "🚪 بله، بیرون برو"
+ADMIN_GROUP_LEFT_DONE = "ربات از گروه بیرون آمد."
+ADMIN_GROUP_LEFT_MARKED = "تلگرام جواب نداد؛ گروه در فهرست غیرفعال شد (شاید ربات قبلاً بیرون شده باشد)."
+ADMIN_GROUP_GONE = "این گروه دیگر در فهرست نیست."
+
 ADMIN_FJ_BTN = "📢 جوین اجباری"
 ADMIN_FJ = (
     "📢 <b>جوین اجباری</b>\n\n"

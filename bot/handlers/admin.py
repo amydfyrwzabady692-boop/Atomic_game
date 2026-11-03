@@ -338,6 +338,7 @@ async def admin_panel_screen(user: TelegramUser):
         buttons += [_btn(texts.ADMIN_ADMINS_BTN, "adm:admins:list", ui.PRIMARY), _btn(texts.ADMIN_API_BTN, "adm:api:list", ui.PRIMARY)]
     if "stats" in perms:
         buttons += [_btn(texts.ADMIN_STATS_BTN, "adm:stats:show", ui.PRIMARY), _btn(texts.ADMIN_AUDIT_BTN, "adm:audit", ui.PRIMARY)]
+        buttons.append(_btn(texts.ADMIN_GROUPS_BTN, "adm:grp:a:0", ui.PRIMARY))
     if "support" in perms:
         buttons.append(_btn(texts.ADMIN_MSG_BTN, "adm:msg:start", ui.PRIMARY))
     if "broadcast" in perms:

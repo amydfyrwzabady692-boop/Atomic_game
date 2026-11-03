@@ -43,6 +43,7 @@ from .handlers import (
     forcejoin,
     group,
     group_settings,
+    groups_admin,
     membership_admin,
     private,
     promo,
@@ -216,6 +217,7 @@ def register_handlers(application: Application) -> None:
     add(CallbackQueryHandler(admin.admin_dm_callback, pattern=r"^adm:dm:"))
     add(CallbackQueryHandler(membership_admin.panel_callback, pattern=r"^adm:(?:fj|api):"))
     add(CallbackQueryHandler(promo.panel_callback, pattern=r"^adm:(?:promo|post):"))
+    add(CallbackQueryHandler(groups_admin.panel_callback, pattern=r"^adm:grp:"))
     add(CallbackQueryHandler(admin.admin_callback, pattern=r"^adm:"))
     add(CallbackQueryHandler(forcejoin.check_callback, pattern=r"^fj:ok$"))
     add(CallbackQueryHandler(promo.promo_callback, pattern=r"^promo:(?:game|help)$"))
