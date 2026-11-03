@@ -71,7 +71,9 @@ def _rows(buttons: list, per_row: int) -> list[list]:
 def enabled_games(group: TelegramGroup) -> dict[str, GameInfo]:
     """بازی‌های قابل‌ساخت در این گروه. بازی‌های آرکید تا راه‌اندازی مینی‌اپ پیشنهاد نمی‌شوند."""
     arcade = render.arcade_ready()
-    return {k: g for k, g in catalog().items() if group.game_enabled(k) and (arcade or not g.is_arcade)}
+    return {
+        k: g for k, g in catalog().items() if group.game_enabled(k) and (arcade or not (g.is_arcade or g.miniapp_only))
+    }
 
 
 # ------------------------------------------------------------------ پاک شدن منوی بی‌استفاده
@@ -111,7 +113,7 @@ def _disarm_menu_timeout(chat_id: int, message_id: int) -> None:
 # بازی‌های منو بر اساس نوع و به ترتیب محبوبیت؛ هر دسته یک ردیف عنوان دارد. بازی تازه‌ای که این‌جا نیست
 # خودکار در «بازی‌های دیگر» (یا ته بازی‌های آرکید) می‌آید، پس هیچ بازی‌ای از منو جا نمی‌ماند.
 MENU_SECTIONS = (
-    ("board", ("chess", "poker", "tictactoe", "connect4")),
+    ("board", ("chess", "poker", "hokm", "tictactoe", "connect4")),
     ("word", ("quiz", "anagram", "hangman", "emoji_guess", "word_chain")),
     ("speed", ("quick_math", "typing_race", "guess_number", "dice_games")),
 )
@@ -170,8 +172,9 @@ def steps_for(info: GameInfo, draft: dict | None = None) -> list[str]:
     if info.variants:
         steps.append("variant")
     steps.append("fee")
-    # بازی رایگان جایزه‌ای ندارد که تقسیم شود؛ پوکر میز نقدی است و هر کس به اندازه‌ی ژتونش می‌برد
-    if info.max_players > 2 and (draft or {}).get("fee") != 0 and info.key != "poker":
+    # بازی رایگان جایزه‌ای ندارد که تقسیم شود؛ پوکر میز نقدی است و هر کس به اندازه‌ی ژتونش می‌برد و در حکم
+    # دو یار تیم برنده جایزه را نصف‌نصف می‌برند
+    if info.max_players > 2 and (draft or {}).get("fee") != 0 and info.key not in ("poker", "hokm"):
         steps.append("split")
     if info.is_arcade:
         steps.append("window")

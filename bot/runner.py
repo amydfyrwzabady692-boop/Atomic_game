@@ -46,6 +46,14 @@ logger = logging.getLogger(__name__)
 
 LOBBY_REFRESH_SECONDS = 10
 LIVE_POLL_SECONDS = 2
+
+
+def live_key(state: dict):
+    """چه وقت پیام وضعیت گروه باید ویرایش شود. در حکم فقط با رویدادهای مهم (انتخاب حکم، پایان هر دست، پایان دور)
+    نه با تک‌تک کارت‌ها، تا یک بازی ۵۲کارتی سهمیه‌ی ویرایش پیام‌های گروه را نخورد؛ بقیه با هر نسخه‌ی تازه."""
+    if state.get("game") == "hokm":
+        return (state["round"], state["phase"], state["trump"], state["trick_no"], tuple(state["points"]), bool(state["over"]))
+    return state["version"]
 LIVE_EDIT_MIN_GAP = 3  # فاصله‌ی ویرایش عکس صفحه در گروه (حد نرخ تلگرام)
 ARCADE_POLL_SECONDS = 5
 ARCADE_FLASH_MIN_GAP = 20
@@ -75,7 +83,7 @@ class ActiveMatch:
     last_flash_at: float = 0.0
     flash: str = ""
     # بازی دونفره‌ی گرافیکی (شطرنج در مینی‌اپ)
-    live_version: int = 0
+    live_version: object = 0  # نسخه (یا کلید رویدادهای مهم حکم) آخرین ویرایش پیام گروه
     live_edit_at: float = 0.0
 
 
@@ -366,6 +374,8 @@ class MatchManager:
                 match = await db(services.start_match)(active.match_id, play_seconds)
             except MatchError as exc:
                 reason = "not_enough_players" if exc.code == "not_enough_players" else "error"
+                if reason == "not_enough_players" and info.key == "hokm":
+                    reason = "hokm_four"  # حکم دقیقاً ۴ نفر لازم دارد
                 await self._cancel_locked(active, reason)
                 return
             entries = await db(lambda: list(match.players.select_related("user")))()
@@ -393,6 +403,10 @@ class MatchManager:
             if info.key in live_board.LIVE_GAMES and render.arcade_ready():
                 # صفحه‌ی گرافیکی در مینی‌اپ؛ بدون مینی‌اپ همان نسخه‌ی داخل گفت‌وگو اجرا می‌شود
                 await self._start_live(active, match, players)
+                return
+            if info.miniapp_only:
+                # بازی‌ای مثل حکم نسخه‌ی داخل گفت‌وگو ندارد: لغو و برگشت کامل ورودی‌ها
+                await self._cancel_locked(active, "miniapp_off")
                 return
             cls = get_game(info.key)
             active.ctx = TelegramGameContext(self, active, players, dict(match.options), match.seed)
@@ -686,6 +700,9 @@ class MatchManager:
         if state.get("game") == "poker":
             by_id = {p.user_id: p for p in active.players_by_tg.values()}
             return None, render.poker_text(state, {uid: p.name for uid, p in by_id.items()}, live=True)
+        if state.get("game") == "hokm":
+            by_id = {p.user_id: p for p in active.players_by_tg.values()}
+            return None, render.hokm_text(state, {uid: p.name for uid, p in by_id.items()})
         if state.get("game", "chess") != "chess":
             return self._grid_view(active, state)
         by_id = {p.user_id: p for p in active.players_by_tg.values()}
@@ -732,7 +749,7 @@ class MatchManager:
             active.info.key, [p.user_id for p in order], time.time(), seed=str(match.seed), options=match.options
         )
         await db(live_board.start)(match.pk, state)
-        active.live_version = state["version"]
+        active.live_version = live_key(state)
         image, caption = await asyncio.to_thread(self._live_view, active, state)
         keyboard = render.live_keyboard(self.username, match.token, active.info.key)
         if image is None:
@@ -787,8 +804,9 @@ class MatchManager:
         if state["over"]:
             await self.finish_live(active, state)
             return
-        if state["version"] != active.live_version and time.monotonic() - active.live_edit_at >= LIVE_EDIT_MIN_GAP:
-            active.live_version = state["version"]
+        key = live_key(state)
+        if key != active.live_version and time.monotonic() - active.live_edit_at >= LIVE_EDIT_MIN_GAP:
+            active.live_version = key
             await self._edit_live(active, state)
 
     async def finish_live(self, active: ActiveMatch, state: dict) -> None:

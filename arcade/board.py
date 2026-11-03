@@ -16,6 +16,7 @@ from django.db import transaction
 
 from games import gridlive
 from games.chess import live
+from games.hokm import live as hokm
 from games.models import Match, MatchStatus
 from games.poker import live as poker
 
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 VERSION_TTL = 3  # ثانیه؛ لغو مسابقه (که نسخه را عوض نمی‌کند) حداکثر با همین تأخیر دیده می‌شود
 
-LIVE_GAMES = ("chess", "tictactoe", "connect4", "poker")
+LIVE_GAMES = ("chess", "tictactoe", "connect4", "poker", "hokm")
 
 
 def rules_for(state: dict):
@@ -33,6 +34,8 @@ def rules_for(state: dict):
         return live
     if game == "poker":
         return poker
+    if game == "hokm":
+        return hokm
     return gridlive
 
 
@@ -44,6 +47,11 @@ def new_state(game: str, user_ids: list[int], now: float, seed: str = "", option
         return live.new_state(user_ids[0], user_ids[1], now, control=control)
     if game == "poker":
         return poker.new_state(list(user_ids), now, seed=seed)
+    if game == "hokm":
+        # طول بازی همان گزینه‌ای است که سازنده انتخاب کرده (۳، ۵ یا ۷ امتیاز)
+        variant = str((options or {}).get("variant") or hokm.DEFAULT_TARGET)
+        target = int(variant) if variant.isdigit() else hokm.DEFAULT_TARGET
+        return hokm.new_state(list(user_ids), now, seed=seed, target=target)
     return gridlive.new_state(game, user_ids[0], user_ids[1], now)
 
 

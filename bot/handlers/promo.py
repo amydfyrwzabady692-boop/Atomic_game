@@ -56,11 +56,14 @@ def _variants(daily: bool, arcade: bool) -> list[str]:
 
 
 def _game_counts() -> tuple[int, int]:
-    """(تعداد بازی‌های گروهی، تعداد بازی‌های آرکید) برای پر کردن متن‌ها."""
+    """(تعداد بازی‌های گروهی، تعداد بازی‌های آرکید) برای پر کردن متن‌ها. بازی‌ای مثل حکم که فقط روی مینی‌اپ است
+    تا راه‌اندازی مینی‌اپ شمرده نمی‌شود."""
     from arcade.sim import all_simulators
     from games.catalog import catalog
 
-    return sum(1 for k in catalog() if not k.startswith("arcade_")), len(all_simulators())
+    arcade = render.arcade_ready()
+    games = sum(1 for g in catalog().values() if not g.is_arcade and (arcade or not g.miniapp_only))
+    return games, len(all_simulators())
 
 
 def promo_message(index: int, username: str, daily: bool) -> tuple[str, InlineKeyboardMarkup]:

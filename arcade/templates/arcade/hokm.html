@@ -1,0 +1,128 @@
+{% load static %}<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#06201d">
+<title>حکم</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E♠️%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="{% static 'arcade/board/chess.css' %}?v={{ version }}">
+<link rel="stylesheet" href="{% static 'arcade/board/hokm.css' %}?v={{ version }}">
+<link rel="preload" href="/arcade/font/regular.ttf" as="font" type="font/ttf" crossorigin>
+</head>
+<body class="hokm">
+<main id="game" class="hidden">
+  <header id="table-head">
+    <div class="title">
+      <b>♠️ حکم</b>
+      <span class="chip" id="target-chip"></span>
+    </div>
+    <div class="tools">
+      <button class="icon-btn" id="chat-btn" type="button" aria-label="گفت‌وگوی میز" title="گفت‌وگوی میز">💬<i class="badge hidden" id="chat-badge"></i></button>
+      <button class="icon-btn" id="history-btn" type="button" aria-label="دست قبل و نتیجه‌ی دورها" title="دست قبل و نتیجه‌ی دورها">📜</button>
+      <button class="icon-btn" id="sound-btn" type="button" aria-label="صدا" title="صدا">🔊</button>
+      <button class="icon-btn" id="resign-btn" type="button" aria-label="ترک بازی" title="ترک بازی">🚪</button>
+    </div>
+  </header>
+
+  <!-- امتیاز دو تیم، حاکم و حکم -->
+  <section id="scores" aria-label="امتیاز تیم‌ها">
+    <div class="team" id="team-0"><b class="name"></b><span class="pts"></span><small class="tricks"></small></div>
+    <div id="trump-box" class="empty" aria-label="حکم"><span class="sym" id="trump-sym">?</span><small id="trump-name">حکم</small></div>
+    <div class="team" id="team-1"><b class="name"></b><span class="pts"></span><small class="tricks"></small></div>
+  </section>
+
+  <section id="table" aria-label="میز حکم">
+    <div id="felt">
+      <div class="felt-logo"><b>WINZON</b><small>HOKM</small></div>
+    </div>
+    <div id="seats"></div>
+    <div id="trick" aria-live="polite"></div>
+    <div id="center-note" class="hidden"></div>
+    <!-- انتخاب حکم: فقط حاکم می‌بیند -->
+    <div id="trump-pick" class="hidden" role="dialog" aria-label="انتخاب حکم">
+      <b>👑 حکم را انتخاب کن</b>
+      <small>از روی همین ۵ کارتی که داری</small>
+      <div class="suits">
+        <button type="button" data-suit="s"><span>♠</span><em>پیک</em><i></i></button>
+        <button type="button" data-suit="h" class="red"><span>♥</span><em>دل</em><i></i></button>
+        <button type="button" data-suit="d" class="red"><span>♦</span><em>خشت</em><i></i></button>
+        <button type="button" data-suit="c"><span>♣</span><em>گشنیز</em><i></i></button>
+      </div>
+    </div>
+    <div id="bubbles" aria-live="polite"></div>
+  </section>
+
+  <p id="status" aria-live="polite"></p>
+
+  <!-- کارت‌های خودت: کارت مجاز را یک بار لمس کن تا بالا بیاید و دوباره بزن تا بازی شود -->
+  <section id="hand" aria-label="کارت‌های تو"></section>
+  <p id="hand-hint"></p>
+</main>
+
+<section id="loading" class="overlay">
+  <div class="spinner"></div>
+  <p id="loading-text">در حال آماده‌سازی میز حکم…</p>
+</section>
+
+<section id="result" class="overlay hidden">
+  <div class="card">
+    <div class="result-icon" id="result-icon">🏆</div>
+    <h1 id="result-title"></h1>
+    <p class="muted" id="result-reason"></p>
+    <ol id="result-list"></ol>
+    <p class="mine-prize hidden" id="result-mine"></p>
+    <button id="result-close" class="btn go" type="button">برگشت</button>
+    <button id="result-view" class="btn violet" type="button">دیدن میز</button>
+  </div>
+</section>
+
+<section id="history" class="overlay sheet hidden" role="dialog" aria-label="دست قبل و نتیجه‌ی دورها">
+  <div class="card">
+    <h2>📜 دست قبل و دورها</h2>
+    <div id="history-body"></div>
+    <button class="btn violet sheet-close" type="button">بستن</button>
+  </div>
+</section>
+
+<section id="chat" class="overlay sheet hidden" role="dialog" aria-label="گفت‌وگوی میز">
+  <div class="card">
+    <h2>💬 گفت‌وگوی میز</h2>
+    <div id="chat-list" aria-live="polite"></div>
+    <p class="muted chat-empty" id="chat-empty">هنوز پیامی نیست؛ به یارت سلام کن 👋</p>
+    <div id="chat-quick"></div>
+    <form id="chat-form" autocomplete="off">
+      <input id="chat-input" type="text" maxlength="120" placeholder="پیام کوتاه… (لینک و آیدی ممنوع)" aria-label="پیام">
+      <button id="chat-send" class="btn go" type="submit">ارسال</button>
+    </form>
+    <p class="muted chat-note hidden" id="chat-note">فقط بازیکن‌های میز می‌نویسند؛ تو تماشاچی هستی.</p>
+    <button class="btn violet sheet-close" type="button">بستن</button>
+  </div>
+</section>
+
+<section id="leave" class="overlay sheet hidden" role="dialog" aria-label="ترک بازی">
+  <div class="card">
+    <h2>🚪 ترک بازی</h2>
+    <p id="leave-note">حکم بازی تیمی است: اگر بروی، بازی همین حالا تمام می‌شود و <b>تیم تو (تو و یارت) می‌بازد</b>؛ جایزه به تیم حریف می‌رسد.</p>
+    <button id="leave-yes" class="btn danger" type="button">ترک می‌کنم</button>
+    <button class="btn violet sheet-close" type="button">می‌مانم</button>
+  </div>
+</section>
+
+<div id="confetti" aria-hidden="true"></div>
+
+<div id="toast" class="hidden" role="alert"></div>
+
+<script src="{% static 'arcade/common/telegram-web-app.js' %}?v={{ version }}"></script>
+<script src="{% static 'arcade/common/sfx.js' %}?v={{ version }}"></script>
+<script>
+window.BOARD_BOOT = {
+  token: "{{ token|escapejs }}",
+  apiBase: "{% url 'arcade:app' %}api/",
+  devAuth: {{ dev_auth|yesno:"true,false" }},
+  version: "{{ version }}"
+};
+</script>
+<script src="{% static 'arcade/board/hokm.js' %}?v={{ version }}"></script>
+</body>
+</html>

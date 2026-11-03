@@ -36,6 +36,7 @@ class GameInfo:
     floor: int = 2
     ceiling: int = 50
     enabled: bool = True
+    miniapp_only: bool = False  # فقط روی صفحه‌ی گرافیکی مینی‌اپ (مثل حکم)
 
     @property
     def is_arcade(self) -> bool:
@@ -83,6 +84,7 @@ def defaults() -> dict[str, GameInfo]:
             default_max=cls.max_players,
             floor=cls.players_floor,
             ceiling=max(cls.players_ceiling, cls.players_floor),
+            miniapp_only=cls.miniapp_only,
         )
     for key, sim in all_simulators().items():
         full_key = ARCADE_PREFIX + key

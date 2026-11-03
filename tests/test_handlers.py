@@ -674,19 +674,19 @@ async def test_game_menu_shows_every_game_on_one_screen(app):
     buttons = buttons_of(menu.replies[0]["reply_markup"])
     games = [b for b in buttons if (b.callback_data or "").startswith("n:g:")]
     arcade = [b for b in games if b.callback_data.startswith("n:g:arcade_")]
-    assert len(games) == 27 and len(arcade) == 14
+    assert len(games) == 28 and len(arcade) == 14
     assert {style_of(b) for b in arcade} == {"success"}
     assert {style_of(b) for b in games if b not in arcade} == {"primary"}
     labels = " ".join(b.text for b in games)
-    for title in ("هیزم‌شکن", "موش‌زن", "مار کلاسیک", "شطرنج", "دوز چهارتایی", "کوییز"):
+    for title in ("هیزم‌شکن", "موش‌زن", "مار کلاسیک", "شطرنج", "دوز چهارتایی", "کوییز", "حکم"):
         assert title in labels
-    assert "۱۳ بازی گروهی" in menu.replies[0]["text"] and "۱۴ بازی آرکید" in menu.replies[0]["text"]
+    assert "۱۴ بازی گروهی" in menu.replies[0]["text"] and "۱۴ بازی آرکید" in menu.replies[0]["text"]
     # مرتب بر اساس نوع: هر دسته یک ردیف عنوان و بعد بازی‌هایش به ترتیب محبوبیت
     order = [b.callback_data for b in buttons if b.callback_data != "n:x"]
-    assert order[:5] == ["n:h:board", "n:g:chess", "n:g:poker", "n:g:tictactoe", "n:g:connect4"]
-    assert order[5:11] == ["n:h:word", "n:g:quiz", "n:g:anagram", "n:g:hangman", "n:g:emoji_guess", "n:g:word_chain"]
-    assert order[11:16] == ["n:h:speed", "n:g:quick_math", "n:g:typing_race", "n:g:guess_number", "n:g:dice_games"]
-    assert order[16:18] == ["n:h:arcade", "n:g:arcade_snake"] and len(order) == 31
+    assert order[:6] == ["n:h:board", "n:g:chess", "n:g:poker", "n:g:hokm", "n:g:tictactoe", "n:g:connect4"]
+    assert order[6:12] == ["n:h:word", "n:g:quiz", "n:g:anagram", "n:g:hangman", "n:g:emoji_guess", "n:g:word_chain"]
+    assert order[12:17] == ["n:h:speed", "n:g:quick_math", "n:g:typing_race", "n:g:guess_number", "n:g:dice_games"]
+    assert order[17:19] == ["n:h:arcade", "n:g:arcade_snake"] and len(order) == 32
     # ردیف عنوان هر دسته فقط توضیح کوتاهی می‌دهد و منو را عوض نمی‌کند (و «n:h» منوهای قبلی هم کار می‌کند)
     for section in ("board", "word", "speed", "arcade"):
         header = await click(app, 251, f"n:h:{section}", menu_id)
@@ -730,6 +730,7 @@ async def test_arcade_games_are_not_offered_until_the_mini_app_is_set_up(app, se
     menu, menu_id = await open_game_menu(app, 261)
     data = [b.callback_data for b in buttons_of(menu.replies[0]["reply_markup"])]
     assert not any((d or "").startswith("n:g:arcade_") for d in data) and "n:h:arcade" not in data and "n:h:board" in data
+    assert "n:g:hokm" not in data  # حکم فقط روی میز مینی‌اپ است
     assert "راه‌اندازی مینی‌اپ" in menu.replies[0]["text"] and "۱۳ بازی گروهی" in menu.replies[0]["text"]
     stale = await click(app, 261, "n:g:arcade_timber", menu_id)
     assert stale.answers[0] == (texts.MENU_EXPIRED, True)

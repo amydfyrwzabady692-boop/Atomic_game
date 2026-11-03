@@ -1,0 +1,296 @@
+/* میز حکم مینی‌اپ: میز مستطیلِ گوشه‌گرد با نمد سبزآبی، نقش مشبک ملایم و قاب طلایی؛ چهار صندلی (یار روبه‌رو، حریف‌ها
+   چپ و راست)، کارت‌های دست وسط میز، کارت‌های خودت پایین صفحه به شکل بادبزن و نشان حکم بالای میز. رنگ تیم‌ها: آبی و
+   نارنجی. پایه‌ی مشترک (دکمه‌ها، لایه‌ها، پیام‌ها) در chess.css است.
+
+   سرعت: پس‌زمینه‌ها ثابت‌اند و یک بار رنگ می‌شوند، انیمیشن‌ها فقط transform و opacity هستند و برگه‌ها blur ندارند. */
+:root {
+  --felt-hi: #1b8f7d;
+  --felt: #0f6457;
+  --felt-lo: #073a33;
+  --team0: #4f8cff;
+  --team1: #ff9f43;
+  --glass: rgba(7, 12, 24, .9);
+  --ring: #34d399;
+  --tw: min(calc(100vw - 16px), 520px);
+  --th: clamp(calc(var(--tw) * .78), calc(100vh - var(--safe-top) - var(--safe-bottom) - 292px), calc(var(--tw) * 1.3));
+  --cw: min(calc(var(--tw) * .145), 62px); /* کارت‌های وسط میز */
+  --hw: min(calc(var(--tw) * .155), 64px); /* کارت‌های دست خودت */
+}
+@supports (height: 100dvh) {
+  :root { --th: clamp(calc(var(--tw) * .78), calc(100dvh - var(--safe-top) - var(--safe-bottom) - 292px), calc(var(--tw) * 1.3)); }
+}
+html { background: #04110f; }
+body { overflow-x: hidden; }
+body::before {
+  background:
+    radial-gradient(70% 40% at 50% 38%, rgba(38, 194, 160, .2), transparent 72%),
+    radial-gradient(90% 60% at 50% 0%, rgba(255, 214, 140, .06), transparent 70%),
+    radial-gradient(140% 100% at 50% 30%, #0a1f1c, #04110f 72%);
+}
+#game { gap: 6px; padding: calc(var(--safe-top) + 8px) 8px calc(var(--safe-bottom) + 8px); }
+
+/* ---------------------------------------------------------------- سربرگ و امتیاز */
+#table-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: var(--tw); }
+#table-head .title { display: flex; align-items: center; gap: 6px; min-width: 0; }
+#table-head .title b { font-size: 18px; font-weight: 900; white-space: nowrap; }
+#table-head .tools { display: flex; gap: 5px; }
+#table-head .icon-btn { position: relative; width: 36px; height: 36px; border-radius: 12px; background: rgba(255, 255, 255, .06); }
+.badge {
+  position: absolute; top: -5px; left: -5px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px;
+  background: var(--danger); color: #fff; font-size: 11px; font-style: normal; font-weight: 900; line-height: 18px;
+  box-shadow: 0 0 0 2px #0b1210;
+}
+#scores { display: flex; align-items: stretch; gap: 8px; width: var(--tw); }
+.team {
+  flex: 1 1 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 0 6px;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--c) 16%, rgba(8, 12, 26, .85));
+  border: 1px solid color-mix(in srgb, var(--c) 55%, transparent);
+}
+#team-0 { --c: var(--team0); }
+#team-1 { --c: var(--team1); }
+.team .name { overflow: hidden; color: #fff; font-size: 12px; font-weight: 900; white-space: nowrap; text-overflow: ellipsis; }
+.team .pts { grid-row: span 2; color: var(--c); font-size: 26px; font-weight: 900; line-height: 1; white-space: nowrap; }
+.team .pts small { color: color-mix(in srgb, var(--c) 70%, #fff); font-size: 11px; font-weight: 800; }
+.team .tricks { color: var(--muted); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.team.lead { box-shadow: 0 0 16px color-mix(in srgb, var(--c) 35%, transparent); }
+#trump-box {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  border-radius: 16px;
+  background: linear-gradient(170deg, #fff, #e9ecf3);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .45), inset 0 0 0 2px rgba(214, 170, 90, .8);
+  color: #15171f;
+}
+#trump-box .sym { font-family: "Segoe UI Symbol", Arial, sans-serif; font-size: 28px; line-height: 1.05; }
+#trump-box small { font-size: 10.5px; font-weight: 900; color: #333; }
+#trump-box.red .sym { color: #d3163c; }
+#trump-box.empty { background: rgba(255, 255, 255, .08); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .15); color: var(--muted); }
+#trump-box.empty small { color: var(--muted); }
+#trump-box.fresh { animation: pop .45s cubic-bezier(.2, 1.4, .4, 1); }
+
+/* ---------------------------------------------------------------- میز */
+#table { position: relative; flex: 0 0 auto; width: var(--tw); height: var(--th); }
+#felt {
+  position: absolute;
+  inset: 2% 1%;
+  overflow: hidden;
+  border-radius: 38px;
+  background:
+    radial-gradient(60% 50% at 50% 47%, rgba(255, 255, 255, .12), transparent 72%),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, .028) 0 1px, transparent 1px 20px),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, .028) 0 1px, transparent 1px 20px),
+    radial-gradient(80% 70% at 50% 48%, var(--felt-hi), var(--felt) 55%, var(--felt-lo));
+  box-shadow:
+    inset 0 0 0 3px rgba(214, 170, 90, .65),
+    inset 0 0 0 9px rgba(28, 18, 8, .55),
+    inset 0 0 calc(var(--tw) * .1) rgba(0, 0, 0, .55),
+    0 calc(var(--tw) * .04) calc(var(--tw) * .08) rgba(0, 0, 0, .65);
+}
+.felt-logo {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; direction: ltr;
+  color: rgba(0, 0, 0, .2); text-shadow: 0 1px 0 rgba(255, 255, 255, .06); line-height: 1; white-space: nowrap;
+}
+.felt-logo b { font-size: calc(var(--tw) * .07); font-weight: 900; letter-spacing: .32em; margin-left: .32em; }
+.felt-logo small { margin-top: 4px; font-size: calc(var(--tw) * .03); font-weight: 800; letter-spacing: .8em; margin-left: .8em; }
+#seats, #trick, #bubbles { position: absolute; inset: 0; pointer-events: none; }
+#bubbles { z-index: 7; }
+
+/* صندلی‌ها */
+.seat { position: absolute; z-index: 2; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; width: 96px; }
+.ava {
+  position: relative; width: 48px; height: 48px; padding: 3px; border-radius: 50%;
+  background: rgba(8, 11, 24, .9);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, .5), 0 0 0 2px var(--c, #fff);
+}
+.ava span {
+  display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%;
+  background: radial-gradient(circle at 35% 28%, rgba(255, 255, 255, .35), transparent 45%), linear-gradient(160deg, var(--ava1, #5662e0), var(--ava2, #262b78));
+  color: #fff; font-size: 18px; font-weight: 900; text-shadow: 0 1px 2px rgba(0, 0, 0, .35);
+}
+.seat.t0 { --c: var(--team0); }
+.seat.t1 { --c: var(--team1); }
+.crown { position: absolute; top: -13px; left: 50%; transform: translateX(-50%) rotate(-8deg); font-size: 18px; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .5)); }
+.ring { position: absolute; inset: -4px; width: calc(100% + 8px); height: calc(100% + 8px); transform: rotate(-90deg) scaleY(-1); pointer-events: none; opacity: 0; }
+.ring circle { fill: none; stroke: var(--ring); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 0; }
+.seat.turn .ring, #me-plate.turn .ring { opacity: 1; }
+.seat.turn .ava { box-shadow: 0 0 0 2px var(--c, #fff), 0 0 18px rgba(52, 211, 153, .5); }
+@keyframes ring-color { 0%, 50% { stroke: #34d399; } 75% { stroke: #ffc857; } 90%, 100% { stroke: #ff5c7a; } }
+.plate {
+  position: relative; z-index: 1; min-width: 78px; max-width: 100%; margin-top: -6px; padding: 3px 8px 2px;
+  border-radius: 11px; background: var(--glass); border: 1px solid color-mix(in srgb, var(--c, #fff) 45%, transparent);
+  text-align: center; line-height: 1.3; box-shadow: 0 4px 12px rgba(0, 0, 0, .45);
+}
+.plate b { display: block; overflow: hidden; font-size: 11px; font-weight: 800; white-space: nowrap; text-overflow: ellipsis; }
+.plate small { display: block; color: var(--muted); font-size: 10.5px; font-weight: 700; }
+.seat .backs { position: absolute; top: 4px; display: flex; direction: ltr; }
+.seat.at-left .backs { left: calc(50% + 18px); }
+.seat.at-right .backs { right: calc(50% + 18px); }
+.seat.at-top .backs { left: calc(50% + 20px); top: 8px; }
+.seat .backs .pcard { --w: 17px; }
+.seat .backs .pcard + .pcard { margin-left: -11px; }
+.tag { position: absolute; bottom: -12px; z-index: 2; padding: 1px 8px; border-radius: 99px; background: rgba(0, 0, 0, .75); font-size: 10px; font-weight: 900; white-space: nowrap; }
+.tag.away { background: rgba(255, 200, 87, .25); color: #ffe7b0; }
+.tag.left { background: rgba(255, 92, 122, .3); color: #ffd0d8; }
+.seat.left .ava, .seat.left .plate { opacity: .45; }
+
+/* کارت‌های وسط میز: هر کارت از سمت بازیکنش */
+#trick .pcard { --w: var(--cw); position: absolute; z-index: 3; transform: translate(-50%, -50%) rotate(var(--r, 0deg)); box-shadow: 0 6px 14px rgba(0, 0, 0, .45); transition: left .38s cubic-bezier(.3, .7, .3, 1), top .38s cubic-bezier(.3, .7, .3, 1), opacity .38s ease, transform .38s ease; }
+#trick .pcard.in { animation: fly-in .28s cubic-bezier(.2, .8, .3, 1) both; }
+@keyframes fly-in { from { opacity: 0; transform: translate(-50%, -50%) translate(var(--fx, 0), var(--fy, 0)) rotate(var(--r, 0deg)) scale(.85); } }
+#trick .pcard.best { box-shadow: 0 0 0 3px #ffd166, 0 0 18px rgba(255, 209, 102, .8); }
+#trick .pcard.gone { opacity: 0; transform: translate(-50%, -50%) scale(.6); }
+
+/* پیام وسط میز پایین‌تر از ردیف صندلی‌های کناری می‌نشیند تا آن‌ها را نپوشاند */
+#center-note {
+  position: absolute; left: 50%; top: 67%; z-index: 5; transform: translate(-50%, -50%);
+  width: min(66%, 280px); padding: 10px 12px; border-radius: 18px;
+  background: rgba(6, 12, 24, .9); border: 1px solid rgba(255, 255, 255, .14);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, .5); text-align: center; animation: pop .3s cubic-bezier(.2, 1.4, .4, 1);
+}
+#center-note b { display: block; font-size: 15px; font-weight: 900; }
+#center-note p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.7; }
+#center-note.win b { color: #ffe08a; }
+#center-note .big { font-size: 30px; line-height: 1.2; }
+
+#trump-pick {
+  position: absolute; left: 50%; top: 50%; z-index: 6; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  width: min(84%, 320px); padding: 14px; border-radius: 20px;
+  background: rgba(6, 12, 24, .94); border: 1px solid rgba(214, 170, 90, .6);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, .55); animation: pop .3s cubic-bezier(.2, 1.4, .4, 1);
+}
+#trump-pick b { font-size: 16px; font-weight: 900; }
+#trump-pick small { color: var(--muted); font-size: 12px; }
+#trump-pick .suits { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; margin-top: 6px; }
+#trump-pick button {
+  display: flex; flex-direction: column; align-items: center; gap: 0; padding: 8px 4px; border: 0; border-radius: 16px;
+  background: linear-gradient(170deg, #fff, #e6e9f1); color: #15171f; font: inherit; box-shadow: 0 4px 0 #a9afbf, 0 8px 16px rgba(0, 0, 0, .35);
+}
+#trump-pick button:active { transform: translateY(3px); box-shadow: 0 1px 0 #a9afbf; }
+#trump-pick button span { font-family: "Segoe UI Symbol", Arial, sans-serif; font-size: 30px; line-height: 1.1; }
+#trump-pick button.red span { color: #d3163c; }
+#trump-pick button em { font-size: 13px; font-style: normal; font-weight: 900; }
+#trump-pick button i { color: #556; font-size: 11px; font-style: normal; font-weight: 700; }
+#trump-pick button.best { box-shadow: 0 4px 0 #b88a1d, 0 0 0 3px #ffd166, 0 8px 16px rgba(0, 0, 0, .35); }
+
+/* ---------------------------------------------------------------- کارت */
+.pcard {
+  --w: 44px;
+  position: relative; display: inline-block; flex: 0 0 auto; width: var(--w); height: calc(var(--w) * 1.4);
+  border-radius: calc(var(--w) * .12); background: linear-gradient(160deg, #fff 0%, #f4f5f9 60%, #e6e9f1 100%); color: #15171f;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(0, 0, 0, .1); font-family: "Segoe UI", Roboto, Arial, system-ui, sans-serif;
+}
+.pcard .idx { position: absolute; top: 4%; left: 8%; display: flex; flex-direction: column; align-items: center; line-height: .92; font-size: calc(var(--w) * .34); font-weight: 800; letter-spacing: -.05em; }
+.pcard .idx i { font-style: normal; font-size: calc(var(--w) * .27); margin-top: 1px; }
+.pcard .pip { position: absolute; right: 8%; bottom: 4%; font-size: calc(var(--w) * .56); line-height: 1; }
+.pcard.red { color: #d3163c; }
+.pcard.back {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 220, 150, .5) 0 12%, transparent 13%),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, .09) 0 2px, transparent 2px 6px),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, .09) 0 2px, transparent 2px 6px),
+    linear-gradient(160deg, #1d5fa8, #0b2e59);
+  box-shadow: inset 0 0 0 calc(var(--w) * .07) #f7f2e8, inset 0 0 0 calc(var(--w) * .1) #1d5fa8, 0 2px 5px rgba(0, 0, 0, .5);
+}
+.pcard.trump::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 2px rgba(214, 170, 90, .9); pointer-events: none; }
+
+/* ---------------------------------------------------------------- کارت‌های خودت (بادبزن) */
+#hand { position: relative; z-index: 4; width: var(--tw); height: calc(var(--hw) * 1.4 + 26px); margin-top: auto; direction: ltr; }
+#hand .pcard {
+  --w: var(--hw);
+  position: absolute; bottom: 4px; left: var(--x); transform-origin: 50% 100%;
+  transform: rotate(var(--r, 0deg)) translateY(var(--y, 0px));
+  transition: transform .16s ease, opacity .2s ease, filter .2s ease;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, .5), inset 0 0 0 1px rgba(0, 0, 0, .1);
+  cursor: pointer;
+}
+#hand .pcard.off { filter: brightness(.55) saturate(.6); cursor: default; }
+#hand .pcard.pick { transform: rotate(var(--r, 0deg)) translateY(calc(var(--y, 0px) - 22px)); box-shadow: 0 0 0 3px #ffd166, 0 10px 22px rgba(0, 0, 0, .55); }
+#hand .pcard.deal { animation: deal .32s cubic-bezier(.2, .8, .3, 1) both; }
+@keyframes deal { from { opacity: 0; transform: translateY(-40px) scale(.85); } }
+#hand.myturn .pcard:not(.off) { box-shadow: 0 6px 14px rgba(0, 0, 0, .5), 0 0 0 2px rgba(52, 211, 153, .55); }
+#hand-hint { min-height: 18px; margin: 0; color: var(--muted); font-size: 12px; text-align: center; }
+#status { width: var(--tw); margin: 0; min-height: 22px; overflow: hidden; font-size: 14px; white-space: nowrap; text-overflow: ellipsis; }
+
+/* پلاک خودت (پایین میز) */
+#me-plate { position: absolute; left: 50%; bottom: 3%; z-index: 2; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 3px 10px 3px 4px; border-radius: 16px; background: var(--glass); border: 1px solid color-mix(in srgb, var(--c, #fff) 45%, transparent); }
+#me-plate .ava { width: 34px; height: 34px; padding: 2px; }
+#me-plate .ava span { font-size: 14px; }
+#me-plate b { font-size: 12px; font-weight: 900; white-space: nowrap; }
+#me-plate .crown { top: -12px; font-size: 15px; }
+
+/* حباب پیام گفت‌وگو و برچسب حرکت */
+.bubble {
+  position: absolute; transform: translate(-50%, calc(-100% - 30px)); max-width: min(46vw, 170px); padding: 6px 10px; border-radius: 14px;
+  background: #fff; color: #141625; font-size: 12px; font-weight: 700; line-height: 1.5; box-shadow: 0 6px 16px rgba(0, 0, 0, .4);
+  overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  animation: bubble 4.2s ease forwards;
+}
+.bubble.below { transform: translate(-50%, 34px); }
+.bubble.mine { background: #d9f7ff; }
+@keyframes bubble { 0% { opacity: 0; scale: .8; } 8%, 85% { opacity: 1; scale: 1; } 100% { opacity: 0; } }
+
+/* ---------------------------------------------------------------- نتیجه */
+#result-list { margin: 4px 0 6px; padding: 0; list-style: none; text-align: right; }
+#result-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px; border-radius: 12px; font-weight: 800; }
+#result-list li.t0 { background: color-mix(in srgb, var(--team0) 14%, transparent); }
+#result-list li.t1 { background: color-mix(in srgb, var(--team1) 14%, transparent); }
+#result-list li.me { outline: 1px solid rgba(110, 231, 255, .6); }
+#result-list li small { color: var(--gold); font-weight: 900; }
+.mine-prize { margin: 4px 0 0; color: var(--gold); font-size: 15px; font-weight: 900; }
+
+/* ---------------------------------------------------------------- برگه‌های پایین */
+.sheet { justify-content: flex-end; padding: 12px 10px calc(var(--safe-bottom) + 10px); background: rgba(3, 6, 14, .72); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.sheet .card { width: min(100%, 520px); max-height: min(84vh, 680px); overflow-y: auto; padding: 16px 14px 12px; border-radius: 24px 24px 18px 18px; background: #12202a; text-align: right; animation: sheet-up .28s cubic-bezier(.2, .9, .3, 1); }
+@keyframes sheet-up { from { transform: translateY(48px); opacity: 0; } }
+.sheet h2 { margin: 0 0 8px; font-size: 18px; font-weight: 900; text-align: center; }
+.sheet .muted { font-size: 12px; text-align: center; }
+.hist { margin-bottom: 10px; padding: 8px 10px; border-radius: 14px; background: rgba(255, 255, 255, .04); }
+.hist h3 { margin: 0 0 6px; font-size: 14px; color: var(--accent); }
+.hist .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 3px 0; font-size: 13px; }
+.hist .row.win b { color: #ffe08a; }
+.hist .row .pcard { --w: 30px; }
+.hist p { margin: 2px 0; font-size: 13px; line-height: 1.7; color: var(--muted); }
+#chat .card { display: flex; flex-direction: column; gap: 8px; }
+#chat-list { display: flex; flex-direction: column; gap: 6px; min-height: 120px; max-height: 42vh; overflow-y: auto; padding: 4px 2px; user-select: text; -webkit-user-select: text; }
+.msg { align-self: flex-end; max-width: 82%; padding: 6px 11px 5px; border-radius: 16px 16px 16px 4px; background: rgba(255, 255, 255, .08); font-size: 13.5px; line-height: 1.65; overflow-wrap: anywhere; }
+.msg b { display: block; color: var(--accent2); font-size: 11px; font-weight: 900; }
+.msg.mine { align-self: flex-start; border-radius: 16px 16px 4px 16px; background: rgba(52, 211, 153, .18); }
+.msg.mine b { display: none; }
+.chat-empty { margin: 0; }
+#chat-quick { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+#chat-quick::-webkit-scrollbar { display: none; }
+#chat-quick button { flex: 0 0 auto; padding: 7px 11px; border: 1px solid var(--stroke); border-radius: 99px; background: rgba(255, 255, 255, .06); color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; white-space: nowrap; }
+#chat-form { display: flex; gap: 6px; }
+#chat-input { flex: 1 1 auto; min-width: 0; padding: 11px 12px; border: 1px solid var(--stroke); border-radius: 14px; background: rgba(0, 0, 0, .3); color: var(--ink); font: inherit; font-size: 14px; outline: none; user-select: text; -webkit-user-select: text; }
+#chat-input:focus { border-color: rgba(110, 231, 255, .6); }
+#chat-send { flex: 0 0 auto; width: auto; margin: 0; padding: 0 16px; font-size: 14px; }
+.chat-note { margin: 0; }
+#leave-note { color: var(--muted); font-size: 14px; line-height: 1.9; text-align: center; }
+#leave-note b { color: #ffb4c2; }
+.icon-btn:disabled { opacity: .35; }
+
+@media (max-height: 700px) {
+  :root { --hw: min(calc(var(--tw) * .145), 58px); --cw: min(calc(var(--tw) * .13), 54px); }
+  .seat { width: 88px; }
+  .ava { width: 42px; height: 42px; }
+  #trump-box { width: 56px; }
+  .team .pts { font-size: 22px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #trick .pcard, #hand .pcard, #center-note, #trump-pick, .bubble, .sheet .card, #trump-box.fresh { animation: none !important; transition: none !important; }
+}

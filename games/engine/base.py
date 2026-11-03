@@ -144,6 +144,8 @@ class BaseGame:
     # گزینه‌ای که موقع ساخت بازی پرسیده می‌شود (مثل دسته‌ی کوییز): {مقدار: برچسب}
     variant_title_fa: ClassVar[str] = ""
     variants: ClassVar[dict[str, str]] = {}
+    # بازی‌ای که فقط روی صفحه‌ی گرافیکی مینی‌اپ اجرا می‌شود (مثل حکم): تا مینی‌اپ راه نیفتد پیشنهاد نمی‌شود
+    miniapp_only: ClassVar[bool] = False
 
     def __init__(self, ctx: GameContext):
         self.ctx = ctx

@@ -35,6 +35,8 @@ def render_page(request, token: str, practice: bool = False):
         template = "arcade/board.html"
     elif match.game_type == "poker":
         template = "arcade/poker.html"
+    elif match.game_type == "hokm":
+        template = "arcade/hokm.html"
     else:
         template = "arcade/grid.html"
     return render(
@@ -114,15 +116,13 @@ def _seated(state: dict, user_id: int) -> bool:
     return user_id in board.rules_for(state).players(state).values()
 
 
-def _poker_money(match, state: dict) -> dict:
-    """ارزش سکه‌ای ژتون‌ها: در میز نقدی هر ژتون سهم ثابتی از کل ورودی‌هاست (``pot_coins`` ÷ همه‌ی ژتون‌ها).
-    بعد از پایان مسابقه سکه‌ی واقعیِ پرداخت‌شده به هر صندلی هم می‌آید."""
-    from games.poker import live as poker
-
+def _table_money(match, state: dict) -> dict:
+    """سکه‌های میزهای چندنفره (پوکر و حکم): کل سکه‌های میز و بعد از پایان، سکه‌ی واقعیِ پرداخت‌شده به هر صندلی.
+    در پوکر (میز نقدی) هر ژتون سهم ثابتی از کل ورودی‌هاست (``pot_coins`` ÷ همه‌ی ژتون‌ها)."""
     info = {"pot_coins": match.pot, "payout": (match.options or {}).get("payout", "rank")}
     if match.status == MatchStatus.FINISHED:
         prizes = dict(match.players.values_list("user_id", "prize"))
-        info["prizes"] = {side: prizes.get(uid, 0) for side, uid in poker.players(state).items()}
+        info["prizes"] = {side: prizes.get(uid, 0) for side, uid in board.rules_for(state).players(state).items()}
     return info
 
 
@@ -146,8 +146,8 @@ def _response(match, state: dict, user, chat_after: int | None = None) -> JsonRe
     data["players"] = _names(state)
     data["profiles"] = _profiles(state)
     data["cancelled"] = match.status == MatchStatus.CANCELLED
-    if state.get("game") == "poker":
-        data.update(_poker_money(match, state))
+    if state.get("game") in ("poker", "hokm"):
+        data.update(_table_money(match, state))
     body = {"ok": True, "changed": True, "state": data}
     if chat_after is not None:
         body["chat"] = chat.recent(chat.match_room(match), user.pk, chat_after)
@@ -239,14 +239,25 @@ def move(request, user, payload):
 @rate_limited("board_move", 30, 10)
 @authenticated
 def action(request, user, payload):
-    """تسلیم، پیشنهاد/قبول مساوی، یا حرکت پوکر (فولد/چک/کال/رِیز/آل‌این)."""
+    """تسلیم، پیشنهاد/قبول مساوی، حرکت پوکر (فولد/چک/کال/رِیز/آل‌این) یا حرکت حکم (انتخاب حکم، بازی یک کارت)."""
+    from games.hokm import live as hokm
     from games.poker import live as poker
 
     match = _match(payload)
     if match.status != MatchStatus.RUNNING:
         raise ArcadeError("match_not_running", 409)
     kind = payload.get("action")
-    if kind in poker.ACTIONS:
+    if kind in ("hokm_trump", "hokm_play"):
+        if match.game_type != "hokm":
+            raise ArcadeError("bad_action", 400)
+        now = time.time()
+        if kind == "hokm_trump":
+            chosen = payload.get("suit")
+            change = lambda s: hokm.choose_trump(s, user.pk, chosen, now)  # noqa: E731
+        else:
+            card = payload.get("card")
+            change = lambda s: hokm.play(s, user.pk, card, now)  # noqa: E731
+    elif kind in poker.ACTIONS:
         if match.game_type != "poker":
             raise ArcadeError("bad_action", 400)
         amount = payload.get("amount", 0)

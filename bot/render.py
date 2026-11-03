@@ -181,7 +181,7 @@ def lobby_text(match, info: GameInfo, names: list[str], remaining: int, prize_no
         style=info.style,
         fee=fee_label(match.entry_fee),
         pot=fa_num(match.pot),
-        split=texts.SPLIT_BY_CHIPS if (match.options or {}).get("payout") == "chips" else split_label(match.prize_split),
+        split=lobby_split(match),
         count=fa_num(len(names)),
         max=fa_num(match.max_players),
         players=players,
@@ -193,6 +193,15 @@ def lobby_text(match, info: GameInfo, names: list[str], remaining: int, prize_no
         marker = texts.DIVIDER
         text = text.replace(marker, prize.lstrip("\n") + "\n" + marker, 1)
     return text
+
+
+def lobby_split(match) -> str:
+    """تقسیم جایزه در متن لابی: پوکر به اندازه‌ی ژتون، حکم بین دو یار تیم برنده، بقیه طبق رتبه."""
+    if (match.options or {}).get("payout") == "chips":
+        return texts.SPLIT_BY_CHIPS
+    if getattr(match, "game_type", "") == "hokm":
+        return texts.SPLIT_TEAM
+    return split_label(match.prize_split)
 
 
 def lobby_keyboard(match_id: int, username: str, game_key: str = "") -> InlineKeyboardMarkup:
@@ -289,7 +298,7 @@ def live_keyboard(username: str, token: str, game_key: str) -> InlineKeyboardMar
         [
             [
                 ui.button(
-                    texts.CHESS_PLAY_BTN if game_key == "chess" else texts.LIVE_PLAY_BTN,
+                    {"chess": texts.CHESS_PLAY_BTN, "hokm": texts.HOKM_PLAY_BTN}.get(game_key, texts.LIVE_PLAY_BTN),
                     url=miniapp_link(username, token),
                     style=ui.SUCCESS,
                 )
@@ -369,3 +378,49 @@ def poker_text(state: dict, names: dict[int, str], live: bool = False) -> str:
         lines.append(texts.POKER_TURN.format(name=name[state["to_act"]], seconds=fa_num(state["move_seconds"])))
         lines.append(texts.POKER_LIVE_HINT if live else texts.POKER_CHAT_HINT)
     return "\n".join(lines)
+
+
+# ------------------------------------------------------------------ حکم
+HOKM_TEAM_MARKS = ("🔵", "🟠")
+
+
+def hokm_text(state: dict, names: dict[int, str]) -> str:
+    """متن وضعیت حکم برای پیام گروه: امتیاز دو تیم، حاکم و حکم، نتیجه‌ی دور قبل و نوبت. کارت هیچ‌کس این‌جا نیست."""
+    seats = state["seats"]
+    name = {i: escape(short_name(names.get(uid, ""))) for i, uid in enumerate(seats)}
+    lines = [texts.HOKM_HEADER.format(round=fa_num(max(state["round"], 1)), target=fa_num(state["target"]))]
+    for team in (0, 1):
+        lines.append(
+            texts.HOKM_TEAM.format(
+                mark=HOKM_TEAM_MARKS[team], a=name[team], b=name[team + 2],
+                points=fa_num(state["points"][team]), tricks=fa_num(state["tricks"][team]),
+            )
+        )  # fmt: skip
+    trump = ""
+    if state["trump"]:
+        symbol, suit = texts.HOKM_SUITS[state["trump"]]
+        trump = texts.HOKM_TRUMP.format(symbol=symbol, suit=suit)
+    text = "\n".join(lines) + texts.HOKM_HAKEM.format(name=name[state["hakem"]], trump=trump)
+    result = state.get("result")
+    over = state.get("over")
+    if result and state["phase"] in ("pause", "over"):
+        team = result["winner_team"]
+        kot = {"kot": texts.HOKM_KOT, "hakem_kot": texts.HOKM_HAKEM_KOT}.get(result["kot"], "")
+        text += texts.HOKM_ROUND_WON.format(
+            round=fa_num(result["round"]), a=name[team], b=name[team + 2], won=fa_num(result["tricks"][team]),
+            lost=fa_num(result["tricks"][1 - team]), kot=kot, points=fa_num(result["points"]),
+        )  # fmt: skip
+    if over:
+        team = over["winner_team"]
+        if over["reason"] == "left":
+            text += texts.HOKM_OVER_LEFT.format(name=name[over["left_seat"]], a=name[team], b=name[team + 2])
+        else:
+            text += texts.HOKM_OVER.format(a=name[team], b=name[team + 2])
+        return text
+    if state["phase"] == "pause":
+        text += texts.HOKM_NEXT_ROUND
+    elif state["phase"] == "trump":
+        text += texts.HOKM_CHOOSING
+    elif state["turn"] is not None:
+        text += texts.HOKM_TURN.format(name=name[state["turn"]])
+    return text + texts.HOKM_LIVE_HINT

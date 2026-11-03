@@ -70,7 +70,7 @@ def test_invite_texts_and_buttons(settings):
     text, markup = promo.promo_message(0, "winzon_bot", daily=True)
     data = {b.text: (b.callback_data or b.url) for b in buttons_of(markup)}
     assert text.split("\n")[0] == texts.PROMO_VARIANTS[0][0].split("\n")[0]
-    assert "روی هم ۱۳ بازی گروهی" in text and "{" not in text  # تعداد واقعی بازی‌ها
+    assert "روی هم ۱۴ بازی گروهی" in text and "{" not in text  # تعداد واقعی بازی‌ها (با حکم)
     assert data[texts.PROMO_GAME_BTN] == "promo:game" and data[texts.PROMO_HELP_BTN] == "promo:help"
     assert data[texts.PROMO_DUEL_BTN] == "https://t.me/winzon_bot?start=duel"
     assert data[texts.PROMO_DAILY_BTN] == "https://t.me/winzon_bot?start=daily"
@@ -219,7 +219,7 @@ async def test_admin_controls_invites_and_publishes_channel_posts(app, settings)
     text = shown(wallet)
     assert "۱٬۰۰۰ تومان" in text and "۱۰٪" in text and "حداقل ۱۰۰ سکه" in text
     intro = await panel(app, OWNER, "adm:post:show:intro")
-    assert "@test_bot" in shown(intro) and "۱۳ بازی گروهی" in shown(intro) and "۱۴ بازی آرکید" in shown(intro)
+    assert "@test_bot" in shown(intro) and "۱۴ بازی گروهی" in shown(intro) and "۱۴ بازی آرکید" in shown(intro)
 
     channel = await sync_to_async(ForcedChannel.objects.create)(chat_id=-1007, title="کانال ما", username="winzon_ch")
     picked = await panel(app, OWNER, "adm:post:pick:intro")
