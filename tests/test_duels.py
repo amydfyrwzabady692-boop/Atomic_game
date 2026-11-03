@@ -204,3 +204,59 @@ def test_duel_resign_finishes_cleanly_without_outer_join_error(make_user):
     assert find_mismatches() == []
 
 
+
+
+# ------------------------------------------------------------------ دوئل آرکید
+def _played(match, user, *scores):
+    """تلاش‌های تأییدشده‌ی یک بازیکن (به‌جای بازی واقعی در مرورگر)."""
+    from arcade.models import ArcadeSession
+
+    for score in scores:
+        ArcadeSession.objects.create(
+            user=user, match=match, game_key=match.game_type[len("arcade_") :], seed=match.seed,
+            status=ArcadeSession.Status.VERIFIED, verified_score=score, submitted_at=timezone.now(),
+        )  # fmt: skip
+
+
+def test_every_game_is_offered_and_arcade_duels_share_one_seed(make_user):
+    keys = duels.duel_games()
+    assert keys[:4] == ["chess", "poker", "tictactoe", "connect4"] and "arcade_snake" in keys and len(keys) == 18
+    a, b = make_user(500), make_user(500)
+    duels.search(a, "arcade_snake", 100)
+    duel = duels.search(b, "arcade_snake", 100)
+    match = duel.match
+    assert duel.status == Duel.Status.PLAYING and match.status == MatchStatus.RUNNING and match.pot == 200
+    assert match.options["attempts"] == duels.ARCADE_ATTEMPTS and match.options["window_minutes"] == duels.ARCADE_MINUTES
+    assert match.play_deadline is not None and board.live_match(match.token) is None  # صفحه‌ی آرکید، نه صفحه‌ی نوبتی
+    # تا وقتی هر دو همه‌ی تلاش‌هایشان را نکرده‌اند و مهلت باقی است، تمام نمی‌شود
+    _played(match, a, 120, 300)
+    _played(match, b, 250)
+    assert duels.finish_if_over(duel.pk) is None
+    _played(match, b, 180)
+    assert duels.finish_if_over(duel.pk) is not None
+    duel.refresh_from_db()
+    assert duel.status == Duel.Status.FINISHED
+    prize = CoinTransaction.objects.get(type=TxType.PRIZE)
+    assert (prize.user_id, prize.amount) == (a.pk, 200)  # بهترین امتیاز: ۳۰۰ در برابر ۲۵۰
+    assert duels.finish_if_over(duel.pk) is None and find_mismatches() == []
+
+
+def test_arcade_duel_ends_at_the_deadline_and_a_no_show_loses(make_user):
+    a, b = make_user(500), make_user(500)
+    duels.search(a, "arcade_g2048", 50)
+    duel = duels.search(b, "arcade_g2048", 50)
+    match = duel.match
+    _played(match, b, 64)
+    assert duels.finish_if_over(duel.pk) is None
+    Match.objects.filter(pk=match.pk).update(play_deadline=timezone.now() - timedelta(seconds=1))
+    assert duels.finish_if_over(duel.pk) is not None
+    prize = CoinTransaction.objects.get(type=TxType.PRIZE)
+    assert (prize.user_id, prize.amount) == (b.pk, 100)
+    # هیچ‌کدام بازی نکرد: مساوی، ورودی هر کس به خودش برمی‌گردد
+    c, d = make_user(500), make_user(500)
+    duels.search(c, "arcade_g2048", 50)
+    empty = duels.search(d, "arcade_g2048", 50)
+    Match.objects.filter(pk=empty.match.pk).update(play_deadline=timezone.now() - timedelta(seconds=1))
+    duels.finish_if_over(empty.pk)
+    refunds = dict(CoinTransaction.objects.filter(ref_match=empty.match, type=TxType.PRIZE).values_list("user_id", "amount"))
+    assert refunds == {c.pk: 50, d.pk: 50} and find_mismatches() == []  # (جایزه‌ی «اولین بازی» جداست)

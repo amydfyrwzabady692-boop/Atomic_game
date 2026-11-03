@@ -27,6 +27,9 @@
     daily_disabled: "جایزه‌ی روزانه فعلاً فعال نیست.",
     rate_limited: "کمی آهسته‌تر! چند ثانیه صبر کن.",
     network: "اتصال به سرور برقرار نشد.",
+    chat_empty: "پیام خالی است.",
+    chat_no_links: "فرستادن لینک و یوزرنیم در گفت‌وگو مجاز نیست.",
+    chat_too_fast: "کمی آهسته‌تر پیام بده.",
   };
   var CANCEL_REASONS = {
     timeout: "زمان توافق تمام شد.",
@@ -37,7 +40,7 @@
   };
 
   var current = "games";
-  var duel = { state: null, games: [], stakes: [], game: null, stake: null, receivedAt: 0, seen: null };
+  var duel = { state: null, games: [], stakes: [], quick: [], maxStake: 1000000, game: null, stake: null, receivedAt: 0, seen: null, chatSeen: 0 };
   var timers = { duel: null };
 
   function $(id) { return document.getElementById(id); }
@@ -325,6 +328,9 @@
     duel.state = data.state;
     duel.games = data.games;
     duel.stakes = data.stakes;
+    duel.quick = data.quick || [];
+    duel.maxStake = data.max_stake || duel.maxStake;
+    duel.coins = data.coins;
     duel.receivedAt = Date.now();
     setCoins(data.coins);
     if (previous && previous.mode !== data.state.mode) {
@@ -375,23 +381,20 @@
     }
     if (s.mode === "idle" || s.mode === "finished" || s.mode === "cancelled") {
       if (!duel.game && duel.games.length) duel.game = duel.games[0].key;
-      var games = $("duel-games");
-      games.textContent = "";
-      duel.games.forEach(function (g) {
-        var label = g.emoji + " " + g.title + (g.note ? " " + g.note : "");
-        games.appendChild(chip(label, duel.game === g.key, function () { duel.game = g.key; drawDuel(); }));
-      });
+      drawDuelGames();
       var stakes = $("duel-stakes");
       stakes.textContent = "";
+      var custom = duel.stake !== null && duel.stakes.indexOf(duel.stake) === -1;
       duel.stakes.concat([null]).forEach(function (value) {
         stakes.appendChild(chip(stakeLabel(value), duel.stake === value, function () { duel.stake = value; drawDuel(); }));
       });
+      if (custom) stakes.appendChild(chip("✍️ " + stakeLabel(duel.stake), true, function () {}));
     } else if (s.mode === "searching") {
-      $("duel-search-info").textContent = s.game.emoji + " " + s.game.title + " · " + stakeLabel(s.stake) +
-        " · " + fa(Math.ceil(duelSecondsLeft() / 60)) + " دقیقه";
+      $("duel-search-info").textContent = s.game.emoji + " " + s.game.title + " — " + stakeLabel(s.stake) +
+        " — " + fa(Math.ceil(duelSecondsLeft() / 60)) + " دقیقه";
     } else if (s.mode === "negotiating") {
       $("duel-opponent").textContent = s.opponent.name;
-      $("duel-opponent-level").textContent = "سطح " + fa(s.opponent.level) + " · " + s.game.emoji + " " + s.game.title;
+      $("duel-opponent-level").textContent = "سطح " + fa(s.opponent.level) + " — " + s.game.emoji + " " + s.game.title;
       $("duel-mine").textContent = s.mine === null ? "هنوز پیشنهاد نداده‌ای" : stakeLabel(s.mine);
       $("duel-theirs").textContent = s.theirs === null ? "هنوز پیشنهاد نداده" : stakeLabel(s.theirs);
       $("duel-timer").textContent = fa(duelSecondsLeft()) + " ثانیه";
@@ -406,10 +409,129 @@
           api("duel/offer", { duel_id: s.duel_id, amount: value }).then(applyDuel);
         }));
       });
+      drawChat($("duel-chat-negotiating"), s);
     } else if (s.mode === "playing") {
-      $("duel-playing-info").textContent = s.game.emoji + " " + s.game.title + " مقابل " + s.opponent.name + " · " +
-        (s.stake ? "ورودی " + money(s.stake) + " · جایزه " + money(s.stake * 2) + " 🪙" : "بدون سکه");
+      $("duel-playing-info").textContent = s.game.emoji + " " + s.game.title + " مقابل " + s.opponent.name + " — " +
+        (s.stake ? "ورودی " + money(s.stake) + " · جایزه " + money(s.stake * 2) + " 🪙" : "بدون سکه") +
+        (s.game.kind === "arcade" ? " — " + s.game.note + "؛ امتیاز بیشتر برنده" : "");
+      drawChat($("duel-chat-playing"), s);
     }
+  }
+
+  /* انتخاب بازی: چهار بازی نوبتی با دکمه‌ی بزرگ و بازی‌های آرکید در یک شبکه‌ی جمع‌وجور نمادها */
+  function drawDuelGames() {
+    var board = $("duel-board-games"), arcade = $("duel-arcade-games");
+    board.textContent = "";
+    arcade.textContent = "";
+    var picked = null;
+    duel.games.forEach(function (g) {
+      var on = duel.game === g.key;
+      if (on) picked = g;
+      var pick = function () { haptic("light"); duel.game = g.key; drawDuel(); };
+      var b;
+      if (g.kind === "arcade") {
+        b = el("button", "duel-tile" + (on ? " on" : ""));
+        b.appendChild(iconFor(g.icon || g.key, g.emoji));
+        b.appendChild(el("b", "", g.title));
+        arcade.appendChild(b);
+      } else {
+        b = el("button", "duel-game" + (on ? " on" : ""));
+        b.appendChild(el("span", "duel-emoji", g.emoji));
+        b.appendChild(el("b", "", g.title));
+        if (g.note) b.appendChild(el("small", "", g.note));
+        board.appendChild(b);
+      }
+      b.type = "button";
+      b.addEventListener("click", pick);
+    });
+    $("duel-pick").textContent = picked
+      ? "انتخاب تو: " + picked.emoji + " " + picked.title + (picked.kind === "arcade"
+        ? " — هر دو همان بازی را در " + picked.note + " بازی می‌کنید؛ بهترین امتیاز برنده است."
+        : (picked.note ? " · ساعت " + picked.note : ""))
+      : "";
+  }
+
+  // ------------------------------------------------------------------ مبلغ دلخواه
+  function readAmount(input) {
+    var raw = String(input.value || "").replace(/[۰-۹]/g, function (d) { return "۰۱۲۳۴۵۶۷۸۹".indexOf(d); }).trim();
+    var value = Number(raw);
+    if (!raw || !isFinite(value) || value < 0 || Math.floor(value) !== value) { toast("مبلغ را با عدد درست بنویس."); return null; }
+    if (value > duel.maxStake) { toast("حداکثر " + money(duel.maxStake) + " سکه"); return null; }
+    if (value > 0 && duel.coins !== undefined && duel.coins !== null && value > duel.coins) {
+      toast("سکه‌ات کافی نیست (" + money(duel.coins) + " 🪙)");
+      return null;
+    }
+    return value;
+  }
+  $("duel-custom-set").addEventListener("click", function () {
+    var value = readAmount($("duel-custom"));
+    if (value === null) return;
+    duel.stake = value;
+    $("duel-custom").value = "";
+    haptic("light");
+    drawDuel();
+  });
+  $("duel-offer-send").addEventListener("click", function () {
+    var value = readAmount($("duel-offer-custom"));
+    if (value === null || !duel.state) return;
+    $("duel-offer-custom").value = "";
+    api("duel/offer", { duel_id: duel.state.duel_id, amount: value }).then(applyDuel);
+  });
+
+  // ------------------------------------------------------------------ گفت‌وگو با حریف
+  /* پیام‌ها با textContent نشان داده می‌شوند (HTML اجرا نمی‌شود)؛ پیام تازه‌ی حریف با لرزش کوتاه اعلام می‌شود */
+  function drawChat(box, s) {
+    if (!box.firstChild) {
+      box.appendChild(el("b", "chat-title", "💬 گفت‌وگو با حریف"));
+      box.appendChild(el("div", "chat-log"));
+      var quick = el("div", "chat-quick");
+      box.appendChild(quick);
+      var row = el("div", "chat-input");
+      var input = el("input");
+      input.maxLength = 120;
+      input.placeholder = "پیام به حریف…";
+      var send = el("button", "btn go", "ارسال");
+      send.type = "button";
+      row.appendChild(input);
+      row.appendChild(send);
+      box.appendChild(row);
+      var post = function (text) {
+        text = String(text || "").trim();
+        if (!text || !duel.state) return;
+        api("duel/chat", { duel_id: duel.state.duel_id, text: text }).then(function (res) {
+          if (res.ok) { input.value = ""; applyDuel(res); }
+        });
+      };
+      send.addEventListener("click", function () { post(input.value); });
+      input.addEventListener("keydown", function (e) { if (e.key === "Enter") post(input.value); });
+      box._post = post;
+    }
+    var quickBox = box.querySelector(".chat-quick");
+    if (!quickBox.firstChild) {
+      duel.quick.forEach(function (text) {
+        var b = el("button", "chip small", text);
+        b.type = "button";
+        b.addEventListener("click", function () { haptic("light"); box._post(text); });
+        quickBox.appendChild(b);
+      });
+    }
+    var log = box.querySelector(".chat-log");
+    var messages = s.chat || [];
+    var lastId = messages.length ? messages[messages.length - 1].id : 0;
+    if (log.dataset.last === String(lastId)) return;
+    log.dataset.last = String(lastId);
+    log.textContent = "";
+    if (!messages.length) log.appendChild(el("p", "muted small chat-empty", "هنوز پیامی نیست؛ با یک سلام شروع کن 🙂"));
+    messages.forEach(function (m) {
+      var row = el("div", "chat-msg" + (m.mine ? " mine" : ""));
+      if (!m.mine) row.appendChild(el("small", "", m.name));
+      row.appendChild(el("span", "", m.text));
+      log.appendChild(row);
+    });
+    log.scrollTop = log.scrollHeight;
+    var fresh = messages.filter(function (m) { return !m.mine && m.id > duel.chatSeen; });
+    if (fresh.length && duel.chatSeen) haptic("light");
+    duel.chatSeen = Math.max(duel.chatSeen, lastId);
   }
   $("duel-search").addEventListener("click", function () {
     if (!duel.game) return;

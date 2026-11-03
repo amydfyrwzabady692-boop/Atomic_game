@@ -8,8 +8,10 @@
    پیشنهاد برابر شد (از جمله ۰ = بدون سکه) بازی شروع می‌شود؛ اگر هر دو از اول همان مقدار را خواسته
    باشند بلافاصله. اگر تا ``NEGOTIATE_SECONDS`` توافق نشد دوئل لغو می‌شود.
 ۳. ``_start``: یک ``Match`` بدون گروه ساخته می‌شود؛ ورودی هر دو از مسیر عادی ledger کم می‌شود و کل
-   جایزه به برنده می‌رسد (در تساوی نصف‌نصف). بازی روی همان صفحه‌های شطرنج/دوز/پوکر مینی‌اپ است و
-   ربات (``bot.duels``) مهلت‌ها، پایان بازی و پرداخت را دنبال می‌کند.
+   جایزه به برنده می‌رسد (در تساوی نصف‌نصف). بازی‌های نوبتی روی همان صفحه‌های شطرنج/دوز/پوکر مینی‌اپ‌اند؛
+   در بازی‌های آرکید هر دو نفر همان بازی را با همان شرایط (همان seed) در ``ARCADE_MINUTES`` دقیقه و با
+   ``ARCADE_ATTEMPTS`` تلاش بازی می‌کنند و بهترین امتیاز تأییدشده برنده است. ربات (``bot.duels``) مهلت‌ها،
+   پایان بازی و پرداخت را دنبال می‌کند.
 
 همه‌ی توابع sync و اتمیک‌اند؛ ربات آن‌ها را با ``db(...)`` صدا می‌زند و API مینی‌اپ مستقیم.
 """
@@ -23,13 +25,16 @@ from django.utils import timezone
 
 from core.models import TelegramUser
 
-from .catalog import catalog
+from .catalog import ARCADE_PREFIX, arcade_enabled, catalog
 from .engine import services
 from .engine.payout import Standing
 from .engine.services import MatchError
 from .models import Duel, DuelTicket, Match, MatchStatus
 
-DUEL_GAMES = ("chess", "tictactoe", "connect4", "poker")
+BOARD_GAMES = ("chess", "poker", "tictactoe", "connect4")
+DUEL_GAMES = BOARD_GAMES  # نام قدیمی؛ بازی‌های آرکید از duel_games() می‌آیند
+ARCADE_MINUTES = 3  # مهلت دوئل آرکید
+ARCADE_ATTEMPTS = 2  # تلاش هر نفر در دوئل آرکید
 STAKE_CHOICES = (0, 50, 100, 250, 500, 1000)
 MAX_STAKE = 1_000_000
 SEARCH_SECONDS = 300
@@ -45,9 +50,21 @@ class DuelError(Exception):
         self.context = context
 
 
+def is_arcade(game_type: str) -> bool:
+    return game_type.startswith(ARCADE_PREFIX)
+
+
+def duel_games() -> list[str]:
+    """کلید بازی‌های قابل دوئل: اول چهار بازی نوبتی، بعد بازی‌های آرکیدِ فعال."""
+    games = catalog()
+    board = [key for key in BOARD_GAMES if key in games]
+    arcade = [key for key, info in games.items() if info.is_arcade and arcade_enabled(key[len(ARCADE_PREFIX) :])]
+    return board + arcade
+
+
 def available_games() -> list:
     games = catalog()
-    return [games[key] for key in DUEL_GAMES if key in games]
+    return [games[key] for key in duel_games()]
 
 
 def _check_stake(stake) -> int | None:
@@ -77,7 +94,7 @@ def search(user: TelegramUser, game_type: str, stake: int | None, now=None) -> D
     """درخواست جستجو. اگر حریف سازگار منتظر بود ``Duel`` برمی‌گرداند، وگرنه ``DuelTicket``."""
     now = now or timezone.now()
     stake = _check_stake(stake)
-    if game_type not in DUEL_GAMES or game_type not in catalog():
+    if game_type not in duel_games():
         raise DuelError("bad_game")
     user.refresh_from_db(fields=["coins", "is_banned", "started_bot"])
     if user.is_banned:
@@ -217,6 +234,10 @@ def _start(duel_id: int) -> None:
 
     duel = Duel.objects.select_related("player_a", "player_b").get(pk=duel_id)
     stake = duel.offer_a or 0
+    arcade = is_arcade(duel.game_type)
+    options = {"duel": duel.pk}
+    if arcade:
+        options.update(window_minutes=ARCADE_MINUTES, attempts=ARCADE_ATTEMPTS)
     try:
         with transaction.atomic():
             locked = Duel.objects.select_for_update().get(pk=duel_id)
@@ -231,16 +252,20 @@ def _start(duel_id: int) -> None:
                 join_deadline=timezone.now() + timedelta(seconds=60),
                 min_players=2,
                 max_players=2,
-                options={"duel": duel.pk},
+                options=options,
             )
             for player in (duel.player_a, duel.player_b):
                 services.join_match(match.pk, player)
-            match = services.start_match(match.pk)
-            order = [duel.player_a_id, duel.player_b_id]
-            random.Random(match.seed).shuffle(order)
-            import time
+            if arcade:
+                # هر دو همان seed مسابقه را می‌گیرند؛ تا پایان مهلت یا تمام شدن تلاش‌های هر دو
+                match = services.start_match(match.pk, ARCADE_MINUTES * 60)
+            else:
+                match = services.start_match(match.pk)
+                order = [duel.player_a_id, duel.player_b_id]
+                random.Random(match.seed).shuffle(order)
+                import time
 
-            board.start(match.pk, board.new_state(duel.game_type, order, time.time(), seed=str(match.seed)))
+                board.start(match.pk, board.new_state(duel.game_type, order, time.time(), seed=str(match.seed)))
             locked.status = Duel.Status.PLAYING
             locked.stake = stake
             locked.match = match
@@ -264,6 +289,8 @@ def finish_if_over(duel_id: int):
     if match.status == MatchStatus.CANCELLED:  # لغو از پنل ادمین (ورودی‌ها آن‌جا برگشته)
         Duel.objects.filter(pk=duel_id).update(status=Duel.Status.CANCELLED, cancel_reason="admin", version=duel.version + 1)
         return None
+    if is_arcade(match.game_type):
+        return _finish_arcade(duel, match)
     state = board.tick(match.pk)
     if state is None or not state["over"]:
         return None
@@ -273,6 +300,21 @@ def finish_if_over(duel_id: int):
     standings = [Standing(uid, score, now if score > 0 else None) for uid, score in board.standings(state)]
     result = services.finish_match(match.pk, standings)
     Duel.objects.filter(pk=duel_id).update(status=Duel.Status.FINISHED, version=duel.version + 1)
+    return result
+
+
+def _finish_arcade(duel: Duel, match: Match):
+    """دوئل آرکید وقتی تمام است که مهلت گذشته یا هر دو نفر همه‌ی تلاش‌هایشان را فرستاده‌اند."""
+    from arcade import services as arcade_services
+
+    if match.status != MatchStatus.RUNNING:
+        return None
+    over = match.play_deadline is None or timezone.now() >= match.play_deadline
+    if not over and not arcade_services.all_attempts_done(match):
+        return None
+    standings = [Standing(s.user_id, s.score, s.reached_at) for s in arcade_services.match_standings(match)]
+    result = services.finish_match(match.pk, standings)
+    Duel.objects.filter(pk=duel.pk, status=Duel.Status.PLAYING).update(status=Duel.Status.FINISHED, version=duel.version + 1)
     return result
 
 

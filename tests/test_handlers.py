@@ -978,6 +978,14 @@ async def test_duel_flow_in_private_chat(app, settings):
         await duel_handlers.duel_callback(update, context)
         return update
 
+    # اول چهار بازی نوبتی، بعد ردیف عنوان آرکید و بازی‌های رکوردی
+    assert labels[:4] == ["du:g:chess", "du:g:poker", "du:g:tictactoe", "du:g:connect4"]
+    assert labels[4] == "du:i" and "du:g:arcade_snake" in labels and len(labels) == 19
+    header = await press(501, "du:i", 11)
+    assert header.answers[-1][1] is True and "تلاش" in header.answers[-1][0] and not header.edits
+    arcade = await press(501, "du:g:arcade_snake", 11)
+    assert "سر چند سکه" in arcade.edits[-1]["text"] and "مار" in arcade.edits[-1]["text"]
+
     pick = await press(501, "du:g:tictactoe", 11)
     assert "سر چند سکه" in pick.edits[-1]["text"]
     searching = await press(501, "du:s:tictactoe:100", 11)

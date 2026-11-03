@@ -88,7 +88,10 @@ def test_shop_sells_coin_packs_with_the_bot_top_up_prices(client, make_user, eco
 def test_duel_through_the_mini_app(client, make_user):
     a, b = make_user(1000), make_user(1000)
     status, data = post(client, "duel/state", a)
-    assert data["state"]["mode"] == "idle" and {g["key"] for g in data["games"]} == {"chess", "tictactoe", "connect4", "poker"}
+    keys = [g["key"] for g in data["games"]]
+    assert data["state"]["mode"] == "idle" and keys[:4] == ["chess", "poker", "tictactoe", "connect4"] and len(keys) == 18
+    kinds = {g["key"]: g["kind"] for g in data["games"]}
+    assert kinds["chess"] == "board" and kinds["arcade_snake"] == "arcade" and data["quick"] and data["max_stake"] > 0
     # شطرنج حریف تصادفی کنترل زمانی ۵+۳ دارد و برچسبش در متن راست‌به‌چپ برعکس نمی‌شود
     assert {g["key"]: g.get("note") for g in data["games"]}["chess"] == "\u200e۵+۳"
     status, data = post(client, "duel/search", a, game="poker", stake=None)
@@ -108,3 +111,31 @@ def test_duel_through_the_mini_app(client, make_user):
     c = make_user()
     assert post(client, "duel/cancel", c, duel_id=duel.pk)[1]["error"] == "not_your_duel"
     assert post(client, "duel/offer", a, duel_id=duel.pk, amount="x")[1]["error"] == "bad_stake"
+
+
+def test_arcade_duel_and_chat_between_the_two_players(client, make_user):
+    a, b, outsider = make_user(500), make_user(500), make_user(500)
+    post(client, "duel/search", a, game="arcade_snake", stake=None)
+    status, data = post(client, "duel/search", b, game="arcade_snake", stake=None)
+    duel_id = data["state"]["duel_id"]
+    assert data["state"]["mode"] == "negotiating" and data["state"]["chat"] == []
+    # گفت‌وگو برای توافق روی مبلغ
+    status, data = post(client, "duel/chat", b, duel_id=duel_id, text="  سلام، ۷۵ سکه؟  ")
+    assert status == 200 and data["state"]["chat"][-1]["text"] == "سلام، ۷۵ سکه؟" and data["state"]["chat"][-1]["mine"]
+    seen = post(client, "duel/state", a)[1]["state"]["chat"]
+    assert seen[-1]["text"] == "سلام، ۷۵ سکه؟" and not seen[-1]["mine"] and seen[-1]["name"] == b.display_name
+    assert post(client, "duel/chat", a, duel_id=duel_id, text="بیا t.me/scam")[1]["error"] == "chat_no_links"
+    assert post(client, "duel/chat", a, duel_id=duel_id, text="   ")[1]["error"] == "chat_empty"
+    assert post(client, "duel/chat", outsider, duel_id=duel_id, text="سلام")[1]["error"] == "not_your_duel"
+    assert post(client, "duel/chat", b, duel_id=duel_id, text="دوباره")[1]["error"] == "chat_too_fast"
+    # مبلغ دلخواه (نه فقط دکمه‌های آماده) و شروع با توافق
+    post(client, "duel/offer", b, duel_id=duel_id, amount=75)
+    status, data = post(client, "duel/accept", a, duel_id=duel_id)
+    state = data["state"]
+    assert state["mode"] == "playing" and state["url"].startswith("/arcade/?tgWebAppStartParam=") and state["chat"]
+    assert state["game"]["kind"] == "arcade" and "تلاش" in state["game"]["note"]
+    duel = Duel.objects.get()
+    assert duel.stake == 75 and duel.match.pot == 150 and duel.match.token in state["url"]
+    # همان لینک صفحه‌ی بازی آرکید را با توکن مسابقه باز می‌کند
+    page = client.get(state["url"]).content.decode()
+    assert "shell.js" in page and duel.match.token in page

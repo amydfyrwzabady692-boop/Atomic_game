@@ -174,6 +174,47 @@ main { padding: 6px 14px calc(var(--safe-bottom) + 90px); max-width: 640px; marg
 .tile .icon.chess img { width: 46px; height: 46px; }
 
 /* ---------------------------------------------------------------- حریف */
+/* حریف تصادفی: دو بخش جمع‌وجور (نوبتی و آرکید)، مبلغ دلخواه و گفت‌وگو */
+.duel-kind { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 12px 2px 6px; }
+.duel-kind b { font-size: 13.5px; }
+.duel-kind small { color: var(--muted); font-size: 11.5px; text-align: left; }
+.duel-board { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.duel-game {
+  display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 8px; align-items: center;
+  padding: 10px 12px; border: 1px solid var(--stroke); border-radius: 14px; background: var(--panel); color: var(--ink);
+  font: inherit; text-align: right; cursor: pointer;
+}
+.duel-game .duel-emoji { grid-row: span 2; font-size: 26px; line-height: 1; }
+.duel-game b { font-size: 14px; }
+.duel-game small { color: var(--muted); font-size: 11.5px; direction: rtl; unicode-bidi: plaintext; }
+.duel-game.on, .duel-tile.on { border-color: var(--accent); background: rgba(110, 231, 255, .16); box-shadow: 0 0 0 1px rgba(110, 231, 255, .35) inset; }
+.duel-arcade { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.duel-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 2px 7px;
+  border: 1px solid var(--stroke); border-radius: 12px; background: var(--panel); color: var(--ink); font: inherit; cursor: pointer;
+}
+.duel-tile .icon { display: grid; place-items: center; width: 44px; height: 44px; overflow: hidden; border-radius: 11px; font-size: 26px; }
+.duel-tile .icon canvas { width: 44px !important; height: 44px !important; display: block; }
+.duel-tile b { font-size: 10.5px; font-weight: 800; line-height: 1.3; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.duel-pick { margin: 10px 2px 0; color: #dff8ff; }
+.custom-stake { display: flex; gap: 8px; margin-top: 8px; }
+.custom-stake input {
+  flex: 1 1 auto; min-width: 0; padding: 10px 12px; border: 1px solid var(--stroke); border-radius: 12px;
+  background: rgba(255, 255, 255, .06); color: var(--ink); font: inherit; direction: rtl;
+}
+.custom-stake .btn { flex: none; padding: 10px 14px; }
+.chat { margin-top: 12px; padding: 10px; border: 1px solid var(--stroke); border-radius: 14px; background: rgba(9, 11, 28, .45); }
+.chat:empty { display: none; }
+.chat-title { display: block; margin-bottom: 6px; font-size: 13px; }
+.chat-log { display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto; padding: 2px; }
+.chat-msg { align-self: flex-start; max-width: 85%; padding: 6px 10px; border-radius: 12px 12px 12px 4px; background: rgba(255, 255, 255, .08); font-size: 13.5px; line-height: 1.6; word-break: break-word; }
+.chat-msg small { display: block; color: var(--accent); font-size: 11px; font-weight: 800; }
+.chat-msg.mine { align-self: flex-end; border-radius: 12px 12px 4px 12px; background: rgba(52, 211, 153, .2); }
+.chat-quick { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0 2px; scrollbar-width: none; }
+.chat-quick .chip { flex: none; padding: 5px 10px; font-size: 12.5px; }
+.chat-input { display: flex; gap: 6px; margin-top: 6px; }
+.chat-input input { flex: 1 1 auto; min-width: 0; padding: 9px 12px; border: 1px solid var(--stroke); border-radius: 12px; background: rgba(255, 255, 255, .06); color: var(--ink); font: inherit; }
+.chat-input .btn { flex: none; padding: 9px 14px; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip {
   padding: 9px 13px;

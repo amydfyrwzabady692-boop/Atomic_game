@@ -70,10 +70,18 @@
 
     <div id="duel-idle" class="hidden">
       <h2>۱. بازی</h2>
-      <div class="chips" id="duel-games"></div>
+      <div class="duel-kind"><b>♟ نوبتی و کارتی</b><small>رودررو با یک حریف واقعی</small></div>
+      <div class="duel-board" id="duel-board-games"></div>
+      <div class="duel-kind"><b>🕹 رکوردی (آرکید)</b><small>همان بازی برای هر دو؛ امتیاز بیشتر برنده</small></div>
+      <div class="duel-arcade" id="duel-arcade-games"></div>
+      <p class="duel-pick small" id="duel-pick"></p>
       <h2>۲. سر چند سکه؟</h2>
       <div class="chips" id="duel-stakes"></div>
-      <p class="muted small">با «فرقی نمی‌کند» بعد از پیدا شدن حریف روی مقدار توافق می‌کنید. بدون سکه = بدون امتیاز.</p>
+      <div class="custom-stake">
+        <input id="duel-custom" type="number" inputmode="numeric" min="0" step="1" placeholder="مبلغ دلخواه (سکه)">
+        <button class="btn line" id="duel-custom-set" type="button">ثبت مبلغ</button>
+      </div>
+      <p class="muted small">با «فرقی نمی‌کند» بعد از پیدا شدن حریف روی مبلغ توافق می‌کنید و با هم پیام می‌دهید. تا شروع بازی هیچ سکه‌ای کم نمی‌شود.</p>
       <button class="btn go wide" id="duel-search" type="button">🔎 جستجوی حریف</button>
     </div>
 
@@ -91,17 +99,23 @@
         <div class="vs-mark">VS</div>
         <div><b id="duel-opponent"></b><small id="duel-opponent-level"></small><span class="offer" id="duel-theirs"></span></div>
       </div>
-      <p class="muted small">وقتی دو پیشنهاد یکی شد بازی شروع می‌شود · <span id="duel-timer"></span></p>
+      <p class="muted small">وقتی دو پیشنهاد یکی شد بازی شروع می‌شود — <span id="duel-timer"></span></p>
       <button class="btn go wide hidden" id="duel-accept" type="button"></button>
       <h2>پیشنهاد تو</h2>
       <div class="chips" id="duel-offers"></div>
-      <button class="btn ghost" id="duel-leave" type="button">انصراف</button>
+      <div class="custom-stake">
+        <input id="duel-offer-custom" type="number" inputmode="numeric" min="0" step="1" placeholder="مبلغ دلخواه (سکه)">
+        <button class="btn line" id="duel-offer-send" type="button">پیشنهاد بده</button>
+      </div>
+      <div class="chat" id="duel-chat-negotiating"></div>
+      <button class="btn ghost" id="duel-leave" type="button">❌ انصراف (هنوز سکه‌ای کم نشده)</button>
     </div>
 
     <div id="duel-playing" class="card center hidden">
       <h3>🎮 بازی شروع شد!</h3>
       <p id="duel-playing-info" class="muted"></p>
       <button class="btn go wide" id="duel-open" type="button">ورود به صفحه‌ی بازی</button>
+      <div class="chat" id="duel-chat-playing"></div>
     </div>
   </section>
 

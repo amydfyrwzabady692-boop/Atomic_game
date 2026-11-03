@@ -41,8 +41,15 @@ def stake_label(stake: int | None) -> str:
 
 
 def games_keyboard() -> InlineKeyboardMarkup:
-    buttons = [ui.button(f"{g.emoji} {g.title_fa}", f"du:g:{g.key}", style=ui.PRIMARY) for g in duels.available_games()]
-    return InlineKeyboardMarkup(ui.rows(buttons, 2))
+    """اول چهار بازی نوبتی، بعد عنوان بخش آرکید و بازی‌های رکوردی (همان ترتیب مینی‌اپ)."""
+    games = duels.available_games()
+    board = [ui.button(f"{g.emoji} {g.title_fa}", f"du:g:{g.key}", style=ui.PRIMARY) for g in games if not g.is_arcade]
+    arcade = [ui.button(f"{g.emoji} {g.title_fa}", f"du:g:{g.key}", style=ui.SUCCESS) for g in games if g.is_arcade]
+    rows = ui.rows(board, 2)
+    if arcade:
+        rows.append([ui.button(texts.DUEL_ARCADE_HEADER_BTN, "du:i")])
+        rows += ui.rows(arcade, 2)
+    return InlineKeyboardMarkup(rows)
 
 
 def stakes_keyboard(game_type: str) -> InlineKeyboardMarkup:
@@ -91,6 +98,8 @@ def duel_view(duel: Duel, side: str, prizes: dict | None = None) -> tuple[str, I
     if duel.status == Duel.Status.PLAYING:
         stake = duel.stake or 0
         line = texts.DUEL_STAKE_LINE.format(stake=fa_num(stake), prize=fa_num(stake * 2)) if stake else texts.DUEL_FREE_LINE
+        if duels.is_arcade(duel.game_type):
+            line += texts.DUEL_ARCADE_RULE.format(minutes=fa_num(duels.ARCADE_MINUTES), attempts=fa_num(duels.ARCADE_ATTEMPTS))
         text = texts.DUEL_STARTED.format(game=game, name=name, stake_line=line)
         keyboard = None
         if render.arcade_ready() and duel.match is not None:

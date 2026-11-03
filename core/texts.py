@@ -1299,6 +1299,12 @@ DUEL_FOUND = (
 DUEL_NO_OFFER = "هنوز پیشنهاد نداده"
 DUEL_ACCEPT_BTN = "✅ قبول {amount}"
 DUEL_LEAVE_BTN = "❌ انصراف"
+DUEL_ARCADE_HEADER_BTN = "🕹 رکوردی (آرکید) 👇"
+DUEL_ARCADE_NOTE = (
+    "🕹 در دوئل آرکید هر دو نفر همان بازی را با همان شرایط بازی می‌کنید: {minutes} دقیقه وقت و {attempts} تلاش. "
+    "بهترین امتیاز هر نفر حساب می‌شود و امتیاز بیشتر برنده است."
+)
+DUEL_ARCADE_RULE = "\n🕹 {minutes} دقیقه وقت و {attempts} تلاش؛ امتیاز بیشتر برنده است."
 DUEL_STARTED = (
     "🎮 <b>بازی شروع شد!</b>\n" + DIVIDER + "\n"
     "بازی: {game}\nحریف: <b>{name}</b>\n{stake_line}\n\n"

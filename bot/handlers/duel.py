@@ -51,6 +51,9 @@ async def duel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user
         await answer(query)
         await _edit(query, *await _home(user))
         return
+    if action == "i":  # ردیف عنوان بازی‌های آرکید
+        await answer(query, texts.DUEL_ARCADE_NOTE.format(minutes=fa_num(duels.ARCADE_MINUTES), attempts=fa_num(duels.ARCADE_ATTEMPTS)), alert=True)
+        return
     if not render.arcade_ready():
         await answer(query, texts.DUEL_UNAVAILABLE, alert=True)
         return

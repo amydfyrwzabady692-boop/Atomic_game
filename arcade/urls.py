@@ -33,6 +33,7 @@ urlpatterns = [
     path("api/duel/offer", hub_views.duel_offer, name="duel_offer"),
     path("api/duel/accept", hub_views.duel_accept, name="duel_accept"),
     path("api/duel/cancel", hub_views.duel_cancel, name="duel_cancel"),
+    path("api/duel/chat", hub_views.duel_chat, name="duel_chat"),
     # شطرنج تمرینی با کامپیوتر
     path("chess/", board_views.practice_page, name="chess_practice"),
     path("api/practice/chess/new", board_views.practice_new, name="chess_practice_new"),

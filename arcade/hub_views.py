@@ -26,6 +26,7 @@ from shop import services as shop
 from wallet import economy
 from wallet.models import CoinTransaction, TxType
 
+from . import chat
 from .views import authenticated, error, rate_limited
 
 
@@ -48,6 +49,14 @@ def _ok(**data) -> JsonResponse:
 def _game(key: str) -> dict:
     info = get_info(key)
     data = {"key": key, "title": info.title_fa if info else key, "emoji": info.emoji if info else "🎮"}
+    data["kind"] = "arcade" if duels.is_arcade(key) else "board"
+    if duels.is_arcade(key):
+        # دوئل آرکید: همان بازی با همان شرایط برای هر دو، چند دقیقه و چند تلاش؛ بهترین امتیاز برنده
+        from core.texts import fa_num
+
+        # «·» کنار رقم فارسی شبیه «۰» دیده می‌شد؛ «و» خواناست
+        data["note"] = f"{fa_num(duels.ARCADE_MINUTES)} دقیقه و {fa_num(duels.ARCADE_ATTEMPTS)} تلاش"
+        data["icon"] = key[len("arcade_") :]
     if key == "chess":
         # کنترل زمانی شطرنج حریف تصادفی (مثل ۵+۳)؛ نشانه‌ی چپ‌به‌راست جلوی برعکس شدن «+» را می‌گیرد
         from core.texts import fa_num
@@ -259,6 +268,8 @@ def _duel_dict(duel: Duel, user) -> dict:
         "opponent": {"name": them.display_name, "level": them.level},
         "stake": duel.stake,
     }
+    if duel.status in (Duel.Status.NEGOTIATING, Duel.Status.PLAYING):
+        data["chat"] = chat.recent(chat.duel_room(duel.pk), user.pk)  # گفت‌وگوی دو حریف
     if duel.status == Duel.Status.NEGOTIATING:
         data.update(
             mode="negotiating",
@@ -267,7 +278,12 @@ def _duel_dict(duel: Duel, user) -> dict:
             seconds_left=max(0, int((duel.expires_at - timezone.now()).total_seconds())),
         )
     elif duel.status == Duel.Status.PLAYING:
-        data.update(mode="playing", url=reverse("arcade:board", args=[duel.match.token]) if duel.match else "")
+        url = ""
+        if duel.match and duels.is_arcade(duel.game_type):
+            url = reverse("arcade:app") + "?tgWebAppStartParam=" + duel.match.token  # صفحه‌ی همان بازی آرکید
+        elif duel.match:
+            url = reverse("arcade:board", args=[duel.match.token])
+        data.update(mode="playing", url=url)
     elif duel.status == Duel.Status.FINISHED:
         rows = {uid: (prize, rank or 0) for uid, prize, rank in MatchPlayer.objects.filter(match_id=duel.match_id).values_list("user_id", "prize", "rank")}
         mine, theirs = rows.get(user.pk, (0, 0)), rows.get(them.pk, (0, 0))
@@ -312,6 +328,8 @@ def _duel_response(user) -> JsonResponse:
         state=duel_state_for(user),
         games=[_game(g.key) for g in duels.available_games()],
         stakes=list(duels.STAKE_CHOICES),
+        max_stake=duels.MAX_STAKE,
+        quick=list(chat.QUICK),
         coins=TelegramUser.objects.filter(pk=user.pk).values_list("coins", flat=True).first(),
     )
 
@@ -388,3 +406,19 @@ def duel_accept(request, user, payload):
 @authenticated
 def duel_cancel(request, user, payload):
     return _duel_call(user, lambda: duels.cancel(user, _duel_id(payload)))
+
+
+@csrf_exempt
+@require_POST
+@rate_limited("duel_chat", 30, 10)
+@authenticated
+def duel_chat(request, user, payload):
+    """پیام کوتاه به حریف (موقع توافق روی سکه و حین بازی)."""
+    duel = duels.active_duel(user.pk)
+    if duel is None or duel.pk != payload.get("duel_id"):
+        return error("not_your_duel", 409)
+    try:
+        chat.post(chat.duel_room(duel.pk), user, payload.get("text"))
+    except chat.ChatError as exc:
+        return error(exc.code, 409)
+    return _duel_response(user)
