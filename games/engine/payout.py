@@ -62,3 +62,22 @@ def compute_payouts(pot: int, split: list[int], groups: list[list[int]]) -> dict
 
     payouts[players[0]] += pot - sum(payouts.values())
     return payouts
+
+
+def proportional_payouts(pot: int, chips: dict[int, int]) -> dict[int, int]:
+    """میز نقدی: هر کس به نسبت ژتون‌هایش از pot می‌برد. سهم‌ها رو به پایین گرد می‌شوند و هر سکه‌ی
+    باقیمانده (کمتر از تعداد بازیکن‌ها) به ترتیب به بزرگ‌ترین ژتون‌ها می‌رسد؛ جمع پرداختی همیشه برابر pot است."""
+    counts = {uid: max(0, int(c)) for uid, c in chips.items()}
+    payouts = dict.fromkeys(counts, 0)
+    if not counts or pot <= 0:
+        return payouts
+    total = sum(counts.values())
+    if total <= 0:  # هیچ ژتونی نمانده (نباید پیش بیاید): مساوی
+        counts = dict.fromkeys(counts, 1)
+        total = len(counts)
+    for uid, c in counts.items():
+        payouts[uid] = pot * c // total
+    order = sorted(counts, key=lambda uid: (-counts[uid], uid))
+    for i in range(pot - sum(payouts.values())):
+        payouts[order[i % len(order)]] += 1
+    return payouts

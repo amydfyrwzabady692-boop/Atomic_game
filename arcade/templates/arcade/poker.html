@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#0b3d2e">
+<meta name="theme-color" content="#07130f">
 <title>پوکر</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E🃏%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="{% static 'arcade/board/chess.css' %}?v={{ version }}">
@@ -15,43 +15,51 @@
   <header id="table-head">
     <div class="title">
       <b>🃏 پوکر</b>
-      <span class="chip" id="hand-chip"></span>
+      <span class="chip kind" id="kind-chip">میز نقدی</span>
     </div>
     <div class="tools">
-      <button class="icon-btn" id="ranks-btn" type="button" aria-label="رتبه‌ی دست‌ها" title="رتبه‌ی دست‌ها">🏅</button>
-      <button class="icon-btn" id="history-btn" type="button" aria-label="تاریخچه‌ی دست" title="تاریخچه‌ی دست">📜</button>
+      <button class="icon-btn" id="chat-btn" type="button" aria-label="گفت‌وگوی میز" title="گفت‌وگوی میز">💬<i class="badge hidden" id="chat-badge"></i></button>
+      <button class="icon-btn" id="history-btn" type="button" aria-label="تاریخچه و رتبه‌ی دست‌ها" title="تاریخچه و رتبه‌ی دست‌ها">📜</button>
       <button class="icon-btn" id="sound-btn" type="button" aria-label="صدا" title="صدا">🔊</button>
-      <button class="icon-btn" id="resign-btn" type="button" aria-label="ترک میز" title="ترک میز">🚪</button>
+      <button class="icon-btn" id="resign-btn" type="button" aria-label="بلند شدن از میز" title="بلند شدن از میز">🚪</button>
     </div>
   </header>
 
   <section id="table" aria-label="میز پوکر">
+    <div id="rail"></div>
     <div id="felt">
-      <div class="felt-logo">WINZON</div>
+      <div class="felt-line"></div>
+      <div class="felt-logo"><b>WINZON</b><small>POKER</small></div>
       <div id="center">
-        <div id="pot"><i class="chip-ico"></i><span>پات</span> <b id="pot-amount">۰</b></div>
+        <div id="pot"><span class="pot-stack"><i class="chip-ico"></i><i class="chip-ico blue"></i><i class="chip-ico gold"></i></span><span>پات</span> <b id="pot-amount">۰</b><small id="pot-coins"></small></div>
         <div id="side-pots" class="hidden"></div>
         <div id="board-cards"></div>
         <div id="street"></div>
-        <span class="chip blinds" id="blind-chip"></span>
+        <div class="table-info"><span id="hand-chip"></span><span id="blind-chip"></span></div>
       </div>
     </div>
     <div id="layer"></div>
+    <div id="bubbles" aria-live="polite"></div>
   </section>
 
   <section id="me" class="hidden">
     <div id="my-cards"></div>
     <div class="hero">
-      <div class="ava" id="my-ava"><span id="my-initial"></span></div>
-      <div class="meta"><b id="my-name"></b><small id="my-chips"></small></div>
+      <div class="ava" id="my-ava"><svg class="ring" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18.5" pathLength="100"></circle></svg><span id="my-initial"></span></div>
+      <div class="meta"><b id="my-name"></b><small><i class="chip-ico"></i><span id="my-chips"></span><em id="my-coins"></em></small></div>
       <span class="hero-bet hidden" id="my-bet"></span>
     </div>
     <div id="my-hand"></div>
   </section>
 
   <div id="log" aria-live="polite"></div>
-
   <p id="status" aria-live="polite"></p>
+
+  <!-- بعد از بلند شدن از میز: ژتون‌ها و سهم سکه سر جایش می‌ماند -->
+  <section id="left-box" class="hidden">
+    <b>🚪 از میز بلند شدی</b>
+    <p id="left-text"></p>
+  </section>
 
   <!-- حرکت از پیش، مثل اپ‌های پوکر: وقتی نوبت برسد خودکار انجام می‌شود -->
   <section id="pre" class="hidden" aria-label="حرکت از پیش">
@@ -62,20 +70,31 @@
   </section>
 
   <section id="controls" class="hidden">
-    <div id="sizing" class="hidden">
-      <div class="presets" id="presets"></div>
-      <div class="slider">
-        <button class="icon-btn" id="minus-btn" type="button" aria-label="کمتر">−</button>
-        <input id="raise-range" type="range" min="0" max="0" step="1" aria-label="مقدار رِیز">
-        <button class="icon-btn" id="plus-btn" type="button" aria-label="بیشتر">+</button>
+    <!-- اندازه‌ی شرط: مبلغ دقیق (تایپ یا + و −)، چند انتخاب آماده و نوار لغزنده -->
+    <div id="sizing" class="hidden" aria-label="مبلغ شرط">
+      <div class="amount-row">
+        <button class="step-btn" id="minus-btn" type="button" aria-label="کمتر">−</button>
+        <label class="amount">
+          <small id="amount-label">رِیز تا</small>
+          <input id="raise-input" type="text" inputmode="numeric" autocomplete="off" aria-label="مبلغ شرط">
+          <em id="amount-coins"></em>
+        </label>
+        <button class="step-btn" id="plus-btn" type="button" aria-label="بیشتر">+</button>
       </div>
+      <div class="presets" id="presets"></div>
+      <input id="raise-range" type="range" min="0" max="0" step="1" aria-label="مقدار شرط">
+      <div class="range-ends"><span id="range-min"></span><span id="range-max"></span></div>
     </div>
     <div class="row main">
       <button id="fold-btn" class="btn danger" type="button">فولد</button>
       <button id="check-btn" class="btn go" type="button">چک</button>
       <button id="call-btn" class="btn go" type="button">کال</button>
-      <button id="raise-btn" class="btn violet" type="button">رِیز</button>
+      <button id="raise-btn" class="btn gold" type="button">رِیز</button>
       <button id="allin-btn" class="btn gold" type="button">آل‌این</button>
+    </div>
+    <div class="row confirm hidden" id="confirm-row">
+      <button id="sizing-cancel" class="btn violet" type="button">برگشت</button>
+      <button id="sizing-ok" class="btn gold" type="button">تأیید</button>
     </div>
   </section>
 </main>
@@ -91,26 +110,55 @@
     <h1 id="result-title"></h1>
     <p class="muted" id="result-reason"></p>
     <ol id="result-list"></ol>
+    <p class="mine-prize hidden" id="result-mine"></p>
     <button id="result-close" class="btn go" type="button">برگشت</button>
     <button id="result-view" class="btn violet" type="button">دیدن میز</button>
   </div>
 </section>
-<section id="history" class="overlay sheet hidden" role="dialog" aria-label="تاریخچه‌ی دست">
+
+<section id="history" class="overlay sheet hidden" role="dialog" aria-label="تاریخچه و رتبه‌ی دست‌ها">
   <div class="card">
-    <h2>📜 تاریخچه</h2>
-    <div id="history-body"></div>
+    <div class="tabs" role="tablist">
+      <button type="button" class="tab on" data-tab="history-body" role="tab">📜 تاریخچه</button>
+      <button type="button" class="tab" data-tab="ranks-body" role="tab">🏅 رتبه‌ی دست‌ها</button>
+    </div>
+    <div id="history-body" class="tab-body"></div>
+    <div id="ranks-body" class="tab-body hidden">
+      <p class="muted">از قوی‌ترین به ضعیف‌ترین؛ بهترین ۵ کارت از ۷ کارت (۲ کارت خودت و ۵ کارت وسط) حساب می‌شود.</p>
+      <ol id="ranks-list"></ol>
+    </div>
     <button class="btn violet sheet-close" type="button">بستن</button>
   </div>
 </section>
 
-<section id="ranks" class="overlay sheet hidden" role="dialog" aria-label="رتبه‌ی دست‌ها">
+<section id="chat" class="overlay sheet hidden" role="dialog" aria-label="گفت‌وگوی میز">
   <div class="card">
-    <h2>🏅 رتبه‌ی دست‌ها</h2>
-    <p class="muted">از قوی‌ترین به ضعیف‌ترین؛ بهترین ۵ کارت از ۷ کارت (۲ کارت خودت و ۵ کارت وسط) حساب می‌شود.</p>
-    <ol id="ranks-list"></ol>
+    <h2>💬 گفت‌وگوی میز</h2>
+    <div id="chat-list" aria-live="polite"></div>
+    <p class="muted chat-empty" id="chat-empty">هنوز پیامی نیست؛ یک سلام بفرست 👋</p>
+    <div id="chat-quick"></div>
+    <form id="chat-form" autocomplete="off">
+      <input id="chat-input" type="text" maxlength="120" placeholder="پیام کوتاه… (لینک و آیدی ممنوع)" aria-label="پیام">
+      <button id="chat-send" class="btn go" type="submit">ارسال</button>
+    </form>
+    <p class="muted chat-note hidden" id="chat-note">فقط بازیکن‌های میز می‌نویسند؛ تو تماشاچی هستی.</p>
     <button class="btn violet sheet-close" type="button">بستن</button>
   </div>
 </section>
+
+<section id="leave" class="overlay sheet hidden" role="dialog" aria-label="بلند شدن از میز">
+  <div class="card">
+    <h2>🚪 بلند شدن از میز</h2>
+    <div class="leave-worth">
+      <span>ژتون‌هایت</span><b id="leave-chips"></b>
+      <span id="leave-coins-label">ارزش آن</span><b id="leave-coins" class="gold"></b>
+    </div>
+    <p id="leave-note"></p>
+    <button id="leave-yes" class="btn danger" type="button">بلند می‌شوم</button>
+    <button class="btn violet sheet-close" type="button">می‌مانم</button>
+  </div>
+</section>
+
 <div id="confetti" aria-hidden="true"></div>
 
 <div id="toast" class="hidden" role="alert"></div>

@@ -235,7 +235,7 @@ def _start(duel_id: int) -> None:
     duel = Duel.objects.select_related("player_a", "player_b").get(pk=duel_id)
     stake = duel.offer_a or 0
     arcade = is_arcade(duel.game_type)
-    options = {"duel": duel.pk}
+    options = services.match_options(duel.game_type, {"duel": duel.pk})
     if arcade:
         options.update(window_minutes=ARCADE_MINUTES, attempts=ARCADE_ATTEMPTS)
     try:

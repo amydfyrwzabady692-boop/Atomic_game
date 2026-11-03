@@ -17,7 +17,7 @@ from wallet.models import TxType
 from wallet.services import InsufficientFunds, apply_transaction
 
 from ..models import ACTIVE_STATUSES, Match, MatchPlayer, MatchStatus
-from .payout import Standing, compute_payouts, rank_standings
+from .payout import Standing, compute_payouts, proportional_payouts, rank_standings
 
 
 class MatchError(Exception):
@@ -71,8 +71,16 @@ def create_match(
         join_deadline=timezone.now() + timedelta(seconds=join_seconds),
         min_players=min_players,
         max_players=max_players,
-        options=options or {},
+        options=match_options(game_type, options),
     )
+
+
+def match_options(game_type: str, options: dict | None = None) -> dict:
+    """گزینه‌های مسابقه؛ پوکر میز نقدی است و جایزه به اندازه‌ی ژتون هر نفر پخش می‌شود (نه بر اساس رتبه)."""
+    options = dict(options or {})
+    if game_type == "poker":
+        options.setdefault("payout", "chips")
+    return options
 
 
 def join_match(match_id: int, user: TelegramUser) -> Match:
@@ -164,7 +172,11 @@ def finish_match(match_id: int, standings: list[Standing]) -> MatchResult | None
         # جایزه فقط به کسانی می‌رسد که امتیاز گرفته‌اند؛ امتیاز صفر یعنی باخت و سهمی ندارد.
         # اگر هیچ‌کس امتیاز نگرفت (یا بازی دونفره مساوی شد)، pot مساوی بین همه تقسیم می‌شود.
         paid_groups = [g for g in groups if g[0].score > 0] or groups
-        shares = compute_payouts(match.pot, match.prize_split, [[s.user_id for s in g] for g in paid_groups])
+        if (match.options or {}).get("payout") == "chips":
+            # میز نقدی پوکر: سهم هر کس به اندازه‌ی ژتون‌هایش (نه بر اساس رتبه)
+            shares = proportional_payouts(match.pot, {s.user_id: s.score for s in full})
+        else:
+            shares = compute_payouts(match.pot, match.prize_split, [[s.user_id for s in g] for g in paid_groups])
         payouts = {uid: shares.get(uid, 0) for uid in entries}
         # بازی رایگان (ورودی صفر) فقط برای سرگرمی است: سکه، XP، برد، آمار و دستاورد ندارد
         free = match.entry_fee == 0

@@ -1,8 +1,12 @@
 /* میز پوکر مینی‌اپ. همه‌ی قوانین و کارت‌ها در سرور است؛ سرور فقط کارت‌های خود بازیکن را می‌فرستد.
-   این فایل میز را مثل اپ‌های پوکر موبایل می‌کشد: صندلی‌ها دور میز بیضی، ستون ژتون شرط جلوی هر نفر، دکمه‌ی
-   دیلر، حلقه‌ی زمان نوبت، کارت‌هایی که پخش می‌شوند و برمی‌گردند، پات‌های جانبی، و در آل‌این باز شدن
-   کارت‌های وسط یکی‌یکی. وقتی نوبت حریف است می‌شود حرکت از پیش (چک/فولد، کال، کال هر مبلغ) انتخاب کرد که
-   به محض رسیدن نوبت انجام می‌شود. تاریخچه‌ی دست و جدول رتبه‌ی دست‌ها هم از دکمه‌های بالا باز می‌شود. */
+   این فایل میز را مثل اپ‌های پوکر موبایل می‌کشد: صندلی‌ها با جای ثابت دور میز (بسته به تعداد نفرات)، ستون
+   ژتون شرط جلوی هر نفر، دکمه‌ی دیلر، حلقه‌ی زمان نوبت، کارت‌هایی که پخش می‌شوند و برمی‌گردند، پات‌های جانبی و
+   در آل‌این باز شدن کارت‌های وسط یکی‌یکی.
+
+   میز نقدی است: هر ژتون سهم ثابتی از سکه‌های میز است، پس کنار ژتون‌ها ارزش سکه‌ای‌شان هم نشان داده می‌شود و
+   «بلند شدن از میز» ژتون‌ها را (بعد از فولد دست جاری) نگه می‌دارد. مبلغ شرط را می‌شود دقیق تایپ کرد، با + و −
+   یا نوار لغزنده تنظیم کرد یا از انتخاب‌های آماده (½ پات، پات، …) برداشت؛ شرط با یک «تأیید» فرستاده می‌شود.
+   گفت‌وگوی میز همراه همان پرسش «چیزی عوض شده؟» می‌آید و پیام هر نفر بالای صندلی‌اش هم دیده می‌شود. */
 (function () {
   "use strict";
 
@@ -14,7 +18,10 @@
 
   var SUITS = { s: "♠", h: "♥", d: "♦", c: "♣" };
   var STREETS = { preflop: "قبل از فلاپ", flop: "فلاپ", turn: "ترن", river: "ریور" };
-  var ACTIONS = { fold: "فولد", check: "چک", call: "کال", raise: "رِیز", allin: "آل‌این", leave: "ترک میز", sb: "بلایند کوچک", bb: "بلایند بزرگ" };
+  var ACTIONS = {
+    fold: "فولد", check: "چک", call: "کال", raise: "رِیز", bet: "شرط", allin: "آل‌این", leave: "بلند شد",
+    sb: "بلایند کوچک", bb: "بلایند بزرگ",
+  };
   var ERRORS = {
     not_your_turn: "نوبت تو نیست.",
     illegal_move: "این حرکت الان مجاز نیست.",
@@ -27,10 +34,24 @@
     rate_limited: "کمی آهسته‌تر! چند ثانیه صبر کن.",
     banned: "حساب تو مسدود شده است.",
     network: "اتصال به سرور برقرار نشد.",
+    chat_empty: "پیام خالی است.",
+    chat_no_links: "فرستادن لینک و آیدی در گفت‌وگو ممنوع است.",
+    chat_too_fast: "کمی آهسته‌تر بنویس 🙂",
   };
-  var REASONS = { chips: "یک نفر همه‌ی ژتون‌ها را برد", limit: "دست‌ها تمام شد", left: "بقیه میز را ترک کردند" };
+  var REASONS = { chips: "یک نفر همه‌ی ژتون‌ها را برد", limit: "دست‌ها تمام شد", left: "بقیه از میز بلند شدند" };
   var AVATARS = [["#5662e0", "#262b78"], ["#f0617f", "#8f1d3a"], ["#2fbf8f", "#0f5c45"], ["#f5a524", "#8a5200"],
     ["#a78bfa", "#4c2a99"], ["#38bdf8", "#0b5d8a"], ["#f472b6", "#86205a"], ["#94a3b8", "#334155"]];
+  // جای صندلی‌ها روی میز (درصد از چپ و بالا) به ترتیب نوبت از خود بیننده (پایین) در جهت عقربه‌های ساعت
+  var LAYOUTS = {
+    2: [[50, 100], [50, 9]],
+    3: [[50, 100], [12, 30], [88, 30]],
+    4: [[50, 100], [11, 50], [50, 9], [89, 50]],
+    5: [[50, 100], [11, 66], [19, 16], [81, 16], [89, 66]],
+    6: [[50, 100], [11, 73], [11, 29], [50, 9], [89, 29], [89, 73]],
+    7: [[50, 100], [11, 77], [10, 44], [27, 11], [73, 11], [90, 44], [89, 77]],
+    8: [[50, 100], [11, 79], [10, 50], [18, 18], [50, 8], [82, 18], [90, 50], [89, 79]],
+  };
+  var TABLE_QUICK = ["👏 دست خوبی بود", "🤔 بلوف بود؟", "😅 شانس آوردی", "🙏 دست بعد"];
   // جدول رتبه‌ی دست‌ها: نام (همان نام‌های سرور)، نمونه، توضیح
   var RANKINGS = [
     ["رویال فلاش", ["As", "Ks", "Qs", "Js", "Ts"], "۱۰ تا آس، پشت سر هم و هم‌خال"],
@@ -56,10 +77,14 @@
   var leftBase = 0;
   var resultShown = false;
   var raiseTo = 0;
+  var sizingOpen = false;
   var pollTimer = null;
   var lastSaid = "";
   var lowWarned = false;
   var historyOpen = false;
+  var ring = { node: null, end: 0 };
+  var prizeTries = 0;
+  var talk = { last: 0, open: false, unread: 0, can: false, quick: [], loaded: false, sending: false };
 
   function $(id) { return document.getElementById(id); }
   function el(tag, cls, text) {
@@ -72,7 +97,12 @@
     return String(value).replace(/\d/g, function (d) { return "۰۱۲۳۴۵۶۷۸۹"[d]; });
   }
   function money(value) { return fa(Number(value || 0).toLocaleString("en-US")).replace(/,/g, "٬"); }
-  function plus(value) { return "\u200e+" + money(value); }
+  function plus(value) { return "‎+" + money(value); }
+  function digits(text) {
+    var latin = String(text || "").replace(/[۰-۹]/g, function (d) { return "۰۱۲۳۴۵۶۷۸۹".indexOf(d); })
+      .replace(/[٠-٩]/g, function (d) { return "٠١٢٣٤٥٦٧٨٩".indexOf(d); }).replace(/\D/g, "");
+    return latin ? Number(latin) : 0;
+  }
   function now() { return window.performance && performance.now ? performance.now() : Date.now(); }
   function sound(kind) { if (window.SFX) window.SFX.play(kind); }
   function haptic(kind) {
@@ -87,9 +117,10 @@
     return ERRORS[code] || "مشکلی پیش آمد. دوباره امتحان کن.";
   }
   var toastTimer = null;
-  function toast(text) {
+  function toast(text, info) {
     var box = $("toast");
     box.textContent = text;
+    box.classList.toggle("info", !!info);
     box.classList.remove("hidden");
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { box.classList.add("hidden"); }, 2600);
@@ -123,6 +154,14 @@
     var me = mine();
     return !!me && !stage && !state.over && !state.cancelled && state.phase === "betting" && state.to_act === me.seat;
   }
+  // ارزش سکه‌ای ژتون در میز نقدی: کل سکه‌های میز تقسیم بر همه‌ی ژتون‌ها (میز رایگان و مسابقه‌ی قدیمی: صفر)
+  function rate() {
+    if (!state || !state.cash || state.payout !== "chips" || !state.pot_coins) return 0;
+    return state.pot_coins / (state.seats.length * state.start_chips);
+  }
+  function worth(chips) { return Math.floor(chips * rate() + 1e-9); }
+  function coinsText(chips) { return rate() ? "≈ " + money(worth(chips)) + " سکه" : ""; }
+  function opening() { return state.current_bet === 0; } // بعد از فلاپ، کسی هنوز شرط نبسته
 
   // ------------------------------------------------------------------ کارت و ژتون
   function cardEl(code, extra) {
@@ -164,7 +203,6 @@
     var colors = ["", "blue", "black", "gold"];
     var top = Math.max(0, colors.indexOf(chipColor(amount)));
     var stack = el("span", "stack");
-    stack.style.setProperty("--n", count);
     for (var i = 0; i < count; i++) {
       var chip = el("i", "chip-ico " + colors[Math.max(0, top - (count - 1 - i))]);
       chip.style.setProperty("--i", i);
@@ -172,29 +210,122 @@
     }
     return stack;
   }
+  function ringSvg() {
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "ring");
+    svg.setAttribute("viewBox", "0 0 40 40");
+    svg.setAttribute("aria-hidden", "true");
+    var circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    circle.setAttribute("cx", "20");
+    circle.setAttribute("cy", "20");
+    circle.setAttribute("r", "18.5");
+    circle.setAttribute("pathLength", "100");
+    svg.appendChild(circle);
+    return svg;
+  }
 
   // ------------------------------------------------------------------ هندسه‌ی میز
-  // صندلی‌ها روی بیضی، ساعت‌گرد از پایین (جای خود بیننده)؛ زاویه با محور x و y رو به پایین
   function relative(seat) {
     var n = state.seats.length;
     var base = mine() ? state.you : 0;
     return (seat - base + n) % n;
   }
-  function angle(seat) { return Math.PI / 2 + (relative(seat) * 2 * Math.PI) / state.seats.length; }
-  function point(seat, rx, ry, shift) {
-    var a = angle(seat) + (shift || 0);
-    return { x: 50 + rx * Math.cos(a), y: 50 + ry * Math.sin(a) };
+  var tableHeight = 0;
+  function spot(seat) {
+    var layout = LAYOUTS[state.seats.length] || LAYOUTS[8];
+    var p = layout[relative(seat)] || [50, 50];
+    // تماشاچی: صندلی پایین هم روی میز کشیده می‌شود
+    if (relative(seat) === 0 && !mine()) return { x: 50, y: 88 };
+    // صندلی بالای میز در صفحه‌های کوتاه پایین‌تر می‌نشیند تا زیر سربرگ نرود (نیمه‌ی بالای صندلی حدود ۳۶ پیکسل است)
+    var top = tableHeight ? (36 / tableHeight) * 100 : 0;
+    return { x: p[0], y: Math.max(p[1], top) };
   }
   function place(node, p) {
     node.style.left = p.x.toFixed(2) + "%";
     node.style.top = p.y.toFixed(2) + "%";
   }
-  function betPoint(seat) { return isMe(seat) ? { x: 50, y: 74 } : point(seat, 24, 24); }
+  // ژتون شرط و دکمه‌ی دیلر جایی می‌نشینند که روی کارت‌ها، پات، صندلی‌ها و کارت‌های خودت نیفتند: چند جای
+  // پیشنهادی (از صندلی رو به وسط میز) به ترتیب امتحان می‌شود و اولین جای خالی انتخاب می‌شود.
+  var betSpots = {};
+  function toward(p, f) { return { x: p.x + (50 - p.x) * f, y: p.y + (50 - p.y) * f }; }
+  function betPoint(seat) { return betSpots[seat] || (isMe(seat) ? { x: 50, y: 77 } : toward(spot(seat), 0.45)); }
+  function relRect(node, origin, pad) {
+    var r = node.getBoundingClientRect();
+    pad = pad || 0;
+    return { l: r.left - origin.left - pad, t: r.top - origin.top - pad, r: r.right - origin.left + pad, b: r.bottom - origin.top + pad };
+  }
+  function covered(box, list) {
+    var area = 0;
+    for (var i = 0; i < list.length; i++) {
+      var o = list[i];
+      var w = Math.min(box.r, o.r) - Math.max(box.l, o.l);
+      var h = Math.min(box.b, o.b) - Math.max(box.t, o.t);
+      if (w > 0 && h > 0) area += w * h;
+    }
+    return area;
+  }
+  function outside(box, W, H) {
+    var w = box.r - box.l;
+    var h = box.b - box.t;
+    var inW = Math.max(0, Math.min(box.r, W * 0.95) - Math.max(box.l, W * 0.05));
+    var inH = Math.max(0, Math.min(box.b, H * 0.95) - Math.max(box.t, H * 0.05));
+    return w * h - inW * inH;
+  }
+  function candidates(seat, W, H, near) {
+    var cx = W / 2;
+    var cy = H / 2;
+    if (isMe(seat)) {
+      return near ? [[W * 0.27, H * 0.8], [W * 0.73, H * 0.8], [W * 0.3, H * 0.74]]
+        : [[cx, H * 0.77], [cx, H * 0.73], [cx - 64, H * 0.79], [cx + 64, H * 0.79]];
+    }
+    var p = spot(seat);
+    var sx = (p.x / 100) * W;
+    var sy = (p.y / 100) * H;
+    var dx = cx - sx;
+    var dy = cy - sy;
+    var len = Math.sqrt(dx * dx + dy * dy) || 1;
+    var side = sx < cx ? 1 : sx > cx ? -1 : 0;
+    var out = [];
+    (near ? [46, 56, 66] : [62, 74, 86, 98, 112, 126]).forEach(function (d) { out.push([sx + (dx / len) * d, sy - 8 + (dy / len) * d]); });
+    if (side) (near ? [62, 74] : [76, 90]).forEach(function (d) { out.push([sx + side * d, sy - (near ? 26 : 14)]); });
+    else (near ? [58, 70] : []).forEach(function (d) { out.push([sx + d, sy + 10]); });
+    return out;
+  }
+  function settle(items, blocked, W, H) {
+    items.forEach(function (item) {
+      var w = item.node.offsetWidth || 56;
+      var h = item.node.offsetHeight || 22;
+      item.w = w;
+      item.h = h;
+    });
+    items.forEach(function (item) {
+      var list = candidates(item.seat, W, H, item.near);
+      // اولین جای کاملاً خالی؛ اگر نبود (میز شلوغ و صفحه‌ی کوچک)، جایی که کمترین هم‌پوشانی را دارد
+      var pick = list[0];
+      var best = Infinity;
+      for (var i = 0; i < list.length; i++) {
+        var c = list[i];
+        var box = { l: c[0] - item.w / 2, t: c[1] - item.h / 2, r: c[0] + item.w / 2, b: c[1] + item.h / 2 };
+        var cost = covered(box, blocked) + outside(box, W, H) * 4;
+        if (cost < best) { best = cost; pick = c; }
+        if (cost === 0) break;
+      }
+      blocked.push({ l: pick[0] - item.w / 2 - 3, t: pick[1] - item.h / 2 - 3, r: pick[0] + item.w / 2 + 3, b: pick[1] + item.h / 2 + 3 });
+      var p = { x: (pick[0] / W) * 100, y: (pick[1] / H) * 100 };
+      if (!item.near) betSpots[item.seat] = p;
+      place(item.node, p);
+      item.node.style.visibility = "";
+    });
+  }
 
   // ------------------------------------------------------------------ رسم
   function drawLayer(previous) {
     var layer = $("layer");
     layer.textContent = "";
+    var table = $("table");
+    tableHeight = table.offsetHeight;
+    // میز شلوغ یا صفحه‌ی کوتاه: صندلی‌ها جمع‌وجورتر
+    table.classList.toggle("dense", state.seats.length >= 7 || tableHeight < 360);
     var win = winning();
     var fresh = !previous || previous.hand !== state.hand;
     var winners = {};
@@ -203,26 +334,35 @@
     var said = state.last_action;
     var saidKey = said ? state.hand + ":" + state.version + ":" + said.seat + ":" + said.kind : "";
     var newSaid = said && saidKey !== lastSaid && said.kind !== "sb" && said.kind !== "bb";
+    var seatNodes = [];
+    var items = [];
     state.seats.forEach(function (s, index) {
       if (s.bet) {
         var bet = el("div", "bet");
         bet.appendChild(chipStack(s.bet));
         bet.appendChild(el("span", "", money(s.bet)));
-        place(bet, betPoint(s.seat));
+        bet.style.visibility = "hidden";
         layer.appendChild(bet);
+        items.push({ seat: s.seat, node: bet, near: false });
       }
       if (s.dealer) {
         var button = el("div", "dealer-btn", "D");
-        place(button, isMe(s.seat) ? { x: 26, y: 74 } : point(s.seat, 33, 33, 0.42));
+        button.style.visibility = "hidden";
         layer.appendChild(button);
+        items.push({ seat: s.seat, node: button, near: true });
       }
       if (isMe(s.seat)) return; // خود بیننده پایین میز جدا کشیده می‌شود
+      var p = spot(s.seat);
       var seat = el("div", "seat");
       if (state.to_act === s.seat && !state.over && state.phase === "betting") seat.classList.add("turn");
       if (s.folded && s.in_hand) seat.classList.add("folded");
       if (s.left) seat.classList.add("left");
       if (!s.in_hand && !state.over && !s.left) seat.classList.add("out");
       if (winners[s.seat]) seat.classList.add("winner");
+      if (p.x > 50) seat.classList.add("in-right");
+      if (p.x < 30) seat.classList.add("side-l");
+      if (p.x > 70) seat.classList.add("side-r");
+      if (p.y < 30) seat.classList.add("top");
       var revealed = s.cards.length && s.cards[0];
       if (revealed) seat.classList.add("revealed");
       // کارت‌هایی که همین الان رو شدند برمی‌گردند (نمایش دست‌ها در شودان یا آل‌این)
@@ -232,6 +372,7 @@
       var colors = AVATARS[index % AVATARS.length];
       avatar.style.setProperty("--ava1", colors[0]);
       avatar.style.setProperty("--ava2", colors[1]);
+      avatar.appendChild(ringSvg());
       avatar.appendChild(el("span", "", initial(s.seat)));
       seat.appendChild(avatar);
       if (s.cards.length) {
@@ -246,23 +387,50 @@
       }
       var plate = el("div", "plate");
       plate.appendChild(el("b", "", badge(s.seat) + name(s.seat)));
-      plate.appendChild(el("small", "", money(s.chips)));
+      var chips = el("small");
+      chips.appendChild(el("i", "chip-ico"));
+      chips.appendChild(el("span", "", money(s.chips)));
+      plate.appendChild(chips);
       seat.appendChild(plate);
       var hand = hands[String(s.seat)];
-      var tag = s.left ? ["ترک کرد", ""] : hand ? [hand, winners[s.seat] ? "hand best" : "hand"]
-        : s.allin ? ["آل‌این", "allin"] : s.folded && s.in_hand ? ["فولد", "fold"] : null;
+      var tag = s.left ? ["بلند شد", "away"] : hand ? [hand, winners[s.seat] ? "hand best" : "hand"]
+        : s.allin ? ["آل‌این", "allin"] : s.folded && s.in_hand ? ["فولد", "fold"]
+        : !s.in_hand && !state.over ? ["بدون ژتون", "fold"] : null;
       if (tag) seat.appendChild(el("span", "tag " + tag[1], tag[0]));
       if (winners[s.seat]) seat.appendChild(el("span", "win-badge", plus(winners[s.seat])));
-      else if (newSaid && said.seat === s.seat) seat.appendChild(el("span", "said " + said.kind, sayText(said)));
-      var spot = point(s.seat, 40, 41);
-      if (spot.y < 30) seat.classList.add("top");
-      place(seat, spot);
+      else if (newSaid && said.seat === s.seat && !(tag && /fold|leave|allin/.test(said.kind))) {
+        // حرکت تازه چند ثانیه روی پلاک خود صندلی (جای نام) نشان داده می‌شود، مثل اپ‌های پوکر؛ روی صندلی
+        // دیگری نمی‌افتد. فولد، بلند شدن و آل‌این همین حالا با برچسب زیر صندلی دیده می‌شوند.
+        plate.appendChild(el("span", "said k-" + saidKind(said), sayText(said)));
+      }
+      place(seat, p);
       layer.appendChild(seat);
+      seatNodes.push(seat);
     });
+    // یک بار اندازه‌ها خوانده می‌شود (صندلی‌ها، وسط میز، کارت‌های خودت) و بعد ژتون‌ها و دکمه‌ی دیلر جا می‌گیرند
+    var origin = $("table").getBoundingClientRect();
+    if (items.length && origin.width) {
+      var blocked = [];
+      ["pot", "board-cards", "street", "side-pots"].forEach(function (id) {
+        var node = $(id);
+        if (node.offsetWidth && node.textContent !== "") blocked.push(relRect(node, origin, 3));
+      });
+      blocked.push(relRect($("board-cards"), origin, 4));
+      blocked.push(relRect(document.querySelector(".table-info"), origin, 2));
+      seatNodes.forEach(function (node) {
+        blocked.push(relRect(node, origin, 2));
+        var hole = node.querySelector(".hole");
+        if (hole) blocked.push(relRect(hole, origin, 2));
+      });
+      if (mine()) blocked.push(relRect($("my-cards"), origin, 4));
+      settle(items, blocked, origin.width, origin.height);
+    } else items.forEach(function (item) { item.node.style.visibility = ""; });
     if (newSaid) lastSaid = saidKey;
     return newSaid ? said : null;
   }
+  function saidKind(action) { return action.kind === "raise" && action.open ? "bet" : action.kind; }
   function sayText(action) {
+    if (action.kind === "raise" && action.open) return "شرط " + money(action.to);
     var text = ACTIONS[action.kind] || "";
     if (action.kind === "raise" || action.kind === "allin") return text + (action.to ? " " + money(action.to) : "");
     var paid = action.kind === "call" || action.kind === "sb" || action.kind === "bb";
@@ -296,6 +464,7 @@
         pot.classList.add("bump");
       }
     }
+    $("pot-coins").textContent = total && rate() ? "(" + coinsText(total) + ")" : "";
     var side = $("side-pots");
     var pots = state.pots || [];
     side.classList.toggle("hidden", pots.length < 2);
@@ -307,6 +476,7 @@
     $("street").textContent = state.over ? "" : STREETS[state.street] || "";
     $("hand-chip").textContent = "دست " + fa(state.hand) + " از " + fa(state.hand_limit);
     $("blind-chip").textContent = "بلایند " + money(state.sb) + "/" + money(state.bb);
+    $("kind-chip").textContent = state.cash ? "میز نقدی" : "مسابقه";
     return box.querySelectorAll(".deal").length;
   }
 
@@ -331,7 +501,7 @@
       if (fresh) card.style.animationDelay = (0.1 + i * 0.12).toFixed(2) + "s";
       box.appendChild(card);
     });
-    $("me").classList.toggle("folded", !!(me.folded && me.in_hand));
+    $("me").classList.toggle("folded", !!(me.folded && me.in_hand) || me.left);
     var hero = document.querySelector("#me .hero");
     hero.classList.toggle("turn", myTurn());
     var wonAmount = 0;
@@ -343,8 +513,9 @@
     $("my-ava").style.setProperty("--ava1", colors[0]);
     $("my-ava").style.setProperty("--ava2", colors[1]);
     $("my-initial").textContent = initial(me.seat);
-    $("my-name").textContent = badge(me.seat) + name(me.seat) + " (تو)";
-    $("my-chips").textContent = money(me.chips) + " ژتون";
+    $("my-name").textContent = badge(me.seat) + name(me.seat) + (me.left ? " (بلند شدی)" : " (تو)");
+    $("my-chips").textContent = money(me.chips);
+    $("my-coins").textContent = coinsText(me.chips);
     var bet = $("my-bet");
     bet.classList.toggle("hidden", !me.bet);
     bet.textContent = "";
@@ -354,7 +525,7 @@
     }
     Array.prototype.forEach.call(hero.querySelectorAll(".said, .win-badge"), function (n) { n.remove(); });
     if (wonAmount) hero.appendChild(el("span", "win-badge", plus(wonAmount)));
-    else if (said && said.seat === me.seat) hero.appendChild(el("span", "said " + said.kind, sayText(said)));
+    else if (said && said.seat === me.seat) hero.appendChild(el("span", "said k-" + saidKind(said), sayText(said)));
     var hand = myHandText();
     $("my-hand").textContent = hand ? "دست تو: " + hand : "";
   }
@@ -362,7 +533,7 @@
   function drawLog() {
     var box = $("log");
     box.textContent = "";
-    var entries = (state.log || []).filter(function (e) { return e.kind !== "sb" && e.kind !== "bb"; }).slice(-3);
+    var entries = (state.log || []).filter(function (e) { return e.kind !== "sb" && e.kind !== "bb"; }).slice(-2);
     entries.forEach(function (entry, i) {
       var span = el("span", i === entries.length - 1 ? "fresh" : "");
       span.appendChild(el("b", "", name(entry.seat)));
@@ -398,7 +569,7 @@
         chip.appendChild(el("i", "chip-ico " + (i % 2 ? "blue" : "")));
         place(chip, { x: 50 + (i - 1.5) * 3, y: 40 });
         layer.appendChild(chip);
-        animateTo(chip, isMe(w.seat) ? { x: 50, y: 98 } : point(w.seat, 40, 41), 120 + i * 80);
+        animateTo(chip, isMe(w.seat) ? { x: 50, y: 98 } : spot(w.seat), 120 + i * 80);
       }
     });
   }
@@ -460,15 +631,25 @@
 
   // ------------------------------------------------------------------ زمان و وضعیت
   function msLeft() { return Math.max(0, leftBase - (now() - receivedAt)); }
+  // حلقه‌ی زمان با یک transition خطی خالی می‌شود (نه با رنگ کردن هر فریم)؛ فقط اگر زمان سرور فرق کرد دوباره تنظیم می‌شود
+  function armRing() {
+    var circle = document.querySelector(".seat.turn .ring circle, .hero.turn .ring circle");
+    if (!circle || state.phase !== "betting" || state.over) { ring.node = null; return; }
+    var total = Math.max(1, state.move_seconds * 1000);
+    var left = Math.min(total, msLeft());
+    var end = now() + left;
+    if (ring.node === circle && Math.abs(ring.end - end) < 700) return;
+    ring.node = circle;
+    ring.end = end;
+    circle.style.transition = "none";
+    circle.style.strokeDashoffset = (100 * (1 - left / total)).toFixed(2);
+    circle.style.animation = "ring-color " + total + "ms linear " + (left - total).toFixed(0) + "ms both";
+    void circle.getBoundingClientRect();
+    circle.style.transition = "stroke-dashoffset " + left.toFixed(0) + "ms linear";
+    circle.style.strokeDashoffset = "100";
+  }
   function tick() {
     if (!state) return;
-    var turn = document.querySelector(".seat.turn > .ava") || document.querySelector(".hero.turn .ava");
-    if (turn && state.phase === "betting") {
-      var fraction = Math.min(1, msLeft() / (state.move_seconds * 1000));
-      turn.style.setProperty("--deg", (fraction * 360).toFixed(1) + "deg");
-      var ring = fraction > 0.5 ? "#34d399" : fraction > 0.2 ? "#ffc857" : "#ff5c7a";
-      turn.style.setProperty("--ring", ring);
-    }
     if (myTurn()) {
       if (msLeft() < 8000 && !lowWarned) {
         lowWarned = true;
@@ -483,6 +664,7 @@
     var text = "";
     var cls = "";
     var seconds = Math.ceil(msLeft() / 1000);
+    var me = mine();
     if (state.cancelled) { text = "این مسابقه لغو شده است."; cls = "alert"; }
     else if (state.over) text = resultTitle();
     else if (state.result && state.result.staging) { text = "🔥 آل‌این! کارت‌ها یکی‌یکی باز می‌شوند…"; cls = "warn"; }
@@ -494,7 +676,8 @@
       var my = isMe(state.to_act);
       text = (my ? "نوبت توست" : "نوبت " + name(state.to_act)) + " (" + fa(seconds) + " ثانیه)";
       cls = my ? (seconds <= 8 ? "warn" : "mine") : "";
-      if (!my && pre) text += " · " + preLabel(pre) + " آماده است";
+      if (!my && pre) text += " — " + preLabel(pre) + " آماده است";
+      else if (!my && me && !me.left && me.folded && me.in_hand) text += " — منتظر دست بعد";
     }
     if (box.textContent !== text) box.textContent = text;
     box.className = cls;
@@ -563,55 +746,123 @@
       options.splice(1, 0, ["۳ بلایند", clamp(state.bb * 3, legal.raise_min, legal.raise_max)]);
     }
     var seen = {};
-    return options.filter(function (pair) {
+    seen[legal.raise_max] = true; // آل‌این همیشه جدا و آخر می‌آید
+    options = options.filter(function (pair) {
       if (seen[pair[1]]) return false;
       seen[pair[1]] = true;
       return true;
     }).slice(0, 4);
+    options.push(["آل‌این", legal.raise_max, "max"]);
+    return options;
   }
-  function raiseLabel() { return "رِیز تا " + money(raiseTo); }
+  // متن دکمه فقط وقتی عوض شده دوباره ساخته می‌شود؛ وگرنه لمسی که همان لحظه روی دکمه است گم می‌شود
+  function setBtn(node, label, sub) {
+    var key = label + "|" + (sub || "");
+    if (node.dataset.key === key) return;
+    node.dataset.key = key;
+    node.textContent = "";
+    node.appendChild(el("span", "", label));
+    if (sub) node.appendChild(el("small", "", sub));
+  }
+  function confirmLabel(legal) {
+    if (raiseTo >= legal.raise_max) return "آل‌این " + money(legal.raise_max);
+    return (opening() ? "شرط " : "رِیز تا ") + money(raiseTo);
+  }
   function controls() {
     var legal = state.legal || {};
     var playing = myTurn();
     $("controls").classList.toggle("hidden", !playing);
-    if (!playing) return;
+    if (!playing) { sizingOpen = false; return; }
+    var me = mine();
+    var canRaise = !!legal.raise_min;
+    if (!canRaise) sizingOpen = false;
+    $("sizing").classList.toggle("hidden", !sizingOpen);
+    $("confirm-row").classList.toggle("hidden", !sizingOpen);
+    document.querySelector("#controls .row.main").classList.toggle("hidden", sizingOpen);
     $("check-btn").classList.toggle("hidden", !legal.check);
     $("call-btn").classList.toggle("hidden", !legal.call);
-    $("call-btn").textContent = "کال " + money(legal.call);
-    var canRaise = !!legal.raise_min;
-    $("sizing").classList.toggle("hidden", !canRaise);
+    setBtn($("call-btn"), "کال", money(legal.call) + (legal.call && legal.call >= me.chips ? " (آل‌این)" : ""));
     $("raise-btn").classList.toggle("hidden", !canRaise);
-    var allinIsCall = legal.allin && legal.allin === legal.call;
-    $("allin-btn").classList.toggle("hidden", !legal.allin || allinIsCall);
-    $("allin-btn").textContent = "آل‌این " + money(legal.allin);
-    if (canRaise) {
-      var range = $("raise-range");
-      range.min = legal.raise_min;
-      range.max = legal.raise_max;
-      range.step = Math.max(1, state.sb);
-      if (raiseTo < legal.raise_min || raiseTo > legal.raise_max) raiseTo = legal.raise_min;
-      range.value = raiseTo;
-      var box = $("presets");
-      box.textContent = "";
-      presets(legal).forEach(function (pair) {
-        var button = el("button", pair[1] === raiseTo ? "on" : "", pair[0]);
-        button.type = "button";
-        button.addEventListener("click", function () {
-          setRaise(pair[1]);
-          button.classList.add("on");
-          haptic("light");
-        });
-        box.appendChild(button);
+    setBtn($("raise-btn"), opening() ? "شرط…" : "رِیز…", "از " + money(legal.raise_min));
+    var allinOnly = !canRaise && legal.allin && legal.allin > legal.call;
+    $("allin-btn").classList.toggle("hidden", !allinOnly);
+    setBtn($("allin-btn"), "آل‌این", money(legal.allin));
+    if (sizingOpen) drawSizing(legal);
+  }
+  function drawSizing(legal) {
+    var range = $("raise-range");
+    range.min = legal.raise_min;
+    range.max = legal.raise_max;
+    range.step = 1;
+    if (raiseTo < legal.raise_min || raiseTo > legal.raise_max) raiseTo = legal.raise_min;
+    range.value = raiseTo;
+    $("range-min").textContent = money(legal.raise_min);
+    $("range-max").textContent = money(legal.raise_max);
+    $("amount-label").textContent = opening() ? "شرط" : "رِیز تا";
+    var box = $("presets");
+    box.textContent = "";
+    presets(legal).forEach(function (pair) {
+      var button = el("button", pair[2] || "", pair[0]);
+      button.type = "button";
+      button.dataset.value = pair[1];
+      button.addEventListener("click", function () {
+        setRaise(pair[1]);
+        haptic("light");
       });
-      $("raise-btn").textContent = raiseLabel();
-    }
+      box.appendChild(button);
+    });
+    showAmount(false);
+  }
+  function showAmount(writeInput) {
+    var legal = state.legal || {};
+    if (writeInput || document.activeElement !== $("raise-input")) $("raise-input").value = money(raiseTo);
+    $("raise-range").value = raiseTo;
+    $("amount-coins").textContent = coinsText(raiseTo);
+    setBtn($("sizing-ok"), confirmLabel(legal), "");
+    Array.prototype.forEach.call($("presets").children, function (button) {
+      button.classList.toggle("on", Number(button.dataset.value) === raiseTo);
+    });
   }
   function setRaise(value) {
     var legal = state.legal || {};
+    if (!legal.raise_min) return;
     raiseTo = clamp(Math.round(value), legal.raise_min, legal.raise_max);
-    $("raise-range").value = raiseTo;
-    $("raise-btn").textContent = raiseLabel();
-    Array.prototype.forEach.call($("presets").children, function (button) { button.classList.remove("on"); });
+    showAmount(true);
+  }
+  function openSizing() {
+    var legal = state.legal || {};
+    if (!myTurn() || !legal.raise_min) return;
+    sizingOpen = true;
+    if (raiseTo < legal.raise_min || raiseTo > legal.raise_max) raiseTo = legal.raise_min;
+    controls();
+    haptic("light");
+  }
+  function closeSizing() {
+    sizingOpen = false;
+    if (state) controls();
+  }
+  function confirmSizing() {
+    var legal = state.legal || {};
+    if (!myTurn() || !legal.raise_min) return;
+    var typed = digits($("raise-input").value);
+    if (typed !== raiseTo) {
+      // مبلغ تایپ‌شده بیرون از محدوده بی‌صدا فرستاده نمی‌شود: درستش می‌کنیم و یک بار دیگر تأیید می‌خواهیم
+      if (typed < legal.raise_min) {
+        setRaise(legal.raise_min);
+        toast("کمترین مبلغ " + money(legal.raise_min) + " است.");
+        return;
+      }
+      if (typed > legal.raise_max) {
+        setRaise(legal.raise_max);
+        toast("بیشترین مبلغ " + money(legal.raise_max) + " (آل‌این) است.");
+        return;
+      }
+      raiseTo = typed;
+    }
+    $("raise-input").blur();
+    sizingOpen = false;
+    if (raiseTo >= legal.raise_max) send("allin");
+    else send("raise", raiseTo);
   }
 
   // ------------------------------------------------------------------ تاریخچه و رتبه‌ی دست‌ها
@@ -690,20 +941,152 @@
       list.appendChild(item);
     });
   }
+  function showTab(id) {
+    Array.prototype.forEach.call(document.querySelectorAll("#history .tab"), function (tab) {
+      tab.classList.toggle("on", tab.dataset.tab === id);
+      $(tab.dataset.tab).classList.toggle("hidden", tab.dataset.tab !== id);
+    });
+    if (id === "ranks-body") drawRanks();
+  }
   function openSheet(id) {
-    if (id === "history") { historyOpen = true; drawHistory(); }
-    if (id === "ranks") drawRanks();
+    if (id === "history") { historyOpen = true; drawHistory(); drawRanks(); }
+    if (id === "chat") openChat();
+    if (id === "leave") drawLeave();
     $(id).classList.remove("hidden");
     haptic("light");
   }
   function closeSheet(sheet) {
     sheet.classList.add("hidden");
     if (sheet.id === "history") historyOpen = false;
+    if (sheet.id === "chat") { talk.open = false; $("chat-input").blur(); }
+  }
+
+  // ------------------------------------------------------------------ گفت‌وگوی میز
+  function chatSeat(message) {
+    if (message.side && /^s\d+$/.test(message.side)) return Number(message.side.slice(1));
+    return null;
+  }
+  function addChat(list, quiet) {
+    if (!list || !list.length) return;
+    var box = $("chat-list");
+    var fresh = 0;
+    list.forEach(function (message) {
+      if (!message || message.id <= talk.last) return;
+      talk.last = message.id;
+      var item = el("div", "msg" + (message.mine ? " mine" : ""));
+      item.appendChild(el("b", "", message.name || ""));
+      item.appendChild(document.createTextNode(message.text));
+      box.appendChild(item);
+      if (quiet) return;
+      bubble(message);
+      if (!message.mine) fresh += 1;
+    });
+    while (box.children.length > 60) box.removeChild(box.firstChild);
+    $("chat-empty").classList.toggle("hidden", box.children.length > 0);
+    if (talk.open) box.scrollTop = box.scrollHeight;
+    else if (fresh) talk.unread += fresh;
+    if (fresh) { sound("move"); haptic("light"); }
+    drawBadge();
+  }
+  function drawBadge() {
+    var badgeNode = $("chat-badge");
+    badgeNode.textContent = talk.unread > 9 ? "۹+" : fa(talk.unread);
+    badgeNode.classList.toggle("hidden", !talk.unread);
+  }
+  function bubble(message) {
+    var seat = chatSeat(message);
+    if (seat === null || !state || seat >= state.seats.length) return;
+    var node = el("div", "bubble" + (message.mine ? " mine" : ""), message.text);
+    var p = isMe(seat) ? { x: 50, y: 92 } : spot(seat);
+    if (!isMe(seat) && p.y < 30) node.classList.add("below");
+    var box = $("bubbles");
+    Array.prototype.forEach.call(box.querySelectorAll('[data-seat="' + seat + '"]'), function (old) { old.remove(); });
+    node.dataset.seat = seat;
+    place(node, p);
+    box.appendChild(node);
+    // حباب صندلی‌های کنار میز از صفحه بیرون نزند
+    var width = box.offsetWidth || 1;
+    var half = (node.offsetWidth / 2 / width) * 100 + 1;
+    place(node, { x: clamp(p.x, half, 100 - half), y: p.y });
+    setTimeout(function () { node.remove(); }, 4300);
+  }
+  function drawQuick() {
+    var box = $("chat-quick");
+    box.textContent = "";
+    talk.quick.concat(TABLE_QUICK).forEach(function (text) {
+      var button = el("button", "", text);
+      button.type = "button";
+      button.addEventListener("click", function () { say(text); });
+      box.appendChild(button);
+    });
+  }
+  function drawChatAccess() {
+    $("chat-form").classList.toggle("hidden", !talk.can);
+    $("chat-quick").classList.toggle("hidden", !talk.can);
+    $("chat-note").classList.toggle("hidden", talk.can);
+  }
+  function openChat() {
+    talk.open = true;
+    talk.unread = 0;
+    drawBadge();
+    drawChatAccess();
+    var box = $("chat-list");
+    setTimeout(function () { box.scrollTop = box.scrollHeight; }, 30);
+  }
+  function say(text) {
+    text = String(text || "").trim();
+    if (!text || talk.sending) return;
+    talk.sending = true;
+    $("chat-send").disabled = true;
+    api("board/chat", { text: text, chat_after: talk.last }).then(function (response) {
+      talk.sending = false;
+      $("chat-send").disabled = false;
+      if (!response.ok) {
+        toast(errorText(response.error));
+        haptic("error");
+        return;
+      }
+      $("chat-input").value = "";
+      addChat(response.chat);
+    });
+  }
+
+  // ------------------------------------------------------------------ بلند شدن از میز
+  function drawLeave() {
+    var me = mine();
+    if (!me) return;
+    $("leave-chips").textContent = money(me.chips) + " ژتون";
+    var value = rate() ? money(worth(me.chips)) + " سکه" : "";
+    $("leave-coins").textContent = value;
+    $("leave-coins").classList.toggle("hidden", !value);
+    $("leave-coins-label").classList.toggle("hidden", !value);
+    var inHand = state.phase === "betting" && me.in_hand && !me.folded;
+    var note = inHand ? "دستی که الان در آن هستی فولد می‌شود و ژتون‌هایی که وسط گذاشته‌ای برنمی‌گردد. " : "";
+    if (!state.cash) note += "در این میز ترک کردن یعنی از دست دادن همه‌ی ژتون‌ها.";
+    else if (!rate()) note += "این میز رایگان است؛ ژتون‌هایت سر جایش می‌ماند.";
+    else note += "ژتون‌هایت سر جایش می‌ماند و آخر میز به همین اندازه سکه به کیف پولت واریز می‌شود.";
+    $("leave-note").textContent = note;
+  }
+  function drawLeft() {
+    var me = mine();
+    var gone = !!me && me.left && !state.over;
+    $("left-box").classList.toggle("hidden", !gone);
+    if (!gone) return;
+    var box = $("left-text");
+    box.textContent = "";
+    box.appendChild(document.createTextNode("ژتون‌هایت: "));
+    box.appendChild(el("b", "", money(me.chips)));
+    if (state.cash && rate()) {
+      box.appendChild(document.createTextNode(" — سهمت: "));
+      box.appendChild(el("b", "", money(worth(me.chips)) + " سکه"));
+      box.appendChild(document.createTextNode(" که آخر میز به کیف پولت واریز می‌شود."));
+    }
+    box.appendChild(document.createTextNode(" می‌توانی میز را تماشا کنی و در گفت‌وگو بنویسی."));
   }
 
   // ------------------------------------------------------------------ نتیجه
   function ranking() {
-    return state.seats.map(function (s) { return { seat: s.seat, chips: s.left ? 0 : s.chips }; })
+    return state.seats.map(function (s) { return { seat: s.seat, chips: s.left && !state.cash ? 0 : s.chips }; })
       .sort(function (a, b) { return b.chips - a.chips; });
   }
   function resultTitle() {
@@ -726,23 +1109,45 @@
     }
     setTimeout(function () { box.textContent = ""; }, 4200);
   }
-  function showResult() {
-    if (resultShown) return;
-    resultShown = true;
+  function prizeOf(seat) {
+    var prizes = state.prizes || null;
+    if (prizes && prizes["s" + seat] !== undefined) return { coins: prizes["s" + seat], exact: true };
+    if (!rate()) return null;
+    var s = state.seats[seat];
+    return { coins: worth(s.left && !state.cash ? 0 : s.chips), exact: false };
+  }
+  function drawResultList() {
     var list = $("result-list");
     list.textContent = "";
     var medals = ["🥇", "🥈", "🥉"];
     ranking().forEach(function (row, i) {
       var item = el("li", isMe(row.seat) ? "me" : "");
       item.appendChild(el("span", "", (medals[i] || fa(i + 1) + ".") + " " + name(row.seat)));
-      item.appendChild(el("small", "", money(row.chips) + " ژتون"));
+      var side = el("small");
+      var prize = prizeOf(row.seat);
+      if (prize && (prize.coins || state.payout === "chips")) side.appendChild(el("b", "", (prize.exact ? "" : "≈ ") + money(prize.coins) + " سکه"));
+      side.appendChild(document.createTextNode(money(row.chips) + " ژتون"));
+      item.appendChild(side);
       list.appendChild(item);
     });
+    var me = mine();
+    var mineBox = $("result-mine");
+    var own = me ? prizeOf(me.seat) : null;
+    mineBox.classList.toggle("hidden", !own || !own.coins);
+    if (own && own.coins) {
+      mineBox.textContent = own.exact ? "💰 " + money(own.coins) + " سکه به کیف پولت واریز شد" : "💰 سهم تو: حدود " + money(own.coins) + " سکه (در حال واریز…)";
+    }
+  }
+  function showResult() {
+    if (resultShown) { drawResultList(); return; }
+    resultShown = true;
+    drawResultList();
     var top = ranking()[0];
     var won = !!top && isMe(top.seat) && top.chips > 0;
     $("result-icon").textContent = won ? "🏆" : "🃏";
-    $("result-title").textContent = resultTitle();
-    $("result-reason").textContent = (REASONS[state.over.reason] || "") + " — جایزه‌ی سکه بر اساس رتبه‌ی ژتون در گروه اعلام می‌شود.";
+    $("result-title").textContent = resultTitle().replace(/^🏆 /, ""); // جام بزرگ بالای همین عنوان است
+    $("result-reason").textContent = (REASONS[state.over.reason] || "") +
+      (state.payout === "chips" ? " — هر کس به اندازه‌ی ژتون‌هایش سکه می‌برد." : " — جایزه‌ی سکه بر اساس رتبه‌ی ژتون در گروه اعلام می‌شود.");
     setTimeout(function () {
       $("result").classList.remove("hidden");
       if (won) confetti();
@@ -750,13 +1155,25 @@
     sound(won ? "win" : "draw");
     haptic("success");
   }
+  // بعد از پایان بازی، ربات چند ثانیه بعد سکه‌ها را پرداخت می‌کند؛ آن موقع مبلغ دقیق را می‌گیریم
+  var prizeTimer = null;
+  function fetchPrizes() {
+    if (!state || !state.over || state.prizes || state.payout !== "chips" || prizeTries >= 8 || prizeTimer) return;
+    prizeTries += 1;
+    prizeTimer = setTimeout(function () {
+      api("board/state", { chat_after: talk.last }).then(function (response) {
+        prizeTimer = null;
+        if (response.ok) apply(response);
+      });
+    }, 2500);
+  }
 
   // ------------------------------------------------------------------ دریافت وضعیت
   function react(previous, said, dealt) {
     if (!previous) return;
     if (said) {
       var kind = said.kind;
-      sound(kind === "fold" || kind === "leave" ? "fold" : kind === "check" ? "move" : kind === "allin" ? "chips" : "chip");
+      sound(kind === "fold" || kind === "leave" ? "fold" : kind === "check" ? "check" : kind === "allin" ? "chips" : "chip");
     }
     if (dealt) sound("deal");
     if (resultAppears(previous)) {
@@ -768,21 +1185,23 @@
     if (myTurn() && !wasMyTurn) { sound("turn"); haptic("medium"); }
   }
   function render(previous) {
+    var dealt = drawBoard(previous); // اول وسط میز، تا جای خالی‌اش برای ژتون‌ها درست اندازه گرفته شود
     var said = drawLayer(previous);
-    var dealt = drawBoard(previous);
     drawMe(previous, said);
     drawLog();
     if (previous) flyBets(previous);
     if (resultAppears(previous)) flyWinnings();
     controls();
     preBar();
+    drawLeft();
     tick();
+    armRing();
     react(previous, said, dealt || (previous && previous.hand !== state.hand));
     var me = mine();
     $("resign-btn").classList.toggle("hidden", !me);
     $("resign-btn").disabled = !me || me.left || !!state.over || !!state.cancelled;
     if (historyOpen) drawHistory();
-    if (state.over) showResult();
+    if (state.over) { showResult(); fetchPrizes(); }
   }
   function apply(response) {
     if (!response.ok) {
@@ -791,9 +1210,19 @@
       return false;
     }
     receivedAt = now();
+    if (response.can_chat !== undefined) {
+      talk.can = !!response.can_chat;
+      if (response.quick && !talk.quick.length) { talk.quick = response.quick; drawQuick(); }
+      drawChatAccess();
+    }
+    if (response.chat) {
+      addChat(response.chat, !talk.loaded); // پیام‌های قبل از باز شدن صفحه حباب و شمارنده ندارند
+      talk.loaded = true;
+    } else if (response.changed !== false) talk.loaded = true;
     if (response.changed === false) {
       leftBase = response.left_ms !== undefined ? response.left_ms : response.seconds_left * 1000;
       tick();
+      armRing();
       return true;
     }
     var previous = state;
@@ -803,7 +1232,10 @@
     if (stage && (stage.hand !== real.hand || real.phase !== "pause")) stopStage();
     if (!stage && shouldStage(before, real)) startStage(before);
     state = stage ? stagedView() : real;
-    if (!previous || previous.to_act !== state.to_act || previous.street !== state.street || previous.hand !== state.hand) raiseTo = 0;
+    if (!previous || previous.to_act !== state.to_act || previous.street !== state.street || previous.hand !== state.hand) {
+      raiseTo = 0;
+      sizingOpen = false;
+    }
     // نوبت رسید و حرکت از پیش انتخاب شده بود: کمی بعد انجام می‌شود تا بازیکن ببیند
     if (pre && (pre.hand !== state.hand || pre.street !== state.street)) pre = null;
     var queued = pre && myTurn() ? pre : null;
@@ -814,14 +1246,14 @@
   }
   function pollDelay() {
     if (!state || state.over || state.cancelled) return 5000;
-    if (myTurn()) return 1600;
+    if (myTurn()) return talk.open ? 1200 : 1600;
     return 900;
   }
   function loop() {
     clearTimeout(pollTimer);
     pollTimer = setTimeout(function () {
       if (document.hidden || busy || !state) { loop(); return; }
-      api("board/state", { version: real.version }).then(function (response) {
+      api("board/state", { version: real.version, chat_after: talk.last }).then(function (response) {
         if (!busy && response.ok) apply(response);
         loop();
       });
@@ -832,7 +1264,7 @@
     busy = true;
     pre = null;
     haptic("light");
-    api("board/action", { action: kind, amount: amount || 0 }).then(function (response) {
+    api("board/action", { action: kind, amount: amount || 0, chat_after: talk.last }).then(function (response) {
       busy = false;
       if (!apply(response)) loop();
     });
@@ -842,6 +1274,7 @@
     document.querySelector("#loading .spinner").classList.add("hidden");
   }
 
+  // ------------------------------------------------------------------ دکمه‌ها
   $("fold-btn").addEventListener("click", function () {
     // مثل اپ‌های پوکر: وقتی چک مجانی است فولد با یک سؤال انجام می‌شود
     if (state && state.legal && state.legal.check) confirmThen("می‌توانی مجانی چک کنی. باز هم فولد می‌کنی؟", function () { send("fold"); });
@@ -849,11 +1282,31 @@
   });
   $("check-btn").addEventListener("click", function () { send("check"); });
   $("call-btn").addEventListener("click", function () { send("call"); });
-  $("allin-btn").addEventListener("click", function () { send("allin"); });
-  $("raise-btn").addEventListener("click", function () { send("raise", raiseTo); });
+  $("allin-btn").addEventListener("click", function () {
+    var legal = (state && state.legal) || {};
+    confirmThen("همه‌ی " + money(legal.allin) + " ژتونت وسط برود؟", function () { send("allin"); });
+  });
+  // دکمه‌های پنل شرط فوکوس فیلد مبلغ را نمی‌گیرند تا صفحه‌کلید گوشی بی‌دلیل بسته و باز نشود
+  Array.prototype.forEach.call(document.querySelectorAll("#sizing button, #confirm-row button"), function (button) {
+    button.addEventListener("mousedown", function (event) { event.preventDefault(); });
+  });
+  $("presets").addEventListener("mousedown", function (event) { event.preventDefault(); });
+  $("raise-btn").addEventListener("click", openSizing);
+  $("sizing-cancel").addEventListener("click", function () { closeSizing(); haptic("light"); });
+  $("sizing-ok").addEventListener("click", confirmSizing);
   $("raise-range").addEventListener("input", function () { setRaise(Number(this.value)); });
   $("minus-btn").addEventListener("click", function () { setRaise(raiseTo - state.bb); haptic("light"); });
   $("plus-btn").addEventListener("click", function () { setRaise(raiseTo + state.bb); haptic("light"); });
+  $("raise-input").addEventListener("focus", function () { this.select(); });
+  $("raise-input").addEventListener("input", function () {
+    // هنگام تایپ فقط رقم‌ها نگه داشته می‌شود؛ محدوده موقع تأیید یا ترک فیلد اعمال می‌شود
+    var legal = (state && state.legal) || {};
+    var typed = digits(this.value);
+    this.value = typed ? money(typed) : "";
+    if (typed >= (legal.raise_min || 0) && typed <= (legal.raise_max || 0)) { raiseTo = typed; showAmount(false); }
+  });
+  $("raise-input").addEventListener("change", function () { setRaise(digits(this.value) || raiseTo); });
+  $("raise-input").addEventListener("keydown", function (event) { if (event.key === "Enter") { event.preventDefault(); confirmSizing(); } });
   Array.prototype.forEach.call(document.querySelectorAll(".pre-btn"), function (button) {
     button.addEventListener("click", function () {
       if (!state || !preAllowed()) return;
@@ -865,11 +1318,18 @@
     });
   });
   $("history-btn").addEventListener("click", function () { if (state) openSheet("history"); });
-  $("ranks-btn").addEventListener("click", function () { if (state) openSheet("ranks"); });
+  $("chat-btn").addEventListener("click", function () { if (state) openSheet("chat"); });
+  Array.prototype.forEach.call(document.querySelectorAll("#history .tab"), function (tab) {
+    tab.addEventListener("click", function () { showTab(tab.dataset.tab); haptic("light"); });
+  });
   Array.prototype.forEach.call(document.querySelectorAll(".sheet"), function (sheet) {
     sheet.addEventListener("click", function (event) {
       if (event.target === sheet || event.target.classList.contains("sheet-close")) closeSheet(sheet);
     });
+  });
+  $("chat-form").addEventListener("submit", function (event) {
+    event.preventDefault();
+    say($("chat-input").value);
   });
   function soundButton() { $("sound-btn").textContent = window.SFX && window.SFX.isMuted() ? "🔇" : "🔊"; }
   $("sound-btn").addEventListener("click", function () {
@@ -879,7 +1339,14 @@
     if (!window.SFX.isMuted()) setTimeout(function () { sound("chip"); }, 60);
   });
   $("resign-btn").addEventListener("click", function () {
-    confirmThen("مطمئنی می‌خواهی میز را ترک کنی؟ ژتون‌هایت از بازی خارج می‌شود.", function () { send("resign"); });
+    var me = state && mine();
+    if (!me || me.left || state.over) return;
+    openSheet("leave");
+  });
+  $("leave-yes").addEventListener("click", function () {
+    closeSheet($("leave"));
+    sizingOpen = false;
+    send("resign");
   });
   $("result-close").addEventListener("click", function () {
     if (tg && tg.close) { try { tg.close(); return; } catch (e) { /* قدیمی */ } }
@@ -893,22 +1360,27 @@
     try {
       tg.ready();
       tg.expand();
-      if (tg.setHeaderColor) tg.setHeaderColor("#0b3d2e");
-      if (tg.setBackgroundColor) tg.setBackgroundColor("#0d1024");
+      if (tg.setHeaderColor) tg.setHeaderColor("#07130f");
+      if (tg.setBackgroundColor) tg.setBackgroundColor("#050a09");
       if (tg.disableVerticalSwipes) tg.disableVerticalSwipes();
     } catch (e) { /* نسخه‌های قدیمی */ }
   }
   if (!initData) { fail(errorText("auth_missing")); return; }
-  api("board/state", {}).then(function (response) {
+  api("board/state", { chat_after: 0 }).then(function (response) {
     if (!response.ok) { fail(errorText(response.error)); return; }
-    apply(response);
     $("loading").classList.add("hidden");
     $("game").classList.remove("hidden");
+    apply(response);
     loop();
-    setInterval(tick, 200);
+    setInterval(tick, 250);
+    var resizeTimer = null;
+    window.addEventListener("resize", function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function () { if (state) render(state); }, 150);
+    });
     document.addEventListener("visibilitychange", function () {
       if (document.hidden || busy || !state) return;
-      api("board/state", { version: real.version }).then(function (response) { if (!busy && response.ok) apply(response); });
+      api("board/state", { version: real.version, chat_after: talk.last }).then(function (response) { if (!busy && response.ok) apply(response); });
     });
   });
 })();

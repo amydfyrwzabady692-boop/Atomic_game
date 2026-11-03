@@ -64,6 +64,8 @@ def _game(key: str) -> dict:
 
         base, increment = live.TIME_CONTROLS[live.DEFAULT_CONTROL]
         data["note"] = f"\u200e{fa_num(base // 60)}+{fa_num(increment)}"
+    if key == "poker":
+        data["note"] = "میز نقدی"  # سکه به اندازه‌ی ژتون هر نفر، نه برنده‌ی همه
     return data
 
 

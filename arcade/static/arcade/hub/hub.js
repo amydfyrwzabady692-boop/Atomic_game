@@ -411,8 +411,10 @@
       });
       drawChat($("duel-chat-negotiating"), s);
     } else if (s.mode === "playing") {
+      // پوکر میز نقدی است: هر کس به اندازه‌ی ژتونش از کل سکه‌ها می‌برد، نه برنده‌ی همه
+      var pot = s.game.key === "poker" ? "هر کس به اندازه‌ی ژتونش از " + money(s.stake * 2) + " 🪙" : "جایزه " + money(s.stake * 2) + " 🪙";
       $("duel-playing-info").textContent = s.game.emoji + " " + s.game.title + " مقابل " + s.opponent.name + " — " +
-        (s.stake ? "ورودی " + money(s.stake) + " · جایزه " + money(s.stake * 2) + " 🪙" : "بدون سکه") +
+        (s.stake ? "ورودی " + money(s.stake) + " — " + pot : "بدون سکه") +
         (s.game.kind === "arcade" ? " — " + s.game.note + "؛ امتیاز بیشتر برنده" : "");
       drawChat($("duel-chat-playing"), s);
     }

@@ -1,6 +1,7 @@
 """گفت‌وگوی کوتاه بین بازیکن‌ها: حریف تصادفی (موقع توافق روی سکه و حین بازی) و میز بازی‌های زنده (پوکر و …).
 
-پیام‌ها در Redis می‌مانند (۴۰ پیام آخر هر «اتاق»، سه ساعت)، پس هیچ جدول تازه‌ای لازم نیست. فقط بازیکن‌های
+پیام‌ها در Redis می‌مانند (۴۰ پیام آخر هر «اتاق»، سه ساعت)، پس هیچ جدول تازه‌ای لازم نیست. صفحه‌ی میز پیام‌های
+تازه را همراه همان پرسش «چیزی عوض شده؟» می‌گیرد (``after``)، پس گفت‌وگو درخواست جدایی ندارد. فقط بازیکن‌های
 همان دوئل یا همان مسابقه می‌نویسند؛ پیام کوتاه است، لینک و @یوزرنیم ندارد (جلوی تبلیغ و کلاه‌برداری) و
 هر نفر حداکثر یک پیام در هر ثانیه و نیم و ۱۵ پیام در دقیقه می‌فرستد. متن در کلاینت با textContent نشان داده
 می‌شود، پس HTML اجرا نمی‌شود.
@@ -59,8 +60,9 @@ def _allowed(user_id: int) -> bool:
     return count <= 15
 
 
-def post(room: str, user, text) -> dict:
-    """پیام را به اتاق اضافه می‌کند و همان را برمی‌گرداند؛ در خطا ``ChatError``."""
+def post(room: str, user, text, side: str | None = None) -> dict:
+    """پیام را به اتاق اضافه می‌کند و همان را برمی‌گرداند؛ در خطا ``ChatError``.
+    ``side`` جای گوینده سر میز است (مثلاً ``s2`` در پوکر) تا حباب پیام بالای صندلی‌اش دیده شود."""
     text = clean(text)
     if not _allowed(user.pk):
         raise ChatError("chat_too_fast")
@@ -72,6 +74,8 @@ def post(room: str, user, text) -> dict:
         "text": text,
         "at": int(time.time()),
     }
+    if side:
+        message["side"] = side
     key = f"chat:log:{room}"
     pipe = redis.pipeline()
     pipe.rpush(key, json.dumps(message, ensure_ascii=False))
@@ -80,6 +84,14 @@ def post(room: str, user, text) -> dict:
     pipe.expire(f"chat:seq:{room}", TTL)
     pipe.execute()
     return message
+
+
+def last_id(room: str) -> int:
+    """شناسه‌ی آخرین پیام اتاق (صفر یعنی هنوز پیامی نیست)؛ برای جواب سریع «پیام تازه‌ای نیست»."""
+    try:
+        return int(get_sync_redis().get(f"chat:seq:{room}") or 0)
+    except Exception:
+        return 0
 
 
 def recent(room: str, viewer_id: int | None = None, after: int = 0) -> list[dict]:

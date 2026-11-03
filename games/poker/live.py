@@ -6,6 +6,11 @@
 ژتون‌ها را برد) تمام می‌شود و رتبه‌بندی نهایی بر اساس ژتون است؛ جایزه‌ی سکه را موتور مسابقه
 بر اساس همین رتبه‌ها تقسیم می‌کند.
 
+**میز نقدی (``cash``، پیش‌فرض بازی‌های تازه):** مثل میزهای نقدی واقعی، هر ژتون سهم ثابتی از جایزه‌ی کل است
+(ورودی هر نفر ÷ ``START_CHIPS``)، بلایندها ثابت‌اند و هر بازیکن هر وقت خواست میز را ترک می‌کند و ژتون‌هایش
+(بعد از فولد دست جاری) سر جایش می‌ماند؛ در پایان هر کس به اندازه‌ی ژتون‌هایش سکه می‌برد. بازی‌های قدیمیِ
+بدون ``cash`` همان مسابقه‌ی بلایند افزایشی با رتبه‌بندی‌اند (ترک میز = امتیاز صفر).
+
 قوانین (مثل میزهای واقعی نو-لیمیت): بلایند کوچک/بزرگ (هر ``BLIND_UP_HANDS`` دست دو برابر)، سوزاندن
 کارت، چهار دور شرط‌بندی، حداقل رِیز به اندازه‌ی آخرین رِیز کامل، پات‌های جانبی برای آل‌این و تقسیم پات در
 تساوی (ژتون فرد به اولین برنده بعد از دیلر). آل‌اینِ کمتر از یک رِیز کامل شرط‌بندی را دوباره باز نمی‌کند:
@@ -37,7 +42,10 @@ LOG_SIZE = 48  # حرکت‌های دست فعلی که نگه داشته می�
 
 
 # ------------------------------------------------------------------ ساخت میز
-def new_state(user_ids: list[int], now: float, seed: str = "", hand_limit: int = HAND_LIMIT) -> dict:
+CASH_HAND_LIMIT = 12  # میز نقدی: بلایندها ثابت‌اند، پس جلسه کمی طولانی‌تر است
+
+
+def new_state(user_ids: list[int], now: float, seed: str = "", hand_limit: int | None = None, cash: bool = True) -> dict:
     if not MIN_PLAYERS <= len(user_ids) <= MAX_PLAYERS:
         raise ValueError("تعداد بازیکن پوکر باید بین ۲ و ۸ باشد")
     n = len(user_ids)
@@ -48,7 +56,8 @@ def new_state(user_ids: list[int], now: float, seed: str = "", hand_limit: int =
         "left": [False] * n,
         "seed": seed or str(now),
         "hand": 0,
-        "hand_limit": hand_limit,
+        "hand_limit": hand_limit or (CASH_HAND_LIMIT if cash else HAND_LIMIT),
+        "cash": cash,
         "dealer": -1,
         "sb": SMALL_BLIND,
         "bb": SMALL_BLIND * 2,
@@ -170,7 +179,8 @@ def _start_hand(state: dict, now: float) -> None:
         return
     n = len(state["seats"])
     state["hand"] += 1
-    level = (state["hand"] - 1) // BLIND_UP_HANDS
+    # میز نقدی بلایند ثابت دارد؛ مسابقه‌ی قدیمی هر چند دست بلایندها را دو برابر می‌کرد
+    level = 0 if state.get("cash") else (state["hand"] - 1) // BLIND_UP_HANDS
     state["sb"] = SMALL_BLIND * (2**level)
     state["bb"] = state["sb"] * 2
     in_hand = [i in contenders for i in range(n)]
@@ -330,8 +340,10 @@ def _finish_game(state: dict, reason: str) -> None:
 
 
 def standings(state: dict) -> list[tuple[int, int]]:
-    """(شناسه‌ی کاربر، ژتون نهایی). کسی که میز را ترک کرده امتیاز صفر می‌گیرد."""
-    return [(uid, 0 if state["left"][i] else state["chips"][i]) for i, uid in enumerate(state["seats"])]
+    """(شناسه‌ی کاربر، ژتون نهایی). در میز نقدی کسی که میز را ترک کرده ژتون‌هایش را نگه می‌دارد؛
+    در مسابقه‌ی قدیمی امتیاز صفر می‌گیرد."""
+    cash = bool(state.get("cash"))
+    return [(uid, state["chips"][i] if cash or not state["left"][i] else 0) for i, uid in enumerate(state["seats"])]
 
 
 # ------------------------------------------------------------------ حرکت‌ها
@@ -427,7 +439,9 @@ def act(state: dict, user_id: int, kind: str, amount: int, now: float) -> None:
     else:
         raise LiveError("bad_action")
     _mark_acted(state, seat)
-    _log(state, seat, kind, put, to=state["bet"][seat])
+    # اولین شرطِ یک دور بعد از فلاپ «شرط» است نه «رِیز» (مثل میز واقعی)
+    opened = {"open": True} if kind in ("raise", "allin") and current == 0 and put > 0 else {}
+    _log(state, seat, kind, put, to=state["bet"][seat], **opened)
     _after_action(state, now)
     state["version"] += 1
 
@@ -437,7 +451,8 @@ def apply_move(state: dict, user_id: int, src: int, dst: int, promo: str, now: f
 
 
 def resign(state: dict, user_id: int, now: float | None = None) -> None:
-    """ترک میز: دست فعلی فولد و ژتون‌های باقی‌مانده بی‌اثر می‌شود (امتیاز نهایی صفر)."""
+    """ترک میز: دست فعلی فولد می‌شود. در میز نقدی ژتون‌های باقی‌مانده سر جایش می‌ماند و در پایان سکه‌اش
+    پرداخت می‌شود (مثل بلند شدن از میز نقدی واقعی)؛ در مسابقه‌ی قدیمی امتیاز نهایی صفر است."""
     import time
 
     now = time.time() if now is None else now
@@ -518,6 +533,8 @@ def view(state: dict, viewer_id: int | None, now: float) -> dict:
         "min_raise": state["min_raise"],
         "hand": state["hand"],
         "hand_limit": state["hand_limit"],
+        "cash": bool(state.get("cash")),
+        "start_chips": START_CHIPS,
         "sb": state["sb"],
         "bb": state["bb"],
         "last_action": state["last_action"],

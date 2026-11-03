@@ -170,8 +170,8 @@ def steps_for(info: GameInfo, draft: dict | None = None) -> list[str]:
     if info.variants:
         steps.append("variant")
     steps.append("fee")
-    # بازی رایگان جایزه‌ای ندارد که تقسیم شود
-    if info.max_players > 2 and (draft or {}).get("fee") != 0:
+    # بازی رایگان جایزه‌ای ندارد که تقسیم شود؛ پوکر میز نقدی است و هر کس به اندازه‌ی ژتونش می‌برد
+    if info.max_players > 2 and (draft or {}).get("fee") != 0 and info.key != "poker":
         steps.append("split")
     if info.is_arcade:
         steps.append("window")

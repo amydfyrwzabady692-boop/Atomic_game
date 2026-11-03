@@ -256,12 +256,36 @@ def test_game_ends_after_hand_limit_and_ranks_by_chips():
     assert sorted(score for _, score in poker.standings(s)) == sorted(s["chips"])
 
 
-def test_leaving_the_table_scores_zero_and_ends_heads_up():
+def test_leaving_a_cash_table_keeps_the_chips_and_ends_heads_up():
     s = table(2)
     d = s["dealer"]
+    # دونفره: دیلر بلایند کوچک است؛ نفر دیگر با بلایند بزرگ (۲۰) بلند می‌شود و فقط همان را می‌بازد
     poker.resign(s, uid(s, 1 - d), 1)
     assert s["over"] is not None and s["over"]["winner"] == uid(s, d)
-    assert dict(poker.standings(s))[uid(s, 1 - d)] == 0
+    final = dict(poker.standings(s))
+    assert final == {uid(s, 1 - d): poker.START_CHIPS - 20, uid(s, d): poker.START_CHIPS + 20}
+    assert sum(final.values()) == 2 * poker.START_CHIPS
+
+
+def test_leaving_a_tournament_table_scores_zero():
+    s = poker.new_state([1, 2], 0, seed="t", cash=False)
+    d = s["dealer"]
+    poker.resign(s, uid(s, 1 - d), 1)
+    assert s["over"]["winner"] == uid(s, d) and dict(poker.standings(s))[uid(s, 1 - d)] == 0
+
+
+def test_cash_table_keeps_the_blinds_and_a_tournament_raises_them():
+    cash = poker.new_state([1, 2, 3], 0, seed="b")
+    tour = poker.new_state([1, 2, 3], 0, seed="b", cash=False)
+    assert cash["cash"] and cash["hand_limit"] == poker.CASH_HAND_LIMIT and tour["hand_limit"] == poker.HAND_LIMIT
+    for s in (cash, tour):
+        for _ in range(poker.BLIND_UP_HANDS):
+            s["phase"], s["deadline"] = "pause", 0
+            poker.check_timeout(s, 1)
+    assert (cash["sb"], cash["bb"]) == (poker.SMALL_BLIND, poker.SMALL_BLIND * 2)
+    assert (tour["sb"], tour["bb"]) == (poker.SMALL_BLIND * 2, poker.SMALL_BLIND * 4)
+    view = poker.view(cash, 1, 1)
+    assert view["cash"] is True and view["start_chips"] == poker.START_CHIPS
 
 
 def test_view_hides_other_players_cards():
@@ -468,10 +492,141 @@ async def test_bot_runs_group_poker_through_the_mini_app_and_pays_by_chips(fresh
     assert active.phase == "done"
     match = await sync_to_async(Match.objects.get)(pk=active.match_id)
     assert match.status == MatchStatus.FINISHED
-    winner = await sync_to_async(TelegramUser.objects.get)(pk=s["seats"][0])
-    # فقط کسی که ژتون دارد امتیاز دارد؛ کل جایزه (۳۰۰) به او می‌رسد
+    # میز نقدی: کسی که بلند شده ژتون‌هایش را نگه داشته و هر کس به اندازه‌ی ژتونش از ۳۰۰ سکه می‌برد
+    from games.engine.payout import proportional_payouts
     from wallet.models import CoinTransaction
 
-    prizes = await sync_to_async(lambda: list(CoinTransaction.objects.filter(type=TxType.PRIZE).values_list("user_id", "amount")))()
-    assert prizes == [(winner.pk, 300)]
+    final = (await sync_to_async(Match.objects.get)(pk=active.match_id)).state["board"]
+    chips = dict(poker.standings(final))
+    assert sum(chips.values()) == 3 * poker.START_CHIPS and all(chips.values())
+    prizes = await sync_to_async(lambda: dict(CoinTransaction.objects.filter(type=TxType.PRIZE).values_list("user_id", "amount")))()
+    assert prizes == {uid: amount for uid, amount in proportional_payouts(300, chips).items() if amount}
+    assert sum(prizes.values()) == 300
     assert "پایان پوکر" in app.bot.sent[-1]["text"]
+
+
+# ====================================================================== میز نقدی در مینی‌اپ: ارزش سکه، گفت‌وگو، شرط
+@pytest.fixture
+def cash_table(db, group, make_user, fresh_redis):
+    import time
+
+    from django.utils import timezone
+
+    from arcade import board
+    from games.engine import services
+    from games.models import Match, MatchPlayer, MatchStatus
+
+    a, b, c = make_user(first_name="آرش"), make_user(first_name="بهار"), make_user(first_name="پویا")
+    match = Match.objects.create(
+        group=group, creator=a, game_type="poker", status=MatchStatus.RUNNING, entry_fee=100, pot=300,
+        min_players=2, max_players=6, join_deadline=timezone.now(), options=services.match_options("poker"),
+    )  # fmt: skip
+    for user in (a, b, c):
+        MatchPlayer.objects.create(match=match, user=user, paid_fee=100)
+    board.start(match.pk, board.new_state("poker", [a.pk, b.pk, c.pk], time.time(), seed="cash"))
+    return match, (a, b, c)
+
+
+@pytest.mark.django_db
+def test_cash_table_reports_the_coin_value_of_the_chips(client, cash_table):
+    from .test_live_chess import post
+
+    match, (a, b, c) = cash_table
+    _, data = post(client, "board/state", a, match_token=match.token)
+    view = data["state"]
+    assert view["cash"] is True and view["payout"] == "chips" and view["pot_coins"] == 300
+    assert view["start_chips"] == poker.START_CHIPS and "prizes" not in view
+    # ارزش هر ژتون = ۳۰۰ سکه ÷ ۳۰۰۰ ژتون؛ کلاینت ارزش هر پشته را با همین حساب می‌کند
+    assert view["pot_coins"] / (len(view["seats"]) * view["start_chips"]) == 0.1
+
+
+@pytest.mark.django_db
+def test_board_chat_reaches_the_table_through_the_state_poll(client, cash_table, make_user):
+    from .test_live_chess import post
+
+    match, (a, b, c) = cash_table
+    watcher = make_user(first_name="تماشاچی")
+    _, first = post(client, "board/state", b, match_token=match.token, chat_after=0)
+    assert first["chat"] == [] and first["can_chat"] is True and first["quick"]
+    version = first["state"]["version"]
+
+    status, sent = post(client, "board/chat", a, match_token=match.token, text="  سلام   بچه‌ها  ", chat_after=0)
+    assert status == 200 and sent["chat"][-1]["text"] == "سلام بچه‌ها" and sent["chat"][-1]["mine"] is True
+    message_id = sent["chat"][-1]["id"]
+    seat = seat_index(match, a)
+    assert sent["chat"][-1]["side"] == f"s{seat}" and "uid" not in sent["chat"][-1]
+
+    # پرسش سریع «چیزی عوض شده؟» (بدون تغییر بازی) پیام تازه را هم می‌آورد، فقط یک بار
+    _, poll = post(client, "board/state", b, match_token=match.token, version=version, chat_after=0)
+    assert poll["changed"] is False and [m["text"] for m in poll["chat"]] == ["سلام بچه‌ها"] and poll["chat"][0]["mine"] is False
+    _, again = post(client, "board/state", b, match_token=match.token, version=version, chat_after=message_id)
+    assert again["changed"] is False and "chat" not in again
+    # صفحه‌ای که گفت‌وگو نمی‌خواهد (شطرنج قدیمی) همان جواب کوتاه قبلی را می‌گیرد
+    _, plain = post(client, "board/state", b, match_token=match.token, version=version)
+    assert "chat" not in plain
+
+    # تماشاچی می‌خواند ولی نمی‌نویسد؛ لینک و آیدی رد می‌شود
+    _, seen = post(client, "board/state", watcher, match_token=match.token, chat_after=0)
+    assert seen["can_chat"] is False and [m["text"] for m in seen["chat"]] == ["سلام بچه‌ها"]
+    assert post(client, "board/chat", watcher, match_token=match.token, text="سلام")[1]["error"] == "not_a_player"
+    assert post(client, "board/chat", b, match_token=match.token, text="بیا @spam_channel")[1]["error"] == "chat_no_links"
+    assert post(client, "board/chat", b, match_token=match.token, text="   ")[1]["error"] == "chat_empty"
+
+
+def seat_index(match, user):
+    from games.models import Match
+
+    return Match.objects.get(pk=match.pk).state["board"]["seats"].index(user.pk)
+
+
+@pytest.mark.django_db
+def test_leaving_keeps_the_chips_and_the_finished_table_reports_real_prizes(client, cash_table):
+    from arcade import board
+    from games.engine import services
+    from games.engine.payout import Standing, proportional_payouts
+    from games.models import Match
+
+    from .test_live_chess import post
+
+    match, (a, b, c) = cash_table
+    assert post(client, "board/action", c, match_token=match.token, action="resign")[0] == 200
+    assert post(client, "board/action", b, match_token=match.token, action="resign")[0] == 200
+    state = Match.objects.get(pk=match.pk).state["board"]
+    assert state["over"] is not None
+    chips = dict(poker.standings(state))
+    assert chips[c.pk] > 0 and chips[b.pk] > 0 and sum(chips.values()) == 3 * poker.START_CHIPS
+    services.finish_match(match.pk, [Standing(uid, score, None) for uid, score in board.standings(state)])
+    _, data = post(client, "board/state", b, match_token=match.token)
+    prizes = data["state"]["prizes"]
+    by_side = {f"s{i}": uid for i, uid in enumerate(state["seats"])}
+    assert sum(prizes.values()) == 300
+    assert {by_side[side]: coins for side, coins in prizes.items()} == proportional_payouts(300, chips)
+
+
+def test_first_bet_after_the_flop_is_a_bet_not_a_raise():
+    from bot.render import poker_text
+
+    s = table(2)
+    # قبل از فلاپ: کال و چک
+    d = s["dealer"]
+    poker.act(s, uid(s, d), "call", 0, 1)
+    poker.act(s, uid(s, 1 - d), "check", 0, 1)
+    assert s["street"] == "flop" and s["current_bet"] == 0
+    first = s["to_act"]
+    poker.act(s, uid(s, first), "raise", 40, 1)
+    assert s["last_action"]["open"] is True and s["last_action"]["to"] == 40
+    names = {uid(s, 0): "آرش", uid(s, 1): "بهار"}
+    assert "شرط ۴۰" in poker_text(s, names)
+    poker.act(s, uid(s, 1 - first), "raise", 120, 1)
+    assert "open" not in s["last_action"] and "رِیز ۱۲۰" in poker_text(s, names)
+
+
+def test_cash_table_end_text_says_coins_follow_the_chips():
+    from bot.render import poker_text
+
+    s = table(2)
+    poker.resign(s, uid(s, 0), 1)
+    assert s["over"] and "هر کس به اندازه‌ی ژتون‌هایش سکه می‌برد" in poker_text(s, {1: "آ", 2: "ب"})
+    tour = poker.new_state([1, 2], 0, seed="t", cash=False)
+    poker.resign(tour, 1, 1)
+    assert "رتبه‌ها بر اساس ژتون نهایی است" in poker_text(tour, {1: "آ", 2: "ب"})

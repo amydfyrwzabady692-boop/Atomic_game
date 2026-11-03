@@ -97,7 +97,8 @@ def duel_view(duel: Duel, side: str, prizes: dict | None = None) -> tuple[str, I
         return text, InlineKeyboardMarkup(rows)
     if duel.status == Duel.Status.PLAYING:
         stake = duel.stake or 0
-        line = texts.DUEL_STAKE_LINE.format(stake=fa_num(stake), prize=fa_num(stake * 2)) if stake else texts.DUEL_FREE_LINE
+        stake_line = texts.DUEL_STAKE_LINE_CASH if duel.game_type == "poker" else texts.DUEL_STAKE_LINE
+        line = stake_line.format(stake=fa_num(stake), prize=fa_num(stake * 2)) if stake else texts.DUEL_FREE_LINE
         if duels.is_arcade(duel.game_type):
             line += texts.DUEL_ARCADE_RULE.format(minutes=fa_num(duels.ARCADE_MINUTES), attempts=fa_num(duels.ARCADE_ATTEMPTS))
         text = texts.DUEL_STARTED.format(game=game, name=name, stake_line=line)
@@ -115,7 +116,8 @@ def duel_view(duel: Duel, side: str, prizes: dict | None = None) -> tuple[str, I
         elif mine[1] < theirs[1]:
             text = texts.DUEL_WON.format(game=game, name=name, prize=prize)
         else:
-            text = texts.DUEL_LOST.format(game=game, name=name)
+            # در پوکر (میز نقدی) بازنده هم به اندازه‌ی ژتون‌های باقی‌مانده‌اش سکه می‌گیرد
+            text = texts.DUEL_LOST.format(game=game, name=name) + prize
         return text, again
     reason = duel.cancel_reason
     if reason.startswith("left_"):

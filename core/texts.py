@@ -297,6 +297,7 @@ STEP_PICKED_SPLIT = "تقسیم: {value}"
 STEP_PICKED_WINDOW = "مدت: {value} دقیقه"
 FEE_FREE = "رایگان"
 FEE_BTN = "{amount} " + COIN
+SPLIT_BY_CHIPS = "هر کس به اندازه‌ی ژتون‌هایش (میز نقدی)"
 SPLIT_LABELS = {
     "100": "🥇 همه برای نفر اول",
     "70-30": "۷۰ - ۳۰",
@@ -1246,6 +1247,7 @@ POKER_WINNER = "🏆 {name} <b>{amount}</b> ژتون برد{hand}"
 POKER_TURN = "\n⏳ نوبت <b>{name}</b> — {seconds} ثانیه"
 POKER_NEXT_HAND = "\n<i>دست بعد چند ثانیه‌ی دیگر شروع می‌شود…</i>"
 POKER_OVER = "\n🏁 <b>بازی تمام شد</b>؛ رتبه‌ها بر اساس ژتون نهایی است."
+POKER_OVER_CASH = "\n🏁 <b>بازی تمام شد</b>؛ هر کس به اندازه‌ی ژتون‌هایش سکه می‌برد."
 POKER_LIVE_HINT = "<i>برای دیدن کارت‌هایت و بازی، صفحه‌ی پوکر را باز کن.</i>"
 POKER_CHAT_HINT = "<i>کارت‌هایت را با «👀 کارت‌های من» ببین (فقط خودت می‌بینی).</i>"
 POKER_MY_CARDS_BTN = "👀 کارت‌های من"
@@ -1311,6 +1313,7 @@ DUEL_STARTED = (
     "دکمه‌ی زیر را بزن تا صفحه‌ی بازی باز شود."
 )
 DUEL_STAKE_LINE = COIN + " ورودی هر نفر: <b>{stake}</b>  ·  جایزه‌ی برنده: <b>{prize}</b>"
+DUEL_STAKE_LINE_CASH = COIN + " ورودی هر نفر: <b>{stake}</b> — میز نقدی: هر کس به اندازه‌ی ژتونش از <b>{prize}</b> سکه می‌برد"
 DUEL_FREE_LINE = "🆓 بازی بدون سکه (بدون امتیاز)"
 DUEL_OPEN_BTN = "🎮 باز کردن صفحه‌ی بازی"
 DUEL_WON = "🏆 <b>بردی!</b>\n{game} مقابل {name}{prize}"

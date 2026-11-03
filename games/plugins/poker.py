@@ -19,21 +19,24 @@ class PokerGame(BaseGame):
     key = "poker"
     title_fa = "پوکر"
     emoji = "🃏"
-    description_fa = "تگزاس هولدم: هر نفر با ژتون برابر شروع می‌کند؛ ژتون بیشتر در پایان یعنی رتبه‌ی بهتر."
+    description_fa = (
+        "تگزاس هولدم مثل میز نقدی واقعی: هر ژتون سهم ثابتی از جایزه است، بلایندها ثابت‌اند و هر وقت خواستی با "
+        "ژتون‌هایت از میز بلند می‌شوی؛ در پایان هر کس به اندازه‌ی ژتون‌هایش سکه می‌برد."
+    )
     min_players = 2
     max_players = 6
     players_floor = 2
     players_ceiling = engine.MAX_PLAYERS
     move_seconds = engine.MOVE_SECONDS
-    hands = engine.HAND_LIMIT
+    hands = engine.CASH_HAND_LIMIT
     start_chips = engine.START_CHIPS
     rules_fa = [
-        "هر نفر {start_chips} ژتون؛ حداکثر {hands} دست، بلایندها کم‌کم بالا می‌روند.",
-        "فولد، چک، کال، رِیز یا آل‌این؛ هر نوبت {move_seconds} ثانیه.",
-        "در پایان، ژتون بیشتر رتبه‌ی بهتر و سهم بیشتری از جایزه است.",
+        "هر نفر {start_chips} ژتون؛ حداکثر {hands} دست با بلایند ثابت.",
+        "فولد، چک، کال، رِیز با مبلغ دلخواه یا آل‌این؛ هر نوبت {move_seconds} ثانیه.",
+        "هر وقت خواستی بلند شو؛ آخر میز هر کس به اندازه‌ی ژتونش سکه می‌برد.",
     ]
     play_style = "turns"
-    style_fa = "نوبتی: هر حرکت {move_seconds} ثانیه، حداکثر {hands} دست."
+    style_fa = "نوبتی: هر حرکت {move_seconds} ثانیه، حداکثر {hands} دست، بلایند ثابت."
 
     async def start(self) -> None:
         order = list(self.players)

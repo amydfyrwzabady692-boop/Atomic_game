@@ -2,7 +2,7 @@ import itertools
 
 import pytest
 
-from games.engine.payout import Standing, compute_payouts, rank_standings
+from games.engine.payout import Standing, compute_payouts, proportional_payouts, rank_standings
 
 SPLITS = [[100], [70, 30], [60, 30, 10], [50, 30, 20]]
 SIZES = [(1,), (1, 1), (1, 1, 1), (1, 1, 1, 1, 1), (2, 1), (1, 2), (3,), (1, 3, 1), (2, 2, 2)]
@@ -66,3 +66,27 @@ def test_rank_by_score_then_time():
 def test_rank_true_tie_when_score_and_time_equal():
     groups = rank_standings([Standing(1, 10, 3.0), Standing(2, 10, 3.0), Standing(3, 0), Standing(4, 0)])
     assert [[s.user_id for s in g] for g in groups] == [[1, 2], [3, 4]]
+
+
+# ---------------------------------------------------------------- میز نقدی پوکر: سهم به اندازه‌ی ژتون
+@pytest.mark.parametrize("pot", [0, 1, 7, 100, 285, 999, 12345])
+@pytest.mark.parametrize("chips", [(1000, 1000), (980, 1020), (0, 3000, 0), (1, 1, 1), (2999, 1, 0, 0), (0, 0)])
+def test_proportional_payouts_always_pay_the_whole_pot(pot, chips):
+    stacks = dict(enumerate(chips, start=1))
+    payouts = proportional_payouts(pot, stacks)
+    assert sum(payouts.values()) == pot and set(payouts) == set(stacks)
+    assert all(v >= 0 for v in payouts.values())
+    total = sum(chips)
+    for uid, c in stacks.items():
+        if total:
+            # هیچ‌کس بیش از یک سکه با سهم دقیقش فاصله ندارد و بی‌ژتون چیزی نمی‌برد
+            assert abs(payouts[uid] - pot * c / total) < 1 + 1e-9
+            assert c or payouts[uid] == 0
+
+
+def test_proportional_payouts_follow_the_chips():
+    assert proportional_payouts(300, {1: 1000, 2: 1000, 3: 1000}) == {1: 100, 2: 100, 3: 100}
+    assert proportional_payouts(300, {1: 1500, 2: 0, 3: 1500}) == {1: 150, 2: 0, 3: 150}
+    # باقیمانده به بزرگ‌ترین پشته (و در تساوی به شناسه‌ی کوچک‌تر) می‌رسد
+    assert proportional_payouts(100, {1: 1000, 2: 2000}) == {1: 33, 2: 67}
+    assert proportional_payouts(10, {}) == {}

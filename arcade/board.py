@@ -66,7 +66,12 @@ def publish_version(match: Match, state: dict, only_new: bool = False) -> None:
     ``only_new`` برای خواننده‌هاست: اگر نویسنده‌ای همین الان نسخه‌ی تازه‌تر را گذاشته، کهنه رویش نمی‌نشیند."""
     from core.redis import get_sync_redis
 
-    value = json.dumps([state["version"], state.get("deadline"), bool(state.get("over")), match.status == MatchStatus.CANCELLED])
+    from .chat import match_room
+
+    # اتاق گفت‌وگو هم کنار نسخه می‌ماند تا پرسش «پیام تازه؟» بدون خواندن مسابقه از پایگاه داده جواب بگیرد
+    value = json.dumps(
+        [state["version"], state.get("deadline"), bool(state.get("over")), match.status == MatchStatus.CANCELLED, match_room(match)]
+    )
     try:
         get_sync_redis().set(_version_key(match.token), value, ex=VERSION_TTL, nx=only_new)
     except Exception:  # فقط کش است؛ بدون Redis همه از پایگاه داده خوانده می‌شود
@@ -74,7 +79,7 @@ def publish_version(match: Match, state: dict, only_new: bool = False) -> None:
 
 
 def cached_version(token: str) -> list | None:
-    """[نسخه، مهلت، تمام‌شده، لغوشده] یا ``None``."""
+    """[نسخه، مهلت، تمام‌شده، لغوشده، اتاق گفت‌وگو] یا ``None``."""
     from core.redis import get_sync_redis
 
     try:

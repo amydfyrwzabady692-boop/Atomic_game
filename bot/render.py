@@ -181,7 +181,7 @@ def lobby_text(match, info: GameInfo, names: list[str], remaining: int, prize_no
         style=info.style,
         fee=fee_label(match.entry_fee),
         pot=fa_num(match.pot),
-        split=split_label(match.prize_split),
+        split=texts.SPLIT_BY_CHIPS if (match.options or {}).get("payout") == "chips" else split_label(match.prize_split),
         count=fa_num(len(names)),
         max=fa_num(match.max_players),
         players=players,
@@ -311,7 +311,7 @@ def arcade_keyboard(username: str, token: str, game_key: str = "") -> InlineKeyb
 
 
 # ------------------------------------------------------------------ پوکر
-POKER_ACTIONS = {"fold": "فولد", "check": "چک", "call": "کال", "raise": "رِیز", "allin": "آل‌این", "leave": "ترک میز"}
+POKER_ACTIONS = {"fold": "فولد", "check": "چک", "call": "کال", "raise": "رِیز", "bet": "شرط", "allin": "آل‌این", "leave": "ترک میز"}
 POKER_STREETS = {"preflop": "قبل از فلاپ", "flop": "فلاپ", "turn": "ترن", "river": "ریور"}
 
 
@@ -352,7 +352,8 @@ def poker_text(state: dict, names: dict[int, str], live: bool = False) -> str:
     if last and not state["over"]:
         amount = f" {fa_num(last['amount'])}" if last.get("amount") else ""
         timeout = texts.POKER_TIMEOUT if last.get("timeout") else ""
-        lines.append(texts.POKER_LAST.format(name=name[last["seat"]], action=POKER_ACTIONS.get(last["kind"], ""), amount=amount, timeout=timeout))
+        kind = "bet" if last["kind"] == "raise" and last.get("open") else last["kind"]
+        lines.append(texts.POKER_LAST.format(name=name[last["seat"]], action=POKER_ACTIONS.get(kind, ""), amount=amount, timeout=timeout))
     result = state.get("result")
     if result and state["phase"] in ("pause", "over"):
         for seat, cards in sorted(result.get("reveal", {}).items()):
@@ -361,7 +362,7 @@ def poker_text(state: dict, names: dict[int, str], live: bool = False) -> str:
             hand = f" — {w['hand']}" if w.get("hand") else ""
             lines.append(texts.POKER_WINNER.format(name=name[w["seat"]], amount=fa_num(w["amount"]), hand=hand))
     if state["over"]:
-        lines.append(texts.POKER_OVER)
+        lines.append(texts.POKER_OVER_CASH if state.get("cash") else texts.POKER_OVER)
     elif state["phase"] == "pause":
         lines.append(texts.POKER_NEXT_HAND)
     elif state["to_act"] is not None:
