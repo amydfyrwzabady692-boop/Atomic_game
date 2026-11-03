@@ -326,6 +326,36 @@ async def test_admin_manages_partner_api_keys(app):
     await sync_to_async(key.refresh_from_db)()
     assert key.webhook_url == "https://partner.example/hook"
 
+    # متن آماده برای سازنده‌ی ربات دیگر: لینک استارت، کلید، وب‌هوک و نمونه‌ی پرسیدن، در پیامی جدا برای فوروارد
+    detail = await fj(app, OWNER, f"adm:api:show:{key.pk}")
+    assert f"adm:api:share:{key.pk}" in [b.callback_data for b in buttons_of(detail.edits[-1]["reply_markup"])]
+    sent = len(app.bot.sent)
+    await fj(app, OWNER, f"adm:api:share:{key.pk}")
+    share = app.bot.sent[sent]
+    assert share["chat_id"] == OWNER and key.key in share["text"] and "https://t.me/test_bot?start=" in share["text"]
+    assert "X-Signature" in share["text"] and "user?user_id=" in share["text"] and "&amp;channels=" in share["text"]
+    assert app.bot.sent[sent + 1]["text"] == texts.ADMIN_API_SHARE_NOTE
+
+    # «بررسی یک کاربر» همان جواب API را نشان می‌دهد
+    await start_user(app, 4242, name="کاربر")
+    await sync_to_async(TelegramUser.objects.filter(tg_id=4242).update)(username="checked_user")
+    await fj(app, OWNER, "adm:api:check")
+    passed = await send_private(app, OWNER, "4242")
+    assert texts.ADMIN_API_CHECK_PASSED in passed.replies[-1]["text"]
+    await fj(app, OWNER, "adm:api:check")
+    by_name = await send_private(app, OWNER, "@checked_user")
+    assert texts.ADMIN_API_CHECK_PASSED in by_name.replies[-1]["text"] and "4242" in by_name.replies[-1]["text"]
+    await sync_to_async(TelegramUser.objects.filter(tg_id=4242).update)(blocked_bot=True)
+    await fj(app, OWNER, "adm:api:check")
+    blocked = await send_private(app, OWNER, "4242")
+    assert texts.ADMIN_API_CHECK_FAILED in blocked.replies[-1]["text"]
+    await fj(app, OWNER, "adm:api:check")
+    unknown = await send_private(app, OWNER, "999888777")
+    assert texts.ADMIN_API_CHECK_FAILED in unknown.replies[-1]["text"]
+    await fj(app, OWNER, "adm:api:check")
+    bad = await send_private(app, OWNER, "سلام")
+    assert bad.replies[-1]["text"] == texts.ADMIN_API_CHECK_BAD
+
     old = key.key
     await fj(app, OWNER, f"adm:api:rotok:{key.pk}")
     await fj(app, OWNER, f"adm:api:toggle:{key.pk}")

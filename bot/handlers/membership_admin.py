@@ -11,16 +11,18 @@ from html import escape
 from django.conf import settings
 from django.db.models import Max
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from telegram import InlineKeyboardMarkup, Update
 from telegram.constants import ChatMemberStatus, ChatType
 from telegram.ext import ContextTypes
 
 from core import texts
 from core.texts import fa_num
+from core.textutils import fa_date
 from membership import checks
 from membership.models import ForcedChannel, PartnerKey, new_key
 
-from .. import partner_hooks, ui
+from .. import partner_hooks, render, ui
 from ..db import db
 from ..tg import tg_call
 from .common import admin_permissions, answer, callback, reply
@@ -28,7 +30,7 @@ from .common import admin_permissions, answer, callback, reply
 logger = logging.getLogger(__name__)
 
 SECTION_PERMISSION = {"fj": "settings", "api": "admins"}
-STEPS = {"fj_add": "settings", "api_name": "admins", "api_hook": "admins"}
+STEPS = {"fj_add": "settings", "api_name": "admins", "api_hook": "admins", "api_check": "admins"}
 USERNAME = re.compile(r"@?([A-Za-z][A-Za-z0-9_]{3,31})")
 
 
@@ -239,10 +241,39 @@ def _api_screen(keys: list[PartnerKey]):
         for i, key in enumerate(keys)
     )
     buttons = [[_btn(f"{fa_num(i + 1)}. {key.name}"[:48], f"adm:api:show:{key.pk}", ui.PRIMARY)] for i, key in enumerate(keys)]
-    buttons.append([_btn(texts.ADMIN_API_NEW_BTN, "adm:api:new", ui.SUCCESS)])
+    buttons.append([_btn(texts.ADMIN_API_NEW_BTN, "adm:api:new", ui.SUCCESS), _btn(texts.ADMIN_API_CHECK_BTN, "adm:api:check", ui.PRIMARY)])
     buttons.append([_btn(texts.ADMIN_BACK_TO_PANEL_BTN, "adm:home")])
     base = escape(api_base()) or texts.ADMIN_API_NO_BASE
     return texts.ADMIN_API.format(base=base, rows=lines or texts.ADMIN_API_EMPTY), InlineKeyboardMarkup(buttons)
+
+
+def share_text(key: PartnerKey, bot: str) -> str:
+    """پیام آماده برای سازنده‌ی ربات دیگر: لینک استارت، کلید، وب‌هوک و نمونه‌ی پرسیدن."""
+    bot = bot or "your_bot"
+    return texts.ADMIN_API_SHARE.format(
+        bot=escape(bot),
+        start_link=escape(f"https://t.me/{bot}?start=partner"),  # پارامتر خنثی: همان خوش‌آمد معمولی
+        key=escape(key.key),
+        base=escape(api_base() or "https://<domain>/api/v1/"),
+    )
+
+
+@db
+def _api_user_status(ref: str) -> dict | None:
+    """دقیقاً همان جوابی که /api/v1/user برای این کاربر می‌دهد (آیدی عددی یا یوزرنیم)."""
+    from core.models import TelegramUser
+    from membership.api import user_status
+
+    ref = ref.strip()
+    if ref.isdigit():
+        return user_status(int(ref))
+    match = USERNAME.fullmatch(ref)
+    if match is None:
+        return None
+    user = TelegramUser.objects.filter(username__iexact=match.group(1)).first()
+    if user is None:
+        return {"user_id": ref, "started": False, "blocked": False, "started_at": None}
+    return user_status(user.tg_id)
 
 
 async def _api_detail(key: PartnerKey):
@@ -266,6 +297,7 @@ async def _api_detail(key: PartnerKey):
         hook_row += [_btn(texts.ADMIN_API_TEST_BTN, f"adm:api:test:{key.pk}"), _btn(texts.ADMIN_API_UNHOOK_BTN, f"adm:api:unhook:{key.pk}")]
     toggle = texts.ADMIN_API_PAUSE_BTN if key.is_active else texts.ADMIN_API_RESUME_BTN
     rows = [
+        [_btn(texts.ADMIN_API_SHARE_BTN, f"adm:api:share:{key.pk}", ui.SUCCESS)],
         hook_row,
         [_btn(toggle, f"adm:api:toggle:{key.pk}"), _btn(texts.ADMIN_API_ROTATE_BTN, f"adm:api:rotate:{key.pk}")],
         [_btn(texts.ADMIN_API_DEL_BTN, f"adm:api:del:{key.pk}", ui.DANGER)],
@@ -341,6 +373,11 @@ async def panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, use
         await answer(query)
         await show(texts.ADMIN_API_ASK_NAME, InlineKeyboardMarkup([[_btn(texts.BACK_BTN, "adm:api:list")]]))
         return
+    if action == "check":
+        flow["admin_flow"] = {"step": "api_check"}
+        await answer(query)
+        await show(texts.ADMIN_API_CHECK_ASK, InlineKeyboardMarkup([[_btn(texts.BACK_BTN, "adm:api:list")]]))
+        return
     key = await _key(arg)
     if key is None:
         await answer(query, texts.ADMIN_API_REMOVED)
@@ -353,6 +390,12 @@ async def panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, use
         flow["admin_flow"] = {"step": "api_hook", "key": key.pk}
         await answer(query)
         await show(texts.ADMIN_API_ASK_HOOK, InlineKeyboardMarkup([[_btn(texts.BACK_BTN, f"adm:api:show:{key.pk}")]]))
+        return
+    elif action == "share":
+        # پیام جدا تا مدیر همان را برای سازنده‌ی ربات دیگر فوروارد کند (کلید داخلش است)
+        await answer(query)
+        await tg_call(context.bot.send_message, update.effective_chat.id, share_text(key, render.bot_username(context)), parse_mode="HTML", disable_web_page_preview=True)
+        await tg_call(context.bot.send_message, update.effective_chat.id, texts.ADMIN_API_SHARE_NOTE)
         return
     elif action == "unhook":
         key = await _update_key(key.pk, webhook_url="")
@@ -405,6 +448,23 @@ async def flow_message(update: Update, context, user, flow: dict) -> bool:
         context.user_data.pop("admin_flow", None)
         logger.info("partner key created", extra={"admin": user.tg_id, "key": key.pk})
         await reply(update, *await _api_detail(key))
+        return True
+    if step == "api_check":
+        status = await _api_user_status(text)
+        if status is None:
+            await reply(update, texts.ADMIN_API_CHECK_BAD)
+            return True
+        context.user_data.pop("admin_flow", None)
+        passed = status["started"]  # در جواب API، «استارت» یعنی استارت کرده و الان بلاک نکرده
+        when = parse_datetime(status["started_at"]) if status["started_at"] else None
+        result = texts.ADMIN_API_CHECK_RESULT.format(
+            user_id=escape(str(status["user_id"])),
+            started=texts.ADMIN_API_YES if status["started"] else texts.ADMIN_API_NO,
+            blocked=texts.ADMIN_API_YES if status["blocked"] else texts.ADMIN_API_NO,
+            at=fa_date(timezone.localtime(when)) if when else texts.ADMIN_API_NEVER,
+            verdict=texts.ADMIN_API_CHECK_PASSED if passed else texts.ADMIN_API_CHECK_FAILED,
+        )
+        await reply(update, result, InlineKeyboardMarkup([[_btn(texts.ADMIN_API_CHECK_BTN, "adm:api:check", ui.PRIMARY)], [_btn(texts.BACK_BTN, "adm:api:list")]]))
         return True
     if step == "api_hook":
         if not re.fullmatch(r"https://[^\s/]+\.[^\s]+", text) or len(text) > 500:

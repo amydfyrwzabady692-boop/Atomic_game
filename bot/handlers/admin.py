@@ -1087,6 +1087,7 @@ STEP_PERMISSION = {
     "fj_add": "settings",
     "api_name": "admins",
     "api_hook": "admins",
+    "api_check": "admins",
     "post_channel": "broadcast",  # ارسال پست آماده به کانال دیگر (promo)
 }
 
