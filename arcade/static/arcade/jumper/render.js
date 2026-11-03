@@ -47,6 +47,10 @@
       c.fillStyle = g;
       c.fillRect(0, 0, w, w);
     }
+    var SKY_STEPS = 30;
+    function paintSunAt(c, x, y) {
+      env.blit(c, env.sprite("jumper:sun", 220, 220, paintSun), x, y);
+    }
     function paintMoon(c, w) {
       var m = w / 2, r = w * 0.3;
       var halo = c.createRadialGradient(m, m, r * 0.8, m, m, m);
@@ -347,23 +351,30 @@
         var depth = env.clamp(state.maxY / 60000, 0, 1);
         var rise = (camera + core.VIEW_BELOW) * S * (H / 640); // مقدار بالا رفتن دوربین روی صفحه
 
-        // آسمان: هر چه بالاتر، تیره‌تر و پرستاره‌تر
-        c.drawImage(env.sprite("jumper:day", 4, H, sky("#3a8fe4", "#cdeeff")).canvas, -12, -12, W + 24, H + 24);
-        if (depth < 0.7) {
-          c.globalAlpha = 1 - depth / 0.7;
-          env.blit(c, env.sprite("jumper:sun", 220, 220, paintSun), W * 0.78 - 110, env.safeTop - 60);
-          c.globalAlpha = 1;
-        }
-        if (depth > 0.02) {
-          c.globalAlpha = depth;
-          c.drawImage(env.sprite("jumper:night", 4, H, sky("#050720", "#27306e")).canvas, -12, -12, W + 24, H + 24);
-          env.blit(c, env.sprite("jumper:stars", W, H, paintStars), 0, 0);
-          if (depth > 0.35) {
-            c.globalAlpha = env.clamp((depth - 0.35) / 0.3, 0, 1);
-            env.blit(c, env.sprite("jumper:moon", 110, 110, paintMoon), 26, env.safeTop + 10 + rise * 0.004);
+        // آسمان: هر چه بالاتر، تیره‌تر و پرستاره‌تر. کل آسمان (روز، شب، خورشید، ستاره‌ها و ماه) روی لایه‌ی
+        // پس‌زمینه است و فقط هر یک‌سی‌ام ارتفاع یک بار دوباره کشیده می‌شود، نه در هر فریم
+        var step = Math.round(depth * SKY_STEPS);
+        env.backdrop("jumper:" + step, function (b, w, h, bleed) {
+          var d = step / SKY_STEPS;
+          b.save();
+          b.translate(-bleed, -bleed);
+          sky("#3a8fe4", "#cdeeff")(b, w + bleed * 2, h + bleed * 2);
+          if (d < 0.7) {
+            b.globalAlpha = 1 - d / 0.7;
+            paintSunAt(b, w * 0.78 - 110 + bleed, env.safeTop - 60 + bleed);
           }
-          c.globalAlpha = 1;
-        }
+          if (d > 0.02) {
+            b.globalAlpha = d;
+            sky("#050720", "#27306e")(b, w + bleed * 2, h + bleed * 2);
+            b.translate(bleed, bleed);
+            env.blit(b, env.sprite("jumper:stars", w, h, paintStars), 0, 0);
+            if (d > 0.35) {
+              b.globalAlpha = env.clamp((d - 0.35) / 0.3, 0, 1);
+              env.blit(b, env.sprite("jumper:moon", 110, 110, paintMoon), 26, env.safeTop + 10);
+            }
+          }
+          b.restore();
+        });
 
         // کوه‌های دور (آهسته‌تر از زمین پایین می‌روند)
         var mountainY = H - 70 - 150 + rise * 0.35;

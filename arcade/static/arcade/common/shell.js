@@ -142,6 +142,15 @@
   var canvas = $("stage");
   var ctx = canvas.getContext("2d");
   var view = { W: 360, H: 640, scale: 1, offsetX: 0, dpr: 1 };
+  /* لایه‌ی پس‌زمینه: پس‌زمینه‌ی ثابت بازی (env.scene) یا آسمانی که آهسته عوض می‌شود (env.backdrop) روی بوم
+     جدایی پشت صحنه کشیده می‌شود و فقط وقتی کلیدش عوض شود دوباره کشیده می‌شود. هر فریم صحنه فقط پاک می‌شود
+     و چیزهای متحرک رویش می‌آیند؛ پر کردن کل صفحه در هر فریم (گران‌ترین کار روی گوشی) حذف می‌شود. */
+  var backCanvas = document.createElement("canvas");
+  backCanvas.id = "stage-back";
+  backCanvas.setAttribute("aria-hidden", "true");
+  canvas.parentNode.insertBefore(backCanvas, canvas);
+  var backCtx = backCanvas.getContext("2d");
+  var back = { key: null, layered: false };
 
   function css(name, fallback) {
     var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -173,14 +182,20 @@
     { dpr: 2, particles: 220 },
   ];
   var QUALITY_MEMORY_MS = 24 * 60 * 60 * 1000;
-  var quality = { level: 2, frames: 0, total: 0, slow: 0 };
-  try {
-    var savedQuality = JSON.parse(localStorage.getItem("arcade_quality") || "null");
-    if (savedQuality && (savedQuality.level === 0 || savedQuality.level === 1) && Date.now() - savedQuality.at < QUALITY_MEMORY_MS) {
-      quality.level = savedQuality.level;
-    }
-  } catch (e) { /* ممکن است در دسترس نباشد یا مقدار قدیمی باشد */ }
+  var QUALITY_WARMUP = 30; // فریم‌های اول صرف ساخت اسپرایت‌ها می‌شوند
+  var QUALITY_WINDOW = 45; // حدود یک ثانیه؛ کندی زود دیده و در همان یکی دو ثانیه‌ی اول درست می‌شود
+  var quality = { level: 2, skip: QUALITY_WARMUP, frames: 0, slow: 0, verySlow: 0 };
+  /* کیفیت برای هر بازی جدا به خاطر سپرده می‌شود: کند بودن یک بازی سنگین، بازی‌های سبک را بی‌کیفیت نمی‌کند */
+  function qualityKey() { return "arcade_quality:" + ((game && game.key) || BOOT.gameKey || BOOT.preloadKey || ""); }
+  function loadQuality() {
+    quality.level = 2;
+    try {
+      var saved = JSON.parse(localStorage.getItem(qualityKey()) || "null");
+      if (saved && (saved.level === 0 || saved.level === 1) && Date.now() - saved.at < QUALITY_MEMORY_MS) quality.level = saved.level;
+    } catch (e) { /* ممکن است در دسترس نباشد یا مقدار قدیمی باشد */ }
+  }
 
+  loadQuality();
   var sprites = {};
   var spriteCount = 0;
 
@@ -193,6 +208,9 @@
     view.offsetX = (w - 360 * view.scale) / 2;
     canvas.width = Math.round(w * view.dpr);
     canvas.height = Math.round(h * view.dpr);
+    backCanvas.width = canvas.width;
+    backCanvas.height = canvas.height;
+    back.key = null; // اندازه عوض شد: پس‌زمینه دوباره کشیده می‌شود
     env.W = view.W;
     env.H = view.H;
     env.res = Math.min(view.scale * view.dpr, 3);
@@ -203,26 +221,27 @@
     spriteCount = 0;
   }
 
+  /* سنجش در طول تلاش‌های پشت‌سرهم ادامه پیدا می‌کند (تلاش‌های کوتاه مثل پرنده‌ی پرشی هم سنجیده می‌شوند)؛
+     فقط چند فریم اول هر تلاش و بعد از هر تغییر کیفیت (ساخت دوباره‌ی اسپرایت‌ها) حساب نمی‌شود. */
   function watchFrameRate(dt) {
     if (quality.level === 0) return;
+    if (quality.skip > 0) { quality.skip--; return; }
     quality.frames++;
-    if (quality.frames <= 45) return; // فریم‌های اول صرف ساخت اسپرایت‌ها می‌شوند
-    quality.total += Math.min(dt, 100);
-    if (quality.frames < 45 + 120) return;
-    var average = quality.total / 120;
-    quality.frames = 45;
-    quality.total = 0;
-    // کمتر از حدود ۴۳ فریم در ثانیه در دو بازه‌ی پیاپی
-    quality.slow = average > 23 ? quality.slow + 1 : 0;
-    if (quality.slow >= 2) {
-      quality.slow = 0;
-      quality.frames = 0; // اسپرایت‌ها دوباره ساخته می‌شوند؛ آن فریم‌ها در سنجش بعدی حساب نشوند
-      quality.level--;
-      try {
-        localStorage.setItem("arcade_quality", JSON.stringify({ level: quality.level, at: Date.now() }));
-      } catch (e) { /* مهم نیست */ }
-      resize();
-    }
+    // سهم فریم‌های کند ملاک است، نه میانگین: یکی دو مکث تصادفی (جمع‌آوری حافظه، لمس) کیفیت را پایین نمی‌آورد
+    if (dt > 25) quality.slow++;
+    if (dt > 40) quality.verySlow++;
+    if (quality.frames < QUALITY_WINDOW) return;
+    var slow = quality.slow / quality.frames, verySlow = quality.verySlow / quality.frames;
+    quality.frames = quality.slow = quality.verySlow = 0;
+    // بیشتر فریم‌ها زیر ۴۰ فریم در ثانیه: یک پله؛ بیشترشان زیر ۲۵ فریم: دو پله (وضوح بوم، بعد افکت‌ها)
+    var drop = verySlow >= 0.6 ? 2 : slow >= 0.5 ? 1 : 0;
+    if (!drop) return;
+    quality.skip = QUALITY_WARMUP; // اسپرایت‌ها دوباره ساخته می‌شوند؛ آن فریم‌ها در سنجش بعدی حساب نشوند
+    quality.level = Math.max(0, quality.level - drop);
+    try {
+      localStorage.setItem(qualityKey(), JSON.stringify({ level: quality.level, at: Date.now() }));
+    } catch (e) { /* مهم نیست */ }
+    resize();
   }
 
   function paintDot(color) {
@@ -414,11 +433,27 @@
       c.restore();
     },
     /* پس‌زمینه‌ی تمام‌صفحه‌ی ثابت یک بازی. paint(c, w, h, bleed) باید از ‎-bleed تا w+bleed را پر کند
-       تا لرزش صفحه لبه‌ی خالی نشان ندهد. */
+       تا لرزش صفحه لبه‌ی خالی نشان ندهد. روی صحنه‌ی اصلی، از فریم بعد روی لایه‌ی پس‌زمینه می‌رود (یک بار). */
     scene: function (c, key, paint) {
       var bleed = 12;
+      if (c === ctx) {
+        if (back.layered) { paintBack("scene:" + key, paint, bleed); return; }
+        back.layered = true; // از فریم بعد
+      }
       var sp = env.sprite("scene:" + key, env.W, env.H, function (s, w, h) { paint(s, w, h, bleed); }, bleed);
       c.drawImage(sp.canvas, -bleed, -bleed, sp.fw, sp.fh);
+    },
+    /* پس‌زمینه‌ای که گاهی عوض می‌شود (رنگ آسمان با ارتفاع، رنگ هر مرحله): همان لایه‌ی پس‌زمینه، و فقط وقتی
+       key عوض شود دوباره کشیده می‌شود. باید اولین کار draw باشد. */
+    backdrop: function (key, paint) {
+      if (!back.layered) {
+        back.layered = true;
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      }
+      paintBack("backdrop:" + key, paint, 12);
     },
     clamp: clamp,
     lerp: function (a, b, t) { return a + (b - a) * t; },
@@ -450,6 +485,10 @@
   for (var si = 0; si < 46; si++) stars.push({ x: Math.random(), y: Math.random(), r: 0.5 + Math.random() * 1.3, p: Math.random() * 6.28 });
   var bgCache = null;
   function paintBackdrop() {
+    ctx.drawImage(sharedBackdrop(), 0, 0);
+    paintStars();
+  }
+  function sharedBackdrop() {
     var w = canvas.width, h = canvas.height;
     if (!bgCache || bgCache.width !== w || bgCache.height !== h) {
       bgCache = document.createElement("canvas");
@@ -473,7 +512,10 @@
       glow(w * 0.95, h * 0.3, w * 0.8, "rgba(167,139,250,.16)");
       glow(w * 0.4, h * 1.02, w * 0.9, "rgba(244,114,182,.10)");
     }
-    ctx.drawImage(bgCache, 0, 0);
+    return bgCache;
+  }
+  function paintStars() {
+    var w = canvas.width, h = canvas.height;
     var t = performance.now() / 900;
     ctx.fillStyle = "#fff";
     for (var i = 0; i < stars.length; i++) {
@@ -486,6 +528,31 @@
     ctx.globalAlpha = 1;
   }
 
+  /* لایه‌ی پس‌زمینه را (فقط اگر key عوض شده) می‌کشد؛ در صفحه‌های پهن دو طرف ستون بازی همان پس‌زمینه‌ی مشترک است */
+  function paintBack(key, paint, bleed) {
+    if (back.key === key) return;
+    back.key = key;
+    var b = backCtx;
+    b.setTransform(1, 0, 0, 1, 0, 0);
+    b.globalAlpha = 1;
+    b.globalCompositeOperation = "source-over";
+    b.clearRect(0, 0, backCanvas.width, backCanvas.height);
+    var wide = view.offsetX > 0.5;
+    if (wide) b.drawImage(sharedBackdrop(), 0, 0);
+    var s = view.dpr * view.scale;
+    b.setTransform(s, 0, 0, s, view.offsetX * view.dpr, 0);
+    b.save();
+    if (wide) {
+      b.beginPath();
+      b.rect(0, -bleed, view.W, view.H + bleed * 2);
+      b.clip();
+    }
+    paint(b, view.W, view.H, bleed);
+    b.restore();
+    b.shadowBlur = 0;
+    b.shadowColor = "transparent";
+  }
+
   var frameClipped = false;
   function beginFrame() {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -495,7 +562,8 @@
     ctx.globalCompositeOperation = "source-over";
     // بازی‌هایی که خودشان کل صفحه را می‌کشند پس‌زمینه‌ی مشترک لازم ندارند (مگر در صفحه‌های پهن)
     var own = game && game.renderer && game.renderer.ownBackground;
-    if (!own || view.offsetX > 0.5) paintBackdrop();
+    if (back.layered) ctx.clearRect(0, 0, canvas.width, canvas.height); // پس‌زمینه روی لایه‌ی جداست
+    else if (!own || view.offsetX > 0.5) paintBackdrop();
     var s = view.dpr * view.scale;
     var sx = 0, sy = 0;
     if (fx.shakeMag) {
@@ -708,9 +776,7 @@
       if (!res.ok) { fail(errorText(res.error)); return; }
       var config = Object.assign({}, res.level_config || {}, { assets: game.assets });
       fx.reset();
-      quality.frames = 0;
-      quality.total = 0;
-      quality.slow = 0;
+      quality.skip = Math.max(quality.skip, 10); // فریم‌های اول تلاش (ساخت اسپرایت‌ها) حساب نمی‌شوند
       run = {
         sessionId: res.session_id,
         state: game.core.newState(res.seed, config),
@@ -1028,7 +1094,9 @@
     refreshInfo().then(function (res) {
       if (!res.ok) { fail(errorText(res.error)); return null; }
       game.meta = res.game;
+      var known = game.key === res.game.key;
       game.key = res.game.key;
+      if (!known) { loadQuality(); resize(); } // مسابقه‌ی گروه: کلید بازی تازه از سرور آمد
       var base = BOOT.staticBase + game.key + "/";
       var ver = "?v=" + (BOOT.version || "1");
       return loadGameScripts(game.key).then(function () {

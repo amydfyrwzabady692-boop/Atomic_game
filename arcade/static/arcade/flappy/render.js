@@ -303,9 +303,15 @@
         lastTick = tickNow;
         var gh = groundH(), groundY = H - gh;
 
-        c.drawImage(env.sprite("flappy:sky", 4, H, paintSky).canvas, -12, -12, W + 24, H + 24);
+        // آسمان و خورشید ثابت‌اند: روی لایه‌ی پس‌زمینه، فقط با تغییر اندازه‌ی صفحه دوباره کشیده می‌شوند
+        env.backdrop("flappy:" + Math.round(groundY), function (b, w, h, bleed) {
+          b.save();
+          b.translate(-bleed, -bleed);
+          paintSky(b, w + bleed * 2, h + bleed * 2);
+          b.restore();
+          env.blit(b, env.sprite("flappy:sun", 200, 200, paintSun), w * 0.7 - 100, groundY - 420);
+        });
         var now = env.now();
-        env.blit(c, env.sprite("flappy:sun", 200, 200, paintSun), W * 0.7 - 100, groundY - 420);
         // ابرها (آهسته‌تر از کوه‌ها) و دسته‌ی پرنده‌های دور
         for (var cl = 0; cl < 4; cl++) {
           var cw = 96 + (cl % 2) * 54;

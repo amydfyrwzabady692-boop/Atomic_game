@@ -275,8 +275,15 @@
 
         forgetFloors(first - 1); // طبقه‌های رد‌شده دیگر لازم نیستند
 
-        c.drawImage(env.sprite("helix:sky:" + themeIndex, 4, H, paintSky(th.sky)).canvas, -12, -12, W + 24, H + 24);
-        art.glow(c, cx, H * 0.45, W * 0.9, "#ffffff", 0.22);
+        // آسمان، هاله و ستون (ثابت در هر مرحله) روی لایه‌ی پس‌زمینه: فقط با عوض شدن رنگ مرحله دوباره کشیده می‌شود
+        var pillar = env.sprite("helix:pillar", R_IN * 2, 8, paintPillar);
+        env.backdrop("helix:" + themeIndex, function (b, w, h, bleed) {
+          paintSky(th.sky)(b, w, h);
+          b.fillStyle = th.sky[1];
+          b.fillRect(-bleed, h, w + bleed * 2, bleed); // پایین‌ترین ردیف هنگام گرد شدن اندازه‌ها
+          art.glow(b, w / 2, h * 0.45, w * 0.9, "#ffffff", 0.22);
+          b.drawImage(pillar.canvas, w / 2 - R_IN, -bleed, R_IN * 2, h + bleed * 2);
+        });
         // ابرهای دور که با پایین رفتن توپ بالا می‌روند
         var nowMs = env.now();
         c.globalAlpha = 0.55;
@@ -288,8 +295,6 @@
           env.blit(c, cloud, ((cl * 157 + nowMs * 0.004) % (W + cw)) - cw, cloudY);
         }
         c.globalAlpha = 1;
-        var pillar = env.sprite("helix:pillar", R_IN * 2, 8, paintPillar);
-        c.drawImage(pillar.canvas, cx - R_IN, -12, R_IN * 2, H + 24);
 
         function drawBall() {
           squash *= 0.8;

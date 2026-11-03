@@ -18,17 +18,27 @@
   --safe-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--tg-safe-area-inset-bottom, 0px));
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+/* پس‌زمینه روی لایه‌ی ثابتِ جدا (نه background-attachment: fixed): روی اندرویدِ تلگرام، پس‌زمینه‌ی fixed هر فریم
+   اسکرول کل صفحه را دوباره رنگ می‌کرد؛ این لایه یک بار کشیده و فقط ترکیب می‌شود. */
+html { background: var(--bg); }
 html, body {
   margin: 0;
   min-height: 100%;
-  background:
-    radial-gradient(60% 40% at 15% 0%, rgba(110, 231, 255, .14), transparent 70%),
-    radial-gradient(60% 45% at 90% 10%, rgba(167, 139, 250, .2), transparent 70%),
-    radial-gradient(120% 80% at 50% 0%, var(--bg2), var(--bg) 70%) fixed;
   color: var(--ink);
   font-family: Vazirmatn, Tahoma, system-ui, sans-serif;
   font-size: 15px;
   overscroll-behavior: none;
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 40% at 15% 0%, rgba(110, 231, 255, .14), transparent 70%),
+    radial-gradient(60% 45% at 90% 10%, rgba(167, 139, 250, .2), transparent 70%),
+    radial-gradient(120% 80% at 50% 0%, var(--bg2), var(--bg) 70%);
 }
 .hidden { display: none !important; }
 .muted { color: var(--muted); }
@@ -46,8 +56,7 @@ h3 { margin: 4px 0 8px; font-size: 18px; }
   align-items: center;
   gap: 10px;
   padding: calc(var(--safe-top) + 10px) 14px 10px;
-  background: linear-gradient(180deg, rgba(13, 16, 36, .96), rgba(13, 16, 36, .82));
-  backdrop-filter: blur(8px);
+  background: linear-gradient(180deg, rgba(13, 16, 36, .98), rgba(13, 16, 36, .93));
   border-bottom: 1px solid var(--stroke);
 }
 .avatar { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, var(--accent2), var(--accent)); font-size: 20px; }
@@ -251,9 +260,8 @@ main { padding: 6px 14px calc(var(--safe-bottom) + 90px); max-width: 640px; marg
   z-index: 6;
   display: flex;
   padding: 6px 6px calc(var(--safe-bottom) + 6px);
-  background: rgba(13, 16, 36, .94);
+  background: rgba(13, 16, 36, .97);
   border-top: 1px solid var(--stroke);
-  backdrop-filter: blur(8px);
 }
 #tabs button { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; border: 0; border-radius: 12px; background: none; color: var(--muted); font: inherit; font-size: 11px; font-weight: 800; }
 #tabs button span { font-size: 20px; }

@@ -261,18 +261,25 @@
         // آسمان: روز ← غروب ← شب
         var dusk = env.clamp((camera - 8) / 14, 0, 1), night = env.clamp((camera - 30) / 18, 0, 1);
         nightAmount = Math.max(night, dusk * 0.45); // پنجره‌ها از غروب کم‌کم روشن می‌شوند
-        var day = env.sprite("stack:day", 4, H, sky("#3f97ea", "#8ecbf7", "#d7efff"));
-        c.drawImage(day.canvas, -12, -12, W + 24, H + 24);
-        if (dusk > 0) {
-          c.globalAlpha = dusk;
-          c.drawImage(env.sprite("stack:dusk", 4, H, sky("#2a2d78", "#b9508f", "#ffb56e")).canvas, -12, -12, W + 24, H + 24);
-        }
-        if (night > 0) {
-          c.globalAlpha = night;
-          c.drawImage(env.sprite("stack:night", 4, H, sky("#04061a", "#10143a", "#272c66")).canvas, -12, -12, W + 24, H + 24);
-          env.blit(c, env.sprite("stack:stars", W, H, paintStars), 0, 0);
-        }
-        c.globalAlpha = 1;
+        // کل آسمان روی لایه‌ی پس‌زمینه؛ فقط هر یک‌بیستم تغییر غروب/شب یک بار دوباره کشیده می‌شود، نه هر فریم
+        var duskStep = Math.round(dusk * 20), nightStep = Math.round(night * 20);
+        env.backdrop("stack:" + duskStep + ":" + nightStep, function (b, w, h, bleed) {
+          var d = duskStep / 20, n = nightStep / 20;
+          b.save();
+          b.translate(-bleed, -bleed);
+          sky("#3f97ea", "#8ecbf7", "#d7efff")(b, w + bleed * 2, h + bleed * 2);
+          if (d > 0) {
+            b.globalAlpha = d;
+            sky("#2a2d78", "#b9508f", "#ffb56e")(b, w + bleed * 2, h + bleed * 2);
+          }
+          if (n > 0) {
+            b.globalAlpha = n;
+            sky("#04061a", "#10143a", "#272c66")(b, w + bleed * 2, h + bleed * 2);
+            b.translate(bleed, bleed);
+            env.blit(b, env.sprite("stack:stars", w, h, paintStars), 0, 0);
+          }
+          b.restore();
+        });
 
         // ابرها (پارالاکس آهسته) و شهر دوردست
         var drift = env.now() / 1000;

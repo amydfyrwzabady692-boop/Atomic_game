@@ -13,10 +13,10 @@
 @supports (height: 100dvh) {
   :root { --tw: min(calc(100vw - 16px), 560px, calc((100dvh - var(--safe-top) - var(--safe-bottom) - 360px) / .95)); }
 }
-html, body {
+body::before {
   background:
     radial-gradient(70% 45% at 50% 0%, rgba(52, 211, 153, .16), transparent 70%),
-    radial-gradient(120% 80% at 50% 0%, #10304a, var(--bg) 70%) fixed;
+    radial-gradient(120% 80% at 50% 0%, #10304a, var(--bg) 70%);
 }
 #game { gap: 8px; padding-top: calc(var(--safe-top) + 8px); }
 

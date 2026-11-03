@@ -53,13 +53,23 @@ body[data-theme="marble"] {
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body {
-  margin: 0;
-  min-height: 100%;
+/* پس‌زمینه روی لایه‌ی ثابتِ جدا (نه background-attachment: fixed): روی اندرویدِ تلگرام، پس‌زمینه‌ی fixed هر فریم
+   اسکرول کل صفحه را دوباره رنگ می‌کرد؛ این لایه یک بار کشیده و فقط ترکیب می‌شود. */
+html { background: var(--bg); }
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background:
     radial-gradient(60% 40% at 15% 0%, rgba(110, 231, 255, .14), transparent 70%),
     radial-gradient(60% 45% at 90% 10%, rgba(167, 139, 250, .2), transparent 70%),
-    radial-gradient(120% 80% at 50% 0%, var(--bg2), var(--bg) 70%) fixed;
+    radial-gradient(120% 80% at 50% 0%, var(--bg2), var(--bg) 70%);
+}
+html, body {
+  margin: 0;
+  min-height: 100%;
   color: var(--ink);
   font-family: Vazirmatn, Tahoma, system-ui, sans-serif;
   user-select: none;
