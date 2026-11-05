@@ -18,6 +18,7 @@ urlpatterns = [
     path("api/board/move", board_views.move, name="board_move"),
     path("api/board/action", board_views.action, name="board_action"),
     path("api/board/chat", board_views.chat_post, name="board_chat"),
+    path("api/board/chat_lock", board_views.chat_lock, name="board_chat_lock"),
     path("piece/<slug:code>.png", board_views.piece, name="piece"),
     path("font/<slug:weight>.ttf", views.font, name="font"),
     # صفحه‌ی اصلی مینی‌اپ (هاب) و حریف تصادفی

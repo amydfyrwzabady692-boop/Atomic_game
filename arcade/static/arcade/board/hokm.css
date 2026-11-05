@@ -302,3 +302,15 @@ body::before {
 @media (prefers-reduced-motion: reduce) {
   #trick .pcard, #hand .pcard, #center-note, #trump-pick, .bubble, .sheet .card, #trump-box.fresh { animation: none !important; transition: none !important; }
 }
+
+/* ---------------------------------------------------------------- حکم سه‌نفره: سه پلاک امتیاز و رنگ هر نفر */
+:root { --team2: #c084fc; }
+#team-2 { --c: var(--team2); }
+.seat.t2 { --c: var(--team2); }
+#result-list li.t2 { background: color-mix(in srgb, var(--team2) 14%, transparent); }
+#scores.solo { gap: 5px; }
+#scores.solo .team { grid-template-columns: 1fr; padding: 5px 7px; text-align: center; }
+#scores.solo .team .pts { grid-row: auto; font-size: 20px; }
+#scores.solo .team .pts small { display: none; }
+#scores.solo .team.me { border-width: 2px; }
+#scores.solo #trump-box { width: 54px; }

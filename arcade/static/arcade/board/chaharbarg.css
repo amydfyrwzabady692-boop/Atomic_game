@@ -1,0 +1,103 @@
+/* میز چهاربرگ (پاسور): همان پایه‌ی میز حکم (hokm.css) با نمد شرابی‌بنفش و قاب طلایی، کارت‌های زمین وسط میز که با
+   انتخاب هر کارت دست، کارت‌های قابل‌برداشت سبز می‌شوند، نوار «برداشتن / زمین بگذار» زیر میز و جشن «سور». */
+body.cb {
+  --felt-hi: #7a2f6e;
+  --felt: #4b1947;
+  --felt-lo: #240a26;
+  --ring: #f9c74f;
+  --th: clamp(calc(var(--tw) * .78), calc(100vh - var(--safe-top) - var(--safe-bottom) - 330px), calc(var(--tw) * 1.2));
+  --hw: min(calc(var(--tw) * .17), 70px);
+}
+@supports (height: 100dvh) {
+  body.cb { --th: clamp(calc(var(--tw) * .78), calc(100dvh - var(--safe-top) - var(--safe-bottom) - 330px), calc(var(--tw) * 1.2)); }
+}
+html:has(body.cb) { background: #0d0614; }
+body.cb::before {
+  background:
+    radial-gradient(70% 40% at 50% 38%, rgba(214, 92, 190, .2), transparent 72%),
+    radial-gradient(90% 60% at 50% 0%, rgba(255, 214, 140, .07), transparent 70%),
+    radial-gradient(140% 100% at 50% 30%, #1d0c22, #0d0614 72%);
+}
+
+/* امتیاز هر نفر */
+#scores.multi { gap: 6px; }
+#scores.multi .team { grid-template-columns: minmax(0, 1fr) auto; padding: 5px 8px; overflow: hidden; }
+#scores.multi .team .tricks { overflow: hidden; text-overflow: ellipsis; }
+#scores.multi.n4 .team { padding: 4px 6px; }
+#scores.multi.n4 .team .pts { font-size: 18px; }
+#scores.multi.n4 .team .tricks { font-size: 9.5px; }
+#scores.multi .team .pts { font-size: 22px; }
+#scores.multi .team .tricks { direction: ltr; text-align: right; font-size: 10.5px; }
+#scores.multi .team.me { border-width: 2px; }
+#scores.multi .team.gone { opacity: .45; }
+
+/* دسته‌ی کارت‌های مانده */
+#deck-chip { position: absolute; left: 4%; top: 5%; z-index: 3; display: flex; align-items: center; gap: 4px; padding: 3px 9px 3px 4px; border-radius: 99px; background: rgba(0, 0, 0, .45); border: 1px solid rgba(255, 214, 140, .35); direction: ltr; }
+#deck-chip .pcard { --w: 18px; }
+#deck-chip b { color: #ffe7b0; font-size: 12px; font-weight: 900; }
+#deck-chip.empty { opacity: .45; }
+
+/* کارت‌های زمین */
+#pile {
+  position: absolute; left: 50%; top: 47%; z-index: 3; transform: translate(-50%, -50%);
+  display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 6px;
+  width: 58%; max-height: 52%; direction: ltr;
+}
+#pile .pcard { --w: var(--pw, var(--cw)); transform: rotate(var(--r, 0deg)); box-shadow: 0 6px 14px rgba(0, 0, 0, .45); transition: transform .2s ease, filter .2s ease, box-shadow .2s ease; }
+#pile .pcard.in { animation: pile-in .32s cubic-bezier(.2, .8, .3, 1) both; }
+@keyframes pile-in { from { opacity: 0; transform: translateY(40px) scale(.8); } }
+#pile .pcard.hot { transform: translateY(-6px) rotate(var(--r, 0deg)) scale(1.06); box-shadow: 0 0 0 3px #34d399, 0 0 18px rgba(52, 211, 153, .7); }
+#pile .pcard.cold { filter: brightness(.6) saturate(.7); }
+#pile .empty { margin: 0; padding: 8px 14px; border-radius: 99px; background: rgba(0, 0, 0, .3); color: rgba(255, 255, 255, .55); font-size: 12px; font-weight: 800; }
+
+/* کارت‌هایی که برداشته می‌شوند و به سمت برداشت‌کننده می‌روند */
+#fly { position: absolute; inset: 0; z-index: 6; pointer-events: none; }
+#fly .pcard {
+  --w: var(--cw); position: absolute; transform: translate(-50%, -50%) rotate(var(--r, 0deg));
+  box-shadow: 0 0 0 2px rgba(52, 211, 153, .8), 0 8px 18px rgba(0, 0, 0, .5);
+  transition: left .42s cubic-bezier(.3, .7, .3, 1), top .42s cubic-bezier(.3, .7, .3, 1), opacity .42s ease, transform .42s ease;
+}
+#fly .pcard.lead { box-shadow: 0 0 0 3px #ffd166, 0 0 18px rgba(255, 209, 102, .8); }
+#fly .pcard.in { animation: fly-pop .3s cubic-bezier(.2, 1.3, .4, 1) both; }
+@keyframes fly-pop { from { opacity: 0; transform: translate(-50%, -50%) scale(.6); } }
+#fly .pcard.gone { opacity: 0; transform: translate(-50%, -50%) scale(.45); }
+
+/* ۱۰ خشت و ۲ گشنیز: نشان کوچک ستاره */
+.pcard.gem:not(.mini)::after { content: "★"; position: absolute; top: -7px; right: -5px; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: #ffd166; color: #5a3b00; font-size: 10px; box-shadow: 0 2px 4px rgba(0, 0, 0, .4); }
+
+/* نوار برداشتن */
+#choices { display: flex; align-items: center; gap: 6px; width: var(--tw); overflow-x: auto; padding: 2px 2px 4px; scrollbar-width: none; animation: sheet-up .2s ease; }
+#choices::-webkit-scrollbar { display: none; }
+#choices .head { flex: 0 0 auto; color: var(--muted); font-size: 12px; font-weight: 800; white-space: nowrap; }
+#choices button {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 14px;
+  border: 1px solid rgba(52, 211, 153, .6); background: linear-gradient(180deg, rgba(52, 211, 153, .28), rgba(52, 211, 153, .12));
+  color: #eafff6; font: inherit; font-size: 13px; font-weight: 900; white-space: nowrap; box-shadow: 0 3px 0 rgba(10, 125, 104, .6);
+}
+#choices button:active { transform: translateY(2px); box-shadow: none; }
+#choices button .cards { display: flex; gap: 2px; direction: ltr; }
+#choices button em { font-style: normal; }
+#choices button i { font-style: normal; color: #ffe08a; font-size: 11px; }
+#choices button i.sur-tag { padding: 1px 6px; border-radius: 99px; background: #ffd166; color: #4a2c00; }
+#choices button.lay { border-color: rgba(255, 255, 255, .25); background: rgba(255, 255, 255, .08); color: var(--ink); box-shadow: 0 3px 0 rgba(0, 0, 0, .35); }
+
+/* کارت‌های دست: بزرگ‌تر، چون حداکثر ۴ کارت است */
+#hand .pcard.can { box-shadow: 0 6px 14px rgba(0, 0, 0, .5), 0 0 0 2px rgba(52, 211, 153, .85); }
+#hand .pcard.pick { box-shadow: 0 0 0 3px #ffd166, 0 10px 22px rgba(0, 0, 0, .55); }
+.crown.dealer { font-size: 14px; }
+
+/* پیام وسط: سور و جدول امتیاز دست */
+#center-note.sur { top: 50%; border-color: rgba(255, 209, 102, .7); background: radial-gradient(circle at 50% 0%, rgba(255, 209, 102, .3), rgba(6, 12, 24, .92) 70%); animation: sur-pop .5s cubic-bezier(.2, 1.4, .4, 1) both; }
+#center-note.sur b { font-size: 26px; color: #ffe08a; }
+@keyframes sur-pop { from { opacity: 0; transform: translate(-50%, -50%) scale(.6) rotate(-6deg); } }
+#center-note.round { top: 50%; width: min(80%, 320px); }
+.round-rows { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.rr { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 10px; background: color-mix(in srgb, var(--c) 16%, transparent); text-align: right; }
+.rr.me { outline: 1px solid rgba(110, 231, 255, .55); }
+.rr b { font-size: 12px; white-space: nowrap; }
+.rr small { overflow: hidden; color: var(--muted); font-size: 10.5px; white-space: nowrap; text-overflow: ellipsis; }
+.rr i { color: #ffe08a; font-style: normal; font-weight: 900; }
+
+@media (prefers-reduced-motion: reduce) {
+  #pile .pcard, #fly .pcard, #center-note.sur, #choices { animation: none !important; transition: none !important; }
+}

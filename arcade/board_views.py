@@ -35,8 +35,10 @@ def render_page(request, token: str, practice: bool = False):
         template = "arcade/board.html"
     elif match.game_type == "poker":
         template = "arcade/poker.html"
-    elif match.game_type == "hokm":
+    elif match.game_type in ("hokm", "hokm3"):
         template = "arcade/hokm.html"
+    elif match.game_type == "chaharbarg":
+        template = "arcade/chaharbarg.html"
     else:
         template = "arcade/grid.html"
     return render(
@@ -136,9 +138,22 @@ def _chat_after(payload) -> int | None:
 
 def _chat_since(room: str, user, after: int) -> dict:
     # اول فقط شمارنده خوانده می‌شود؛ بیشتر وقت‌ها پیام تازه‌ای نیست
+    extra = {"chat_locked": True} if chat.is_locked(room) else {}
     if chat.last_id(room) <= after:
-        return {}
-    return {"chat": chat.recent(room, user.pk, after)}
+        return extra
+    return {"chat": chat.recent(room, user.pk, after), **extra}
+
+
+def _lock_group(state: dict, user_id: int) -> tuple[list[int], int]:
+    """چه کسانی باید برای بستن گفت‌وگو رأی بدهند: در بازی تیمی (حکم چهارنفره) هر دو نفر یک تیم؛ در بقیه اکثر بازیکن‌ها."""
+    rules = board.rules_for(state)
+    uids = list(rules.players(state).values())
+    if hasattr(rules, "teams") and len(state.get("seats", [])) == 4 and state.get("game") == "hokm":
+        for members in rules.teams(state):
+            ids = [state["seats"][i] for i in members]
+            if user_id in ids:
+                return ids, len(ids)
+    return uids, len(uids) // 2 + 1
 
 
 def _response(match, state: dict, user, chat_after: int | None = None) -> JsonResponse:
@@ -146,12 +161,14 @@ def _response(match, state: dict, user, chat_after: int | None = None) -> JsonRe
     data["players"] = _names(state)
     data["profiles"] = _profiles(state)
     data["cancelled"] = match.status == MatchStatus.CANCELLED
-    if state.get("game") in ("poker", "hokm"):
+    if state.get("game") in board.CARD_TABLES:
         data.update(_table_money(match, state))
     body = {"ok": True, "changed": True, "state": data}
     if chat_after is not None:
-        body["chat"] = chat.recent(chat.match_room(match), user.pk, chat_after)
+        room = chat.match_room(match)
+        body["chat"] = chat.recent(room, user.pk, chat_after)
         body["can_chat"] = _seated(state, user.pk)
+        body["chat_locked"] = chat.is_locked(room)
         body["quick"] = list(chat.QUICK)
     return JsonResponse(body)
 
@@ -248,7 +265,7 @@ def action(request, user, payload):
         raise ArcadeError("match_not_running", 409)
     kind = payload.get("action")
     if kind in ("hokm_trump", "hokm_play"):
-        if match.game_type != "hokm":
+        if match.game_type not in ("hokm", "hokm3"):
             raise ArcadeError("bad_action", 400)
         now = time.time()
         if kind == "hokm_trump":
@@ -257,6 +274,14 @@ def action(request, user, payload):
         else:
             card = payload.get("card")
             change = lambda s: hokm.play(s, user.pk, card, now)  # noqa: E731
+    elif kind == "cb_play":
+        if match.game_type != "chaharbarg":
+            raise ArcadeError("bad_action", 400)
+        from games.chaharbarg import live as chaharbarg
+
+        now = time.time()
+        card, take = payload.get("card"), payload.get("take")
+        change = lambda s: chaharbarg.play(s, user.pk, card, take, now)  # noqa: E731
     elif kind in poker.ACTIONS:
         if match.game_type != "poker":
             raise ArcadeError("bad_action", 400)
@@ -294,6 +319,22 @@ def chat_post(request, user, payload):
     except chat.ChatError as exc:
         raise ArcadeError(exc.code, 409) from exc
     return JsonResponse({"ok": True, "chat": chat.recent(room, user.pk, _chat_after(payload) or 0)})
+
+
+@csrf_exempt
+@require_POST
+@rate_limited("board_chat", 20, 10)
+@authenticated
+def chat_lock(request, user, payload):
+    """رأی بستن گفت‌وگوی میز (وقتی تیمی به تقلب با پیام مشکوک است). در حکم چهارنفره اگر هر دو نفر یک تیم بزنند، و در
+    بقیه‌ی بازی‌ها اگر اکثر بازیکن‌ها بزنند، گفت‌وگو تا پایان همان بازی برای همه بسته می‌شود."""
+    match = _match(payload)
+    current = match.state["board"]
+    if not _seated(current, user.pk):
+        raise ArcadeError("not_a_player", 403)
+    group, need = _lock_group(current, user.pk)
+    locked, votes = chat.lock_vote(chat.match_room(match), user.pk, group, need)
+    return JsonResponse({"ok": True, "chat_locked": locked, "votes": votes, "need": need})
 
 
 # ---------------------------------------------------------------------- شطرنج با کامپیوتر

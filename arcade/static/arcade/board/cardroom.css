@@ -1,0 +1,72 @@
+/* نقش «پاسور» برای میزهای کارت (حکم، حکم سه‌نفره، چهاربرگ و پوکر): پس‌زمینه‌ی صفحه با خال‌های پیک، دل، خشت و
+   گشنیز پراکنده، نقش کم‌رنگ همان خال‌ها روی نمد میز، درخشش آرام و چند خال بزرگ محو گوشه‌ها. همه‌چیز روی لایه‌های ثابت
+   است و فقط transform و opacity جابه‌جا می‌شود تا روی گوشی‌های ضعیف هم روان بماند. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: -160px 0 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: .075;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cg transform='translate(22 24) rotate(-14) scale(1.0) translate(-12 -12)' fill='%23ffffff'%3E%3Cpath d='M12 2s-8 6.5-8 11a4 4 0 0 0 7 2.6L10 21h4l-1-5.4A4 4 0 0 0 20 13c0-4.5-8-11-8-11z'/%3E%3C/g%3E%3Cg transform='translate(92 18) rotate(10) scale(0.8) translate(-12 -12)' fill='%23ff7a90'%3E%3Cpath d='M12 21s-8-5.2-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.8-8 11-8 11z'/%3E%3C/g%3E%3Cg transform='translate(58 62) rotate(20) scale(1.1) translate(-12 -12)' fill='%23ff7a90'%3E%3Cpath d='M12 2l7 10-7 10-7-10z'/%3E%3C/g%3E%3Cg transform='translate(128 64) rotate(-8) scale(0.9) translate(-12 -12)' fill='%23ffffff'%3E%3Ccircle cx='12' cy='7' r='4.2'/%3E%3Ccircle cx='6.8' cy='13.4' r='4.2'/%3E%3Ccircle cx='17.2' cy='13.4' r='4.2'/%3E%3Cpath d='M11 12h2l1.4 9h-4.8z'/%3E%3C/g%3E%3Cg transform='translate(20 104) rotate(8) scale(0.85) translate(-12 -12)' fill='%23ffffff'%3E%3Ccircle cx='12' cy='7' r='4.2'/%3E%3Ccircle cx='6.8' cy='13.4' r='4.2'/%3E%3Ccircle cx='17.2' cy='13.4' r='4.2'/%3E%3Cpath d='M11 12h2l1.4 9h-4.8z'/%3E%3C/g%3E%3Cg transform='translate(96 112) rotate(-18) scale(1.05) translate(-12 -12)' fill='%23ffffff'%3E%3Cpath d='M12 2s-8 6.5-8 11a4 4 0 0 0 7 2.6L10 21h4l-1-5.4A4 4 0 0 0 20 13c0-4.5-8-11-8-11z'/%3E%3C/g%3E%3Cg transform='translate(146 140) rotate(12) scale(0.75) translate(-12 -12)' fill='%23ff7a90'%3E%3Cpath d='M12 2l7 10-7 10-7-10z'/%3E%3C/g%3E%3Cg transform='translate(54 146) rotate(-6) scale(0.9) translate(-12 -12)' fill='%23ff7a90'%3E%3Cpath d='M12 21s-8-5.2-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.8-8 11-8 11z'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 160px 160px;
+  -webkit-mask-image: radial-gradient(120% 90% at 50% 40%, #000 30%, transparent 85%);
+  mask-image: radial-gradient(120% 90% at 50% 40%, #000 30%, transparent 85%);
+  animation: suits-drift 40s linear infinite;
+  will-change: transform;
+}
+@keyframes suits-drift { to { transform: translateY(160px); } }
+
+/* چهار خال بزرگ محو در گوشه‌های صفحه */
+.suit-deco { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.suit-deco i {
+  position: absolute; font-family: "Segoe UI Symbol", "Noto Sans Symbols2", Arial, sans-serif; font-style: normal; line-height: 1;
+  font-size: 34vmin; color: rgba(255, 255, 255, .035); text-shadow: 0 0 40px rgba(255, 255, 255, .04);
+  animation: suit-float 14s ease-in-out infinite alternate;
+}
+.suit-deco i:nth-child(1) { top: -6vmin; right: -8vmin; transform: rotate(14deg); }
+.suit-deco i:nth-child(2) { top: 30%; left: -12vmin; color: rgba(255, 92, 122, .045); animation-delay: -4s; }
+.suit-deco i:nth-child(3) { bottom: 6%; right: -10vmin; color: rgba(255, 92, 122, .04); animation-delay: -8s; }
+.suit-deco i:nth-child(4) { bottom: -10vmin; left: 10%; animation-delay: -11s; }
+@keyframes suit-float { from { translate: 0 0; rotate: -6deg; } to { translate: 0 -18px; rotate: 6deg; } }
+
+/* نقش خال‌ها روی نمد و درخشش آرامی که از روی میز رد می‌شود */
+#felt::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: .07;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cg transform='translate(22 24) rotate(-14) scale(1.0) translate(-12 -12)' fill='%23000000'%3E%3Cpath d='M12 2s-8 6.5-8 11a4 4 0 0 0 7 2.6L10 21h4l-1-5.4A4 4 0 0 0 20 13c0-4.5-8-11-8-11z'/%3E%3C/g%3E%3Cg transform='translate(92 18) rotate(10) scale(0.8) translate(-12 -12)' fill='%23000000'%3E%3Cpath d='M12 21s-8-5.2-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.8-8 11-8 11z'/%3E%3C/g%3E%3Cg transform='translate(58 62) rotate(20) scale(1.1) translate(-12 -12)' fill='%23000000'%3E%3Cpath d='M12 2l7 10-7 10-7-10z'/%3E%3C/g%3E%3Cg transform='translate(128 64) rotate(-8) scale(0.9) translate(-12 -12)' fill='%23000000'%3E%3Ccircle cx='12' cy='7' r='4.2'/%3E%3Ccircle cx='6.8' cy='13.4' r='4.2'/%3E%3Ccircle cx='17.2' cy='13.4' r='4.2'/%3E%3Cpath d='M11 12h2l1.4 9h-4.8z'/%3E%3C/g%3E%3Cg transform='translate(20 104) rotate(8) scale(0.85) translate(-12 -12)' fill='%23000000'%3E%3Ccircle cx='12' cy='7' r='4.2'/%3E%3Ccircle cx='6.8' cy='13.4' r='4.2'/%3E%3Ccircle cx='17.2' cy='13.4' r='4.2'/%3E%3Cpath d='M11 12h2l1.4 9h-4.8z'/%3E%3C/g%3E%3Cg transform='translate(96 112) rotate(-18) scale(1.05) translate(-12 -12)' fill='%23000000'%3E%3Cpath d='M12 2s-8 6.5-8 11a4 4 0 0 0 7 2.6L10 21h4l-1-5.4A4 4 0 0 0 20 13c0-4.5-8-11-8-11z'/%3E%3C/g%3E%3Cg transform='translate(146 140) rotate(12) scale(0.75) translate(-12 -12)' fill='%23000000'%3E%3Cpath d='M12 2l7 10-7 10-7-10z'/%3E%3C/g%3E%3Cg transform='translate(54 146) rotate(-6) scale(0.9) translate(-12 -12)' fill='%23000000'%3E%3Cpath d='M12 21s-8-5.2-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.8-8 11-8 11z'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 120px 120px;
+  -webkit-mask-image: radial-gradient(75% 70% at 50% 50%, transparent 32%, #000 70%);
+  mask-image: radial-gradient(75% 70% at 50% 50%, transparent 32%, #000 70%);
+}
+#felt::after {
+  content: "";
+  position: absolute;
+  inset: -20% -60%;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, .07) 50%, transparent 60%);
+  transform: translateX(-60%);
+  animation: felt-shine 9s ease-in-out infinite;
+}
+@keyframes felt-shine { 0%, 55% { transform: translateX(-60%); } 100% { transform: translateX(60%); } }
+
+/* لبه‌ی براق روی کارت‌های رو (بدون دست زدن به سایه‌ها و قاب پشت کارت هر میز) */
+.pcard.face::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(135deg, rgba(255, 255, 255, .5), transparent 26%, transparent 74%, rgba(0, 0, 0, .05));
+}
+
+/* بستن گفت‌وگوی میز (شک به تقلب) */
+.chat-locked { margin: 0; padding: 10px 12px; border-radius: 14px; background: rgba(255, 92, 122, .14); border: 1px solid rgba(255, 92, 122, .45); color: #ffd0d9; font-size: 13px; font-weight: 800; line-height: 1.8; text-align: center; }
+.btn.ghost.chat-lock { margin: 0; padding: 9px; border: 1px dashed rgba(255, 92, 122, .55); background: rgba(255, 92, 122, .07); color: #ffb4c2; font-size: 13px; }
+.btn.ghost.chat-lock:disabled { opacity: .55; }
+.chat-lock-note { margin: 0; min-height: 0; }
+.chat-lock-note:empty { display: none; }
+#chat-btn.locked { opacity: .6; }
+
+@media (prefers-reduced-motion: reduce) {
+  body::after, .suit-deco i, #felt::after { animation: none !important; }
+}

@@ -30,6 +30,7 @@
     chat_empty: "پیام خالی است.",
     chat_no_links: "فرستادن لینک و آیدی در گفت‌وگو ممنوع است.",
     chat_too_fast: "کمی آهسته‌تر بنویس 🙂",
+    chat_locked: "گفت‌وگوی این میز بسته شده است.",
   };
   var AVATARS = [["#5662e0", "#262b78"], ["#f0617f", "#8f1d3a"], ["#2fbf8f", "#0f5c45"], ["#f5a524", "#8a5200"]];
   // جای صندلی‌ها روی میز (درصد) به ترتیب نسبت به بیننده: خودت، نفر بعدی (راست)، یار (بالا)، نفر قبلی (چپ)
@@ -38,6 +39,9 @@
   var TRICK_SPOTS = [{ x: 50, y: 64, r: -3 }, { x: 67, y: 47, r: 7 }, { x: 50, y: 30, r: 2 }, { x: 33, y: 47, r: -7 }];
   var FROM = [[0, 70], [70, 0], [0, -70], [-70, 0]];
   var TABLE_QUICK = ["👏 آفرین یار", "💪 بریم برای کُت", "🙏 حکم خوبی بود", "😅 ببخشید", "🤝 بازی خوبی بود"];
+  var SOLO_QUICK = ["👏 دست خوبی بود", "😎 کُت در راه است", "🙏 حکم خوبی بود", "😅 ببخشید", "🤝 بازی خوبی بود"];
+  // در حکم سه‌نفره دو حریف راست و چپ می‌نشینند (جای بالا خالی است)
+  var SOLO_SLOTS = [0, 1, 3];
 
   var real = null; // آخرین وضعیت سرور
   var state = null;
@@ -55,7 +59,7 @@
   var prizeTries = 0;
   var prizeTimer = null;
   var ring = { node: null, end: 0 };
-  var talk = { last: 0, open: false, unread: 0, can: false, quick: [], loaded: false, sending: false };
+  var talk = { last: 0, open: false, unread: 0, can: false, quick: [], loaded: false, sending: false, locked: false, voted: false };
 
   function $(id) { return document.getElementById(id); }
   function el(tag, cls, text) {
@@ -101,20 +105,32 @@
   }
   function seated() { return state.you !== null && state.you !== undefined; }
   function base() { return seated() ? state.you : 0; }
-  function rel(seat) { return (seat - base() + 4) % 4; }
+  function count() { return state.seats ? state.seats.length : 4; }
+  function solo() { return !!state.solo; }
+  function rel(seat) { return (seat - base() + count()) % count(); }
+  // جای صندلی روی میز (یکی از چهار جای SPOTS): در سه‌نفره بالا خالی می‌ماند
+  function slot(seat) { var r = rel(seat); return solo() ? SOLO_SLOTS[r] : r; }
   function name(seat) { return state.players["s" + seat] || ""; }
   function badge(seat) {
     var profile = (state.profiles || {})["s" + seat];
     return profile && profile.emoji ? profile.emoji + " " : "";
   }
   function initial(seat) { return (name(seat).trim()[0] || "؟").toUpperCase(); }
-  function team(seat) { return seat % 2; }
+  function team(seat) { return solo() ? seat : seat % 2; }
   function myTeam() { return seated() ? team(state.you) : 0; }
   function teamLabel(t) {
+    if (solo()) return seated() && t === state.you ? "تو" : name(t);
     if (!seated()) return t === 0 ? "تیم آبی" : "تیم نارنجی";
     return t === myTeam() ? "ما" : "حریف";
   }
-  function pairNames(t) { return name(t) + " و " + name(t + 2); }
+  function pairNames(t) { return solo() ? name(t) : name(t) + " و " + name(t + 2); }
+  // «۷ به ۳» برای دو تیم؛ در سه‌نفره دست‌های هر سه نفر از برنده به بعد
+  function tally(list, win) {
+    if (!solo()) return fa(list[win]) + " به " + fa(list[1 - win]);
+    var order = [win].concat([0, 1, 2].filter(function (t) { return t !== win; }));
+    return order.map(function (t) { return fa(list[t]); }).join(" – ");
+  }
+  function others(list, t) { return Math.max.apply(null, list.filter(function (_, i) { return i !== t; })); }
   function myTurn() {
     return seated() && !state.over && state.turn === state.you && (state.phase === "play" || state.phase === "trump");
   }
@@ -171,17 +187,20 @@
 
   // ------------------------------------------------------------------ امتیاز و حکم
   function drawScores() {
-    [0, 1].forEach(function (t) {
+    $("team-2").classList.toggle("hidden", !solo());
+    $("scores").classList.toggle("solo", solo());
+    state.points.forEach(function (_, t) {
       var box = $("team-" + t);
-      box.querySelector(".name").textContent = teamLabel(t) + (seated() ? "" : "");
+      box.classList.toggle("me", solo() && seated() && t === state.you);
+      box.querySelector(".name").textContent = teamLabel(t);
       box.querySelector(".name").title = pairNames(t);
       var pts = box.querySelector(".pts");
       pts.textContent = fa(state.points[t]);
       pts.appendChild(el("small", "", " امتیاز"));
       box.querySelector(".tricks").textContent = (state.phase === "trump" && !state.trick_no ? "دور " + fa(state.round) : "این دور " + fa(state.tricks[t]) + " دست");
-      box.classList.toggle("lead", state.points[t] > state.points[1 - t]);
-      // تیم خودت همیشه سمت راست (اول در راست‌به‌چپ)
-      box.style.order = t === myTeam() ? 0 : 2;
+      box.classList.toggle("lead", state.points[t] > others(state.points, t));
+      // تیم خودت همیشه سمت راست (اول در راست‌به‌چپ)؛ در سه‌نفره بقیه به ترتیب نوبت بعد از حکم
+      box.style.order = t === myTeam() ? 0 : solo() ? 1 + rel(t) : 2;
     });
     $("trump-box").style.order = 1;
     $("target-chip").textContent = "تا " + fa(state.target) + " امتیاز";
@@ -207,19 +226,19 @@
     var box = $("seats");
     box.textContent = "";
     state.seats.forEach(function (s) {
-      var r = rel(s.seat);
+      var r = slot(s.seat);
       var turn = !state.over && state.turn === s.seat && (state.phase === "play" || state.phase === "trump");
       if (seated() && s.seat === state.you) {
-        var me = el("div", "t" + s.team);
+        var me = el("div", "t" + (solo() ? s.seat : s.team));
         me.id = "me-plate";
-        me.style.setProperty("--c", s.team === 0 ? "var(--team0)" : "var(--team1)");
+        me.style.setProperty("--c", "var(--team" + (solo() ? s.seat : s.team) + ")");
         if (turn) me.classList.add("turn");
         me.appendChild(avatar(s.seat));
         me.appendChild(el("b", "", badge(s.seat) + name(s.seat) + " (تو)"));
         box.appendChild(me);
         return;
       }
-      var seat = el("div", "seat t" + s.team + (r === 1 ? " at-right" : r === 3 ? " at-left" : r === 2 ? " at-top" : ""));
+      var seat = el("div", "seat t" + (solo() ? s.seat : s.team) + (r === 1 ? " at-right" : r === 3 ? " at-left" : r === 2 ? " at-top" : ""));
       if (turn) seat.classList.add("turn");
       if (s.left) seat.classList.add("left");
       seat.appendChild(avatar(s.seat));
@@ -259,7 +278,7 @@
   }
   var spots = null;
   function trickCard(seat, code, fresh) {
-    var r = rel(seat);
+    var r = slot(seat);
     var spot = (spots || TRICK_SPOTS)[r];
     var card = cardEl(code, fresh ? "in" : "");
     card.style.setProperty("--r", spot.r + "deg");
@@ -305,7 +324,7 @@
     setTimeout(function () { sound(mine ? "chips" : "chip"); }, 250);
     collecting = { no: last.no, timer: null };
     collecting.timer = setTimeout(function () {
-      var target = SPOTS[rel(last.winner)];
+      var target = SPOTS[slot(last.winner)];
       Array.prototype.forEach.call(box.children, function (card) {
         place(card, target);
         card.classList.add("gone");
@@ -322,7 +341,8 @@
   // ------------------------------------------------------------------ کارت‌های خودت
   function drawHand(previous) {
     var box = $("hand");
-    var hand = state.hand || [];
+    // سرور هر خال را از بزرگ به کوچک می‌فرستد؛ روی صفحه از راست به چپ چیده می‌شود (بزرگ‌ترین کارت سمت راست)
+    var hand = (state.hand || []).slice().reverse();
     var legal = legalSet();
     var playing = myTurn() && state.phase === "play" && !busy;
     if (picked && (!playing || !legal[picked] || hand.indexOf(picked) < 0)) picked = null;
@@ -419,8 +439,8 @@
       var r = state.result;
       var win = r.winner_team;
       var kot = r.kot === "hakem_kot" ? "💥 حاکم‌کُت! " : r.kot === "kot" ? "🔥 کُت! " : "";
-      var title = seated() ? (win === myTeam() ? "🎉 این دور را بردیم" : "😕 این دور را حریف برد") : "🎉 " + teamLabel(win) + " این دور را برد";
-      note(title, kot + fa(r.tricks[win]) + " به " + fa(r.tricks[1 - win]) + " — +" + fa(r.points) + " امتیاز. دور بعد چند ثانیه‌ی دیگر…", seated() && win === myTeam() ? "win" : "");
+      var title = seated() ? (win === myTeam() ? (solo() ? "🎉 این دور را بردی" : "🎉 این دور را بردیم") : (solo() ? "😕 این دور را " + name(win) + " برد" : "😕 این دور را حریف برد")) : "🎉 " + teamLabel(win) + " این دور را برد";
+      note(title, kot + tally(r.tricks, win) + " — +" + fa(r.points) + " امتیاز. دور بعد چند ثانیه‌ی دیگر…", seated() && win === myTeam() ? "win" : "");
       return;
     }
     hideNote();
@@ -488,7 +508,7 @@
     } else if (state.turn !== null && state.turn !== undefined) {
       var mine = myTurn();
       text = (mine ? "نوبت توست" : "نوبت " + name(state.turn)) + " (" + fa(seconds) + " ثانیه)";
-      if (!mine && seated() && state.turn === (state.you + 2) % 4) text += " — یارت";
+      if (!mine && seated() && !solo() && state.turn === (state.you + 2) % 4) text += " — یارت";
       cls = mine ? (seconds <= 7 ? "warn" : "mine") : "";
     }
     if (box.textContent !== text) box.textContent = text;
@@ -517,8 +537,7 @@
     if (!list.length) rounds.appendChild(el("p", "", "هنوز دوری تمام نشده است."));
     list.forEach(function (r) {
       var kot = r.kot === "hakem_kot" ? " — حاکم‌کُت" : r.kot === "kot" ? " — کُت" : "";
-      rounds.appendChild(el("p", "", "دور " + fa(r.round) + ": " + teamLabel(r.winner_team) + " " + fa(r.tricks[r.winner_team]) + " به " +
-        fa(r.tricks[1 - r.winner_team]) + kot + " (+" + fa(r.points) + ") — حکم " + SUIT_NAMES[r.trump]));
+      rounds.appendChild(el("p", "", "دور " + fa(r.round) + ": " + teamLabel(r.winner_team) + " " + tally(r.tricks, r.winner_team) + kot + " (+" + fa(r.points) + ") — حکم " + SUIT_NAMES[r.trump]));
     });
     body.appendChild(rounds);
   }
@@ -558,8 +577,8 @@
   function clamp(value, low, high) { return Math.max(low, Math.min(high, value)); }
   function bubble(message) {
     var seat = chatSeat(message);
-    if (seat === null || !state || seat > 3) return;
-    var spot = SPOTS[rel(seat)];
+    if (seat === null || !state || seat >= count()) return;
+    var spot = SPOTS[slot(seat)];
     var node = el("div", "bubble" + (message.mine ? " mine" : ""), message.text);
     if (spot.y < 30) node.classList.add("below");
     var box = $("bubbles");
@@ -575,7 +594,7 @@
   function drawQuick() {
     var box = $("chat-quick");
     box.textContent = "";
-    talk.quick.concat(TABLE_QUICK).forEach(function (text) {
+    talk.quick.concat(state && solo() ? SOLO_QUICK : TABLE_QUICK).forEach(function (text) {
       var button = el("button", "", text);
       button.type = "button";
       button.addEventListener("click", function () { say(text); });
@@ -583,9 +602,38 @@
     });
   }
   function drawChatAccess() {
-    $("chat-form").classList.toggle("hidden", !talk.can);
-    $("chat-quick").classList.toggle("hidden", !talk.can);
-    $("chat-note").classList.toggle("hidden", talk.can);
+    var open = talk.can && !talk.locked;
+    $("chat-form").classList.toggle("hidden", !open);
+    $("chat-quick").classList.toggle("hidden", !open);
+    $("chat-note").classList.toggle("hidden", talk.can || talk.locked);
+    $("chat-locked").classList.toggle("hidden", !talk.locked);
+    $("chat-lock").classList.toggle("hidden", !talk.can || talk.locked);
+    $("chat-lock").disabled = talk.voted;
+    $("chat-btn").classList.toggle("locked", talk.locked);
+  }
+  // بستن گفت‌وگو: اگر حریف با پیام‌ها تقلب (علامت دادن) می‌کند؛ وقتی هر دو نفر یک تیم (در سه‌نفره دو نفر از سه نفر) بزنند
+  // گفت‌وگو تا آخر همین بازی برای همه بسته می‌شود
+  function lockChat() {
+    if (!talk.can || talk.locked || talk.voted) return;
+    talk.voted = true;
+    drawChatAccess();
+    api("board/chat_lock", {}).then(function (response) {
+      if (!response.ok) { talk.voted = false; drawChatAccess(); toast(errorText(response.error)); return; }
+      if (response.chat_locked) setLocked(true);
+      else {
+        $("chat-lock-note").textContent = "رأی تو ثبت شد (" + fa(response.votes) + " از " + fa(response.need) + ")؛ " +
+          (solo() ? "اگر یک نفر دیگر هم بزند" : "اگر یارت هم بزند") + " گفت‌وگو بسته می‌شود.";
+        toast("رأی بستن گفت‌وگو ثبت شد", true);
+      }
+      drawChatAccess();
+    });
+  }
+  function setLocked(locked) {
+    if (!locked || talk.locked) return;
+    talk.locked = true;
+    $("chat-lock-note").textContent = "";
+    toast("🔒 گفت‌وگوی این میز تا پایان بازی بسته شد", true);
+    drawChatAccess();
   }
   function say(text) {
     text = String(text || "").trim();
@@ -596,7 +644,10 @@
     api("board/chat", { text: text, chat_after: talk.last }).then(function (response) {
       talk.sending = false;
       $("chat-send").disabled = false;
-      if (!response.ok) { toast(errorText(response.error)); haptic("error"); return; }
+      if (!response.ok) {
+        if (response.error === "chat_locked") setLocked(true);
+        toast(errorText(response.error)); haptic("error"); return;
+      }
       $("chat-input").value = "";
       addChat(response.chat);
     });
@@ -607,6 +658,7 @@
     var over = state.over;
     if (!over) return "";
     var win = over.winner_team;
+    if (solo()) return seated() && win === state.you ? "🏆 تو بردی!" : (seated() ? "😔 " : "🏆 ") + name(win) + " برد";
     if (!seated()) return "🏆 " + teamLabel(win) + " (" + pairNames(win) + ") برد";
     return win === myTeam() ? "🏆 تیم شما برد!" : "😔 تیم حریف برد";
   }
@@ -628,7 +680,10 @@
     var list = $("result-list");
     list.textContent = "";
     var win = state.over.winner_team;
-    [win, win + 2, 1 - win, 3 - win].forEach(function (seat) {
+    var order = solo()
+      ? [win].concat([0, 1, 2].filter(function (s) { return s !== win; }).sort(function (a, b) { return state.points[b] - state.points[a]; }))
+      : [win, win + 2, 1 - win, 3 - win];
+    order.forEach(function (seat) {
       var item = el("li", "t" + team(seat) + (seated() && seat === state.you ? " me" : ""));
       item.appendChild(el("span", "", (team(seat) === win ? "🏆 " : "") + name(seat)));
       var prizes = state.prizes || null;
@@ -651,8 +706,9 @@
     $("result-icon").textContent = won ? "🏆" : "♠️";
     $("result-title").textContent = resultTitle().replace(/^🏆 /, "");
     $("result-reason").textContent = over.reason === "left"
-      ? name(over.left_seat) + " بازی را ترک کرد؛ تیمش باخت."
-      : "امتیاز " + fa(state.points[0]) + " به " + fa(state.points[1]) + " — تیم برنده جایزه را نصف‌نصف می‌برد.";
+      ? name(over.left_seat) + (solo() ? " بازی را ترک کرد." : " بازی را ترک کرد؛ تیمش باخت.")
+      : solo() ? "امتیاز " + tally(state.points, over.winner_team) + " — برنده کل جایزه را می‌برد."
+        : "امتیاز " + fa(state.points[0]) + " به " + fa(state.points[1]) + " — تیم برنده جایزه را نصف‌نصف می‌برد.";
     setTimeout(function () {
       $("result").classList.remove("hidden");
       if (won) confetti();
@@ -682,7 +738,21 @@
     var wasMine = previous.turn === previous.you && previous.you !== null && previous.phase === state.phase;
     if (myTurn() && !wasMine) { sound("turn"); haptic("medium"); }
   }
+  var dressed = false;
+  // یک بار: عنوان و متن‌های مخصوص حکم سه‌نفره
+  function dress() {
+    if (dressed) return;
+    dressed = true;
+    document.body.classList.toggle("solo", solo());
+    if (!solo()) return;
+    document.title = "حکم سه‌نفره";
+    $("game-title").textContent = "👑 حکم سه‌نفره";
+    $("chat-empty").textContent = "هنوز پیامی نیست؛ سلام کن 👋";
+    $("leave-note").textContent = "اگر بروی، بازی برای تو تمام می‌شود و می‌بازی؛ جایزه به نفری می‌رسد که امتیاز بیشتری دارد.";
+    if (talk.quick.length) drawQuick();
+  }
   function render(previous) {
+    dress();
     drawScores();
     drawTrump();
     drawSeats();
@@ -706,6 +776,7 @@
       return false;
     }
     receivedAt = now();
+    if (response.chat_locked) setLocked(true);
     if (response.can_chat !== undefined) {
       talk.can = !!response.can_chat;
       if (response.quick && !talk.quick.length) { talk.quick = response.quick; drawQuick(); }
@@ -794,6 +865,7 @@
       if (event.target === sheet || event.target.classList.contains("sheet-close")) closeSheet(sheet);
     });
   });
+  $("chat-lock").addEventListener("click", lockChat);
   $("chat-form").addEventListener("submit", function (event) {
     event.preventDefault();
     say($("chat-input").value);

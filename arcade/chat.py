@@ -60,10 +60,34 @@ def _allowed(user_id: int) -> bool:
     return count <= 15
 
 
+def is_locked(room: str) -> bool:
+    try:
+        return bool(get_sync_redis().get(f"chat:locked:{room}"))
+    except Exception:
+        return False
+
+
+def lock_vote(room: str, voter_id: int, group_ids: list[int], need: int) -> tuple[bool, int]:
+    """رأی بستن گفت‌وگو (مشکوک به تقلب، مثلاً علامت دادن یارها به هم). وقتی ``need`` نفر از ``group_ids`` رأی بدهند
+    گفت‌وگوی این اتاق تا پایان بازی برای همه بسته می‌شود. (بسته‌شده؟، تعداد رأی‌های همین گروه)"""
+    redis = get_sync_redis()
+    key = f"chat:lockvote:{room}"
+    redis.sadd(key, str(voter_id))
+    redis.expire(key, TTL)
+    votes = {int(v) for v in redis.smembers(key)}
+    count = len(votes & set(group_ids))
+    if count >= need:
+        redis.set(f"chat:locked:{room}", "1", ex=TTL)
+        return True, count
+    return False, count
+
+
 def post(room: str, user, text, side: str | None = None) -> dict:
     """پیام را به اتاق اضافه می‌کند و همان را برمی‌گرداند؛ در خطا ``ChatError``.
     ``side`` جای گوینده سر میز است (مثلاً ``s2`` در پوکر) تا حباب پیام بالای صندلی‌اش دیده شود."""
     text = clean(text)
+    if is_locked(room):
+        raise ChatError("chat_locked")
     if not _allowed(user.pk):
         raise ChatError("chat_too_fast")
     redis = get_sync_redis()

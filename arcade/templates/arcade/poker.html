@@ -8,9 +8,11 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E🃏%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="{% static 'arcade/board/chess.css' %}?v={{ version }}">
 <link rel="stylesheet" href="{% static 'arcade/board/poker.css' %}?v={{ version }}">
+<link rel="stylesheet" href="{% static 'arcade/board/cardroom.css' %}?v={{ version }}">
 <link rel="preload" href="/arcade/font/regular.ttf" as="font" type="font/ttf" crossorigin>
 </head>
 <body class="poker">
+<div class="suit-deco" aria-hidden="true"><i>♠</i><i>♥</i><i>♦</i><i>♣</i></div>
 <main id="game" class="hidden">
   <header id="table-head">
     <div class="title">
@@ -142,6 +144,9 @@
       <button id="chat-send" class="btn go" type="submit">ارسال</button>
     </form>
     <p class="muted chat-note hidden" id="chat-note">فقط بازیکن‌های میز می‌نویسند؛ تو تماشاچی هستی.</p>
+    <p class="chat-locked hidden" id="chat-locked">🔒 گفت‌وگوی این میز به خاطر شک به تقلب تا پایان بازی بسته شد.</p>
+    <button class="btn ghost chat-lock hidden" id="chat-lock" type="button">🚫 کسی تقلب می‌کند؟ گفت‌وگو را ببند</button>
+    <p class="muted chat-lock-note" id="chat-lock-note"></p>
     <button class="btn violet sheet-close" type="button">بستن</button>
   </div>
 </section>

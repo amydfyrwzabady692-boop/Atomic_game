@@ -51,8 +51,10 @@ LIVE_POLL_SECONDS = 2
 def live_key(state: dict):
     """چه وقت پیام وضعیت گروه باید ویرایش شود. در حکم فقط با رویدادهای مهم (انتخاب حکم، پایان هر دست، پایان دور)
     نه با تک‌تک کارت‌ها، تا یک بازی ۵۲کارتی سهمیه‌ی ویرایش پیام‌های گروه را نخورد؛ بقیه با هر نسخه‌ی تازه."""
-    if state.get("game") == "hokm":
+    if state.get("game") in ("hokm", "hokm3"):
         return (state["round"], state["phase"], state["trump"], state["trick_no"], tuple(state["points"]), bool(state["over"]))
+    if state.get("game") == "chaharbarg":
+        return (state["round"], state["phase"], len(state["deck"]), tuple(state["points"]), bool(state["over"]))
     return state["version"]
 LIVE_EDIT_MIN_GAP = 3  # فاصله‌ی ویرایش عکس صفحه در گروه (حد نرخ تلگرام)
 ARCADE_POLL_SECONDS = 5
@@ -374,8 +376,8 @@ class MatchManager:
                 match = await db(services.start_match)(active.match_id, play_seconds)
             except MatchError as exc:
                 reason = "not_enough_players" if exc.code == "not_enough_players" else "error"
-                if reason == "not_enough_players" and info.key == "hokm":
-                    reason = "hokm_four"  # حکم دقیقاً ۴ نفر لازم دارد
+                if reason == "not_enough_players" and info.key in ("hokm", "hokm3"):
+                    reason = "hokm_four" if info.key == "hokm" else "hokm_three"  # تعداد دقیق بازیکن لازم است
                 await self._cancel_locked(active, reason)
                 return
             entries = await db(lambda: list(match.players.select_related("user")))()
@@ -700,9 +702,12 @@ class MatchManager:
         if state.get("game") == "poker":
             by_id = {p.user_id: p for p in active.players_by_tg.values()}
             return None, render.poker_text(state, {uid: p.name for uid, p in by_id.items()}, live=True)
-        if state.get("game") == "hokm":
+        if state.get("game") in ("hokm", "hokm3"):
             by_id = {p.user_id: p for p in active.players_by_tg.values()}
             return None, render.hokm_text(state, {uid: p.name for uid, p in by_id.items()})
+        if state.get("game") == "chaharbarg":
+            by_id = {p.user_id: p for p in active.players_by_tg.values()}
+            return None, render.chaharbarg_text(state, {uid: p.name for uid, p in by_id.items()})
         if state.get("game", "chess") != "chess":
             return self._grid_view(active, state)
         by_id = {p.user_id: p for p in active.players_by_tg.values()}
@@ -744,7 +749,8 @@ class MatchManager:
 
     async def _start_live(self, active: ActiveMatch, match: Match, players: list[Player]) -> None:
         order = list(players)
-        random.Random(match.seed).shuffle(order)
+        # جای نشستن (و در حکم، یارها) به قرعه است، نه به ترتیب ورود به لابی
+        random.SystemRandom().shuffle(order)
         state = live_board.new_state(
             active.info.key, [p.user_id for p in order], time.time(), seed=str(match.seed), options=match.options
         )

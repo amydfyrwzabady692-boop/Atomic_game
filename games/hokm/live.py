@@ -29,6 +29,11 @@ from games.poker.cards import RANK_VALUE, SUITS, shuffled_deck
 
 PLAYERS = 4
 TRICKS_TO_WIN = 7
+# حکم سه‌نفره: هر کس برای خودش؛ ۲ گشنیز کنار می‌رود (۵۱ کارت، نفری ۱۷) و اولین کسی که ۶ دست ببرد دور را می‌برد
+# (با ۱۷ دست همیشه دست‌کم یک نفر به ۶ می‌رسد).
+SOLO_PLAYERS = 3
+SOLO_TRICKS_TO_WIN = 6
+SOLO_REMOVED = "2c"
 HAND_SIZE = 13
 FIRST_DEAL = 5
 MOVE_SECONDS = 25
@@ -43,6 +48,24 @@ SUIT_SYMBOL = {"s": "♠", "h": "♥", "d": "♦", "c": "♣"}
 
 
 # ------------------------------------------------------------------ ابزار
+def size(state: dict) -> int:
+    return len(state["seats"])
+
+
+def team(state: dict, seat: int) -> int:
+    """تیم یک صندلی: در حکم چهارنفره یارها روبه‌روی هم (۰ و ۲، ۱ و ۳)؛ در سه‌نفره هر کس تیم خودش."""
+    return seat % 2 if size(state) == PLAYERS else seat
+
+
+def teams(state: dict) -> list[list[int]]:
+    """صندلی‌های هر تیم (برای قفل گفت‌وگو و نمایش)."""
+    return [[i for i in range(size(state)) if team(state, i) == t] for t in range(len(state["points"]))]
+
+
+def need(state: dict) -> int:
+    return TRICKS_TO_WIN if size(state) == PLAYERS else SOLO_TRICKS_TO_WIN
+
+
 def team_of(seat: int) -> int:
     return seat % 2
 
@@ -51,8 +74,8 @@ def partner_of(seat: int) -> int:
     return (seat + 2) % PLAYERS
 
 
-def next_seat(seat: int) -> int:
-    return (seat + 1) % PLAYERS
+def next_seat(seat: int, n: int = PLAYERS) -> int:
+    return (seat + 1) % n
 
 
 def suit(card: str) -> str:
@@ -95,12 +118,12 @@ def trick_winner(plays: list, trump: str) -> int:
 
 
 # ------------------------------------------------------------------ ساخت میز
-def first_hakem(seed: str) -> tuple[int, list]:
+def first_hakem(seed: str, n: int = PLAYERS) -> tuple[int, list]:
     """تعیین حاکم اول: کارت‌ها یکی‌یکی رو به ترتیب صندلی‌ها تا اولین آس."""
     deck = shuffled_deck(f"{seed}:hakem")
     draw = []
     for i, card in enumerate(deck):
-        seat = i % PLAYERS
+        seat = i % n
         draw.append([seat, card])
         if card[0] == "A":
             return seat, draw
@@ -108,37 +131,39 @@ def first_hakem(seed: str) -> tuple[int, list]:
 
 
 def new_state(user_ids: list[int], now: float, seed: str = "", target: int = DEFAULT_TARGET) -> dict:
-    if len(user_ids) != PLAYERS:
-        raise ValueError("حکم دقیقاً ۴ بازیکن لازم دارد")
+    n = len(user_ids)
+    if n not in (PLAYERS, SOLO_PLAYERS):
+        raise ValueError("حکم ۴ یا ۳ بازیکن لازم دارد")
     if target not in TARGETS:
         target = DEFAULT_TARGET
     seed = seed or str(now)
-    hakem, draw = first_hakem(seed)
+    hakem, draw = first_hakem(seed, n)
+    nteams = 2 if n == PLAYERS else n
     state = {
-        "game": "hokm",
+        "game": "hokm" if n == PLAYERS else "hokm3",
         "seats": list(user_ids),
         "seed": seed,
         "target": target,
-        "points": [0, 0],
+        "points": [0] * nteams,
         "round": 0,
         "hakem": hakem,
         "draw": draw,
         "trump": "",
-        "hands": [[] for _ in range(PLAYERS)],
+        "hands": [[] for _ in range(n)],
         "pending": [],
         "phase": "trump",
         "turn": hakem,
         "leader": hakem,
         "trick": [],
         "trick_no": 0,
-        "tricks": [0, 0],
+        "tricks": [0] * nteams,
         "last_trick": None,
-        "won": [[] for _ in range(PLAYERS)],  # کارت‌های دست‌های بُرده‌ی هر صندلی در همین دور (برای شمارش)
+        "won": [[] for _ in range(n)],  # کارت‌های دست‌های بُرده‌ی هر صندلی در همین دور (برای شمارش)
         "result": None,
         "history": [],
-        "misses": [0] * PLAYERS,
-        "away": [False] * PLAYERS,
-        "left": [False] * PLAYERS,
+        "misses": [0] * n,
+        "away": [False] * n,
+        "left": [False] * n,
         "deadline": None,
         "move_seconds": MOVE_SECONDS,
         "trump_seconds": TRUMP_SECONDS,
@@ -157,10 +182,13 @@ def _deadline(state: dict, seat: int, now: float, seconds: float) -> float:
 def _start_round(state: dict, now: float) -> None:
     """دور تازه: بُر، ۵ کارت به هر نفر از حاکم، و انتظار برای انتخاب حکم."""
     state["round"] += 1
+    n = size(state)
     deck = shuffled_deck(f"{state['seed']}:{state['round']}")
+    if n == SOLO_PLAYERS:
+        deck.remove(SOLO_REMOVED)
     hakem = state["hakem"]
-    order = [(hakem + i) % PLAYERS for i in range(PLAYERS)]
-    hands = [[] for _ in range(PLAYERS)]
+    order = [(hakem + i) % n for i in range(n)]
+    hands = [[] for _ in range(n)]
     for seat in order:
         for _ in range(FIRST_DEAL):
             hands[seat].append(deck.pop())
@@ -172,9 +200,9 @@ def _start_round(state: dict, now: float) -> None:
     state["leader"] = hakem
     state["trick"] = []
     state["trick_no"] = 0
-    state["tricks"] = [0, 0]
+    state["tricks"] = [0] * len(state["points"])
     state["last_trick"] = None
-    state["won"] = [[] for _ in range(PLAYERS)]
+    state["won"] = [[] for _ in range(n)]
     state["result"] = None
     state["deadline"] = _deadline(state, hakem, now, state.get("trump_seconds", TRUMP_SECONDS))
 
@@ -182,8 +210,9 @@ def _start_round(state: dict, now: float) -> None:
 def _deal_rest(state: dict) -> None:
     deck = state["pending"]
     hakem = state["hakem"]
-    order = [(hakem + i) % PLAYERS for i in range(PLAYERS)]
-    for _ in range(2):  # دو دور، هر بار ۴ کارت به هر نفر
+    n = size(state)
+    order = [(hakem + i) % n for i in range(n)]
+    for _ in range(2 if n == PLAYERS else 3):  # چهارتا چهارتا تا هر نفر ۱۳ (سه‌نفره ۱۷) کارت داشته باشد
         for seat in order:
             for _ in range(4):
                 state["hands"][seat].append(deck.pop())
@@ -246,17 +275,17 @@ def _play(state: dict, seat: int, card: str, now: float, timeout: bool = False) 
     state["trick"].append([seat, card])
     _mark(state, seat, timeout)
     state["last_action"] = {"kind": "play", "seat": seat, "card": card, "timeout": timeout}
-    if len(state["trick"]) < PLAYERS:
-        state["turn"] = next_seat(seat)
+    if len(state["trick"]) < size(state):
+        state["turn"] = next_seat(seat, size(state))
         state["deadline"] = _deadline(state, state["turn"], now, state["move_seconds"])
         return
     winner = trick_winner(state["trick"], state["trump"])
-    state["tricks"][team_of(winner)] += 1
+    state["tricks"][team(state, winner)] += 1
     state["won"][winner].extend(card for _, card in state["trick"])
     state["trick_no"] += 1
     state["last_trick"] = {"plays": state["trick"], "winner": winner, "no": state["trick_no"]}
     state["trick"] = []
-    if max(state["tricks"]) >= TRICKS_TO_WIN:
+    if max(state["tricks"]) >= need(state):
         _end_round(state, now)
         return
     state["turn"] = winner
@@ -266,12 +295,11 @@ def _play(state: dict, seat: int, card: str, now: float, timeout: bool = False) 
 
 def _end_round(state: dict, now: float) -> None:
     tricks = state["tricks"]
-    winner = 0 if tricks[0] >= TRICKS_TO_WIN else 1
-    loser = 1 - winner
-    hakem_team = team_of(state["hakem"])
+    winner = max(range(len(tricks)), key=lambda t: tricks[t])
+    hakem_team = team(state, state["hakem"])
     kot = ""
     gained = 1
-    if tricks[loser] == 0:
+    if all(tricks[t] == 0 for t in range(len(tricks)) if t != winner):
         kot = "kot" if winner == hakem_team else "hakem_kot"
         gained = 2 if kot == "kot" else 3
     state["points"][winner] += gained
@@ -287,7 +315,7 @@ def _end_round(state: dict, now: float) -> None:
     state["result"] = result
     state["history"] = (state["history"] + [result])[-20:]
     if winner != hakem_team:
-        state["hakem"] = next_seat(state["hakem"])  # حکم به نفر بعدی (از تیم برنده) می‌رسد
+        state["hakem"] = next_seat(state["hakem"], size(state))  # حکم به نفر بعدی می‌رسد
     state["turn"] = None
     if state["points"][winner] >= state["target"]:
         _finish(state, "points", winner)
@@ -361,7 +389,12 @@ def resign(state: dict, user_id: int, now: float | None = None) -> None:
     if state["over"]:
         raise LiveError("game_over")
     state["left"][seat] = True
-    _finish(state, "left", 1 - team_of(seat), left_seat=seat)
+    if size(state) == PLAYERS:
+        winner = 1 - team_of(seat)
+    else:  # سه‌نفره: از دو نفر مانده، هر کس امتیاز بیشتری دارد (در تساوی نفر بعدی)
+        others = [(seat + k) % size(state) for k in (1, 2)]
+        winner = max(others, key=lambda t: (state["points"][t], -others.index(t)))
+    _finish(state, "left", winner, left_seat=seat)
     state["version"] += 1
 
 
@@ -381,8 +414,13 @@ def standings(state: dict) -> list[tuple[int, int]]:
     scores = list(state["points"])
     if winner is not None:
         scores[winner] = max(scores[winner], state["target"])
-        scores[1 - winner] = min(scores[1 - winner], scores[winner] - 1)
-    return [(uid, scores[team_of(i)]) for i, uid in enumerate(state["seats"])]
+        for t in range(len(scores)):
+            if t != winner:
+                scores[t] = min(scores[t], scores[winner] - 1)
+    for i in range(size(state)):
+        if state["left"][i] and team(state, i) != winner and size(state) != PLAYERS:
+            scores[team(state, i)] = 0
+    return [(uid, scores[team(state, i)]) for i, uid in enumerate(state["seats"])]
 
 
 # ------------------------------------------------------------------ نمایش
@@ -392,17 +430,17 @@ def view(state: dict, viewer_id: int | None, now: float | None = None) -> dict:
     you = seat_of(state, viewer_id) if viewer_id is not None else None
     trump = state["trump"]
     seats = []
-    for i in range(PLAYERS):
+    for i in range(size(state)):
         seats.append(
             {
                 "seat": i,
                 "side": f"s{i}",
-                "team": team_of(i),
+                "team": team(state, i),
                 "count": len(state["hands"][i]),
                 "hakem": i == state["hakem"],
                 "away": state["away"][i],
                 "left": state["left"][i],
-                "tricks": len(state["won"][i]) // PLAYERS,
+                "tricks": len(state["won"][i]) // size(state),
             }
         )
     hand = []
@@ -415,7 +453,9 @@ def view(state: dict, viewer_id: int | None, now: float | None = None) -> dict:
     turn = state["turn"]
     seconds = state["trump_seconds"] if state["phase"] == "trump" else state["move_seconds"]
     return {
-        "game": "hokm",
+        "game": state["game"],
+        "need": need(state),
+        "solo": size(state) != PLAYERS,
         "seats": seats,
         "you": you,
         "hand": hand,

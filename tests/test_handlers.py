@@ -674,19 +674,21 @@ async def test_game_menu_shows_every_game_on_one_screen(app):
     buttons = buttons_of(menu.replies[0]["reply_markup"])
     games = [b for b in buttons if (b.callback_data or "").startswith("n:g:")]
     arcade = [b for b in games if b.callback_data.startswith("n:g:arcade_")]
-    assert len(games) == 28 and len(arcade) == 14
+    assert len(games) == 30 and len(arcade) == 14
     assert {style_of(b) for b in arcade} == {"success"}
     assert {style_of(b) for b in games if b not in arcade} == {"primary"}
     labels = " ".join(b.text for b in games)
-    for title in ("هیزم‌شکن", "موش‌زن", "مار کلاسیک", "شطرنج", "دوز چهارتایی", "کوییز", "حکم"):
+    for title in ("هیزم‌شکن", "موش‌زن", "مار کلاسیک", "شطرنج", "دوز چهارتایی", "کوییز", "حکم", "حکم سه‌نفره", "چهاربرگ"):
         assert title in labels
-    assert "۱۴ بازی گروهی" in menu.replies[0]["text"] and "۱۴ بازی آرکید" in menu.replies[0]["text"]
+    assert "۱۶ بازی گروهی" in menu.replies[0]["text"] and "۱۴ بازی آرکید" in menu.replies[0]["text"]
     # مرتب بر اساس نوع: هر دسته یک ردیف عنوان و بعد بازی‌هایش به ترتیب محبوبیت
     order = [b.callback_data for b in buttons if b.callback_data != "n:x"]
-    assert order[:6] == ["n:h:board", "n:g:chess", "n:g:poker", "n:g:hokm", "n:g:tictactoe", "n:g:connect4"]
-    assert order[6:12] == ["n:h:word", "n:g:quiz", "n:g:anagram", "n:g:hangman", "n:g:emoji_guess", "n:g:word_chain"]
-    assert order[12:17] == ["n:h:speed", "n:g:quick_math", "n:g:typing_race", "n:g:guess_number", "n:g:dice_games"]
-    assert order[17:19] == ["n:h:arcade", "n:g:arcade_snake"] and len(order) == 32
+    assert order[:8] == [
+        "n:h:board", "n:g:chess", "n:g:poker", "n:g:hokm", "n:g:hokm3", "n:g:chaharbarg", "n:g:tictactoe", "n:g:connect4"
+    ]
+    assert order[8:14] == ["n:h:word", "n:g:quiz", "n:g:anagram", "n:g:hangman", "n:g:emoji_guess", "n:g:word_chain"]
+    assert order[14:19] == ["n:h:speed", "n:g:quick_math", "n:g:typing_race", "n:g:guess_number", "n:g:dice_games"]
+    assert order[19:21] == ["n:h:arcade", "n:g:arcade_snake"] and len(order) == 34
     # ردیف عنوان هر دسته فقط توضیح کوتاهی می‌دهد و منو را عوض نمی‌کند (و «n:h» منوهای قبلی هم کار می‌کند)
     for section in ("board", "word", "speed", "arcade"):
         header = await click(app, 251, f"n:h:{section}", menu_id)

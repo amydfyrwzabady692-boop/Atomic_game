@@ -37,6 +37,7 @@
     chat_empty: "پیام خالی است.",
     chat_no_links: "فرستادن لینک و آیدی در گفت‌وگو ممنوع است.",
     chat_too_fast: "کمی آهسته‌تر بنویس 🙂",
+    chat_locked: "گفت‌وگوی این میز بسته شده است.",
   };
   var REASONS = { chips: "یک نفر همه‌ی ژتون‌ها را برد", limit: "دست‌ها تمام شد", left: "بقیه از میز بلند شدند" };
   var AVATARS = [["#5662e0", "#262b78"], ["#f0617f", "#8f1d3a"], ["#2fbf8f", "#0f5c45"], ["#f5a524", "#8a5200"],
@@ -84,7 +85,7 @@
   var historyOpen = false;
   var ring = { node: null, end: 0 };
   var prizeTries = 0;
-  var talk = { last: 0, open: false, unread: 0, can: false, quick: [], loaded: false, sending: false };
+  var talk = { last: 0, open: false, unread: 0, can: false, quick: [], loaded: false, sending: false, locked: false, voted: false };
 
   function $(id) { return document.getElementById(id); }
   function el(tag, cls, text) {
@@ -1023,9 +1024,35 @@
     });
   }
   function drawChatAccess() {
-    $("chat-form").classList.toggle("hidden", !talk.can);
-    $("chat-quick").classList.toggle("hidden", !talk.can);
-    $("chat-note").classList.toggle("hidden", talk.can);
+    var open = talk.can && !talk.locked;
+    $("chat-form").classList.toggle("hidden", !open);
+    $("chat-quick").classList.toggle("hidden", !open);
+    $("chat-note").classList.toggle("hidden", talk.can || talk.locked);
+    $("chat-locked").classList.toggle("hidden", !talk.locked);
+    $("chat-lock").classList.toggle("hidden", !talk.can || talk.locked);
+    $("chat-lock").disabled = talk.voted;
+  }
+  // بستن گفت‌وگو وقتی کسی با پیام‌ها تقلب (علامت دادن) می‌کند: با رأی اکثر بازیکن‌های میز تا آخر همین بازی بسته می‌شود
+  function lockChat() {
+    if (!talk.can || talk.locked || talk.voted) return;
+    talk.voted = true;
+    drawChatAccess();
+    api("board/chat_lock", {}).then(function (response) {
+      if (!response.ok) { talk.voted = false; drawChatAccess(); toast(errorText(response.error)); return; }
+      if (response.chat_locked) setLocked(true);
+      else {
+        $("chat-lock-note").textContent = "رأی تو ثبت شد (" + fa(response.votes) + " از " + fa(response.need) + ")؛ اگر بقیه هم بزنند گفت‌وگو بسته می‌شود.";
+        toast("رأی بستن گفت‌وگو ثبت شد", true);
+      }
+      drawChatAccess();
+    });
+  }
+  function setLocked(locked) {
+    if (!locked || talk.locked) return;
+    talk.locked = true;
+    $("chat-lock-note").textContent = "";
+    toast("🔒 گفت‌وگوی این میز تا پایان بازی بسته شد", true);
+    drawChatAccess();
   }
   function openChat() {
     talk.open = true;
@@ -1044,6 +1071,7 @@
       talk.sending = false;
       $("chat-send").disabled = false;
       if (!response.ok) {
+        if (response.error === "chat_locked") setLocked(true);
         toast(errorText(response.error));
         haptic("error");
         return;
@@ -1212,6 +1240,7 @@
       return false;
     }
     receivedAt = now();
+    if (response.chat_locked) setLocked(true);
     if (response.can_chat !== undefined) {
       talk.can = !!response.can_chat;
       if (response.quick && !talk.quick.length) { talk.quick = response.quick; drawQuick(); }
@@ -1329,6 +1358,7 @@
       if (event.target === sheet || event.target.classList.contains("sheet-close")) closeSheet(sheet);
     });
   });
+  $("chat-lock").addEventListener("click", lockChat);
   $("chat-form").addEventListener("submit", function (event) {
     event.preventDefault();
     say($("chat-input").value);

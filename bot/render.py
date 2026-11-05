@@ -201,6 +201,8 @@ def lobby_split(match) -> str:
         return texts.SPLIT_BY_CHIPS
     if getattr(match, "game_type", "") == "hokm":
         return texts.SPLIT_TEAM
+    if getattr(match, "game_type", "") == "hokm3":
+        return texts.SPLIT_LABELS["100"]
     return split_label(match.prize_split)
 
 
@@ -298,7 +300,7 @@ def live_keyboard(username: str, token: str, game_key: str) -> InlineKeyboardMar
         [
             [
                 ui.button(
-                    {"chess": texts.CHESS_PLAY_BTN, "hokm": texts.HOKM_PLAY_BTN}.get(game_key, texts.LIVE_PLAY_BTN),
+                    {"chess": texts.CHESS_PLAY_BTN, "hokm": texts.HOKM_PLAY_BTN, "hokm3": texts.HOKM_PLAY_BTN, "chaharbarg": texts.CB_PLAY_BTN}.get(game_key, texts.LIVE_PLAY_BTN),
                     url=miniapp_link(username, token),
                     style=ui.SUCCESS,
                 )
@@ -388,6 +390,8 @@ def hokm_text(state: dict, names: dict[int, str]) -> str:
     """متن وضعیت حکم برای پیام گروه: امتیاز دو تیم، حاکم و حکم، نتیجه‌ی دور قبل و نوبت. کارت هیچ‌کس این‌جا نیست."""
     seats = state["seats"]
     name = {i: escape(short_name(names.get(uid, ""))) for i, uid in enumerate(seats)}
+    if len(seats) == 3:
+        return _hokm_solo_text(state, name)
     lines = [texts.HOKM_HEADER.format(round=fa_num(max(state["round"], 1)), target=fa_num(state["target"]))]
     for team in (0, 1):
         lines.append(
@@ -424,3 +428,66 @@ def hokm_text(state: dict, names: dict[int, str]) -> str:
     elif state["turn"] is not None:
         text += texts.HOKM_TURN.format(name=name[state["turn"]])
     return text + texts.HOKM_LIVE_HINT
+
+
+def _hokm_solo_text(state: dict, name: dict) -> str:
+    """حکم سه‌نفره: هر کس برای خودش."""
+    marks = ("🔵", "🟠", "🟢")
+    lines = [texts.HOKM_HEADER.format(round=fa_num(max(state["round"], 1)), target=fa_num(state["target"]))]
+    for i in range(3):
+        lines.append(texts.HOKM_SOLO_LINE.format(mark=marks[i], name=name[i], points=fa_num(state["points"][i]), tricks=fa_num(state["tricks"][i])))
+    trump = ""
+    if state["trump"]:
+        symbol, suit = texts.HOKM_SUITS[state["trump"]]
+        trump = texts.HOKM_TRUMP.format(symbol=symbol, suit=suit)
+    text = "\n".join(lines) + texts.HOKM_HAKEM.format(name=name[state["hakem"]], trump=trump)
+    result, over = state.get("result"), state.get("over")
+    if result and state["phase"] in ("pause", "over"):
+        w = result["winner_team"]
+        kot = {"kot": texts.HOKM_KOT, "hakem_kot": texts.HOKM_HAKEM_KOT}.get(result["kot"], "")
+        text += texts.HOKM_SOLO_WON.format(round=fa_num(result["round"]), name=name[w], won=fa_num(result["tricks"][w]), kot=kot, points=fa_num(result["points"]))
+    if over:
+        if over["reason"] == "left":
+            return text + texts.HOKM_SOLO_OVER_LEFT.format(left=name[over["left_seat"]], name=name[over["winner_team"]])
+        return text + texts.HOKM_SOLO_OVER.format(name=name[over["winner_team"]])
+    if state["phase"] == "pause":
+        text += texts.HOKM_NEXT_ROUND
+    elif state["phase"] == "trump":
+        text += texts.HOKM_CHOOSING
+    elif state["turn"] is not None:
+        text += texts.HOKM_TURN.format(name=name[state["turn"]])
+    return text + texts.HOKM_LIVE_HINT
+
+
+def chaharbarg_text(state: dict, names: dict[int, str]) -> str:
+    """متن وضعیت چهاربرگ برای پیام گروه: امتیاز هر نفر، کارت‌های زمین، نوبت و نتیجه‌ی دست. کارت دست کسی این‌جا نیست."""
+    from games.poker.cards import label
+
+    seats = state["seats"]
+    name = {i: escape(short_name(names.get(uid, ""))) for i, uid in enumerate(seats)}
+    goal = texts.CB_GOAL.format(target=fa_num(state["target"])) if state["target"] else texts.CB_GOAL_ONE
+    lines = [texts.CB_HEADER.format(round=fa_num(max(state["round"], 1)), goal=goal)]
+    for i in range(len(seats)):
+        captured = state["captured"][i]
+        surs = texts.CB_SURS.format(n=fa_num(state["surs"][i])) if state["surs"][i] else ""
+        mark = "▶️ " if state["turn"] == i and not state["over"] else ""
+        lines.append(texts.CB_LINE.format(mark=mark, name=name[i], points=fa_num(state["points"][i]), cards=fa_num(len(captured)),
+                                          clubs=fa_num(sum(c[1] == "c" for c in captured)), surs=surs))
+    text = "\n".join(lines)
+    if state["table"]:
+        text += texts.CB_TABLE.format(table=" ".join(label(c) for c in state["table"]), deck=fa_num(len(state["deck"])))
+    result = state.get("result")
+    if result and state["phase"] in ("pause", "over"):
+        parts = [f"{name[i]} +{fa_num(r['total'])}" for i, r in enumerate(result["rows"])]
+        text += texts.CB_ROUND.format(round=fa_num(result["round"]), lines="، ".join(parts))
+    if state["over"]:
+        winner = state["over"].get("winner")
+        if winner is not None:
+            seat = seats.index(winner)
+            return text + texts.CB_OVER.format(winner=texts.CB_WINNER.format(name=name[seat], points=fa_num(state["points"][seat])))
+        return text + texts.CB_OVER.format(winner=texts.CB_DRAW)
+    if state["phase"] == "pause":
+        text += texts.CB_NEXT
+    elif state["turn"] is not None:
+        text += texts.CB_TURN.format(name=name[state["turn"]])
+    return text + texts.CB_HINT
