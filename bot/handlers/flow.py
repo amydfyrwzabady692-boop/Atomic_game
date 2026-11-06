@@ -178,7 +178,7 @@ def steps_for(info: GameInfo, draft: dict | None = None) -> list[str]:
         steps.append("split")
     if info.is_arcade:
         steps.append("window")
-    steps.append("join")
+    # زمان ثبت‌نام دیگر پرسیده نمی‌شود: همیشه ۱:۳۰ (settings.LOBBY_JOIN_SECONDS)
     return steps
 
 
@@ -374,7 +374,7 @@ async def new_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             info,
             fee=draft["fee"],
             split=split,
-            join_seconds=draft["join"],
+            join_seconds=settings.LOBBY_JOIN_SECONDS,
             options=options,
             menu_message_id=message_id,
         )

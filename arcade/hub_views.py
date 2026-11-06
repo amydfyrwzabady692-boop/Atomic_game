@@ -18,7 +18,7 @@ from core.models import TelegramUser
 from core.textutils import fa_date
 from games import duels
 from games.catalog import get_info
-from games.models import Duel, MatchPlayer
+from games.models import Duel, MatchPlayer, MatchStatus
 from leaderboard.progress import xp_for_level
 from leaderboard.queries import profile_stats, top_players
 from membership.web import join_required_response, joined_required
@@ -66,6 +66,11 @@ def _game(key: str) -> dict:
         data["note"] = f"\u200e{fa_num(base // 60)}+{fa_num(increment)}"
     if key == "poker":
         data["note"] = "میز نقدی"  # سکه به اندازه‌ی ژتون هر نفر، نه برنده‌ی همه
+    notes = {"hokm": "۴ نفره؛ یار تصادفی", "hokm3": "۳ نفره", "hokm2": "۳ امتیازی", "chaharbarg": "یک دست", "crash": "۳ دور"}
+    if key in notes:
+        data["note"] = notes[key]
+    if key in duels.TABLE_SIZES:
+        data["table"] = duels.TABLE_SIZES[key]
     return data
 
 
@@ -299,12 +304,31 @@ def _duel_dict(duel: Duel, user) -> dict:
     return data
 
 
+def _table_dict(match, user) -> dict:
+    """میز تصادفی چندنفره (حکم چهارنفره و سه‌نفره) که شروع شده: فقط دکمه‌ی میز؛ گفت‌وگو داخل خود میز است."""
+    others = [
+        p.user.display_name for p in match.players.select_related("user").order_by("pk") if p.user_id != user.pk
+    ]
+    return {
+        "mode": "playing",
+        "table": True,
+        "players": len(others) + 1,
+        "game": _game(match.game_type),
+        "opponent": {"name": "، ".join(others), "level": 0},
+        "stake": match.entry_fee,
+        "url": reverse("arcade:board", args=[match.token]),
+    }
+
+
 def duel_state_for(user) -> dict:
     active = duels.active_duel(user.pk)
     if active is not None and duels.close_if_expired(active):
         active = duels.active_duel(user.pk)
     if active is not None:
         return _duel_dict(active, user)
+    table = duels.table_ticket(user.pk)
+    if table is not None and table.match.status == MatchStatus.RUNNING:
+        return _table_dict(table.match, user)
     ticket = duels.searching_ticket(user.pk)
     if ticket is not None:
         return {

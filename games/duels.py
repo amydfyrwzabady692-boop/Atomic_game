@@ -31,7 +31,11 @@ from .engine.payout import Standing
 from .engine.services import MatchError
 from .models import Duel, DuelTicket, Match, MatchStatus
 
-BOARD_GAMES = ("chess", "poker", "tictactoe", "connect4")
+BOARD_GAMES = ("chess", "poker", "hokm", "hokm3", "hokm2", "chaharbarg", "crash", "tictactoe", "connect4")
+# بازی‌هایی که بیش از دو نفر لازم دارند: جستجو تا پر شدن میز ادامه دارد و بدون توافق روی سکه شروع می‌شود
+TABLE_SIZES = {"hokm": 4, "hokm3": 3}
+# بازی‌های تصادفی کوتاه‌تر از لابی‌های گروه
+QUICK_OPTIONS = {"hokm": "3", "hokm3": "3", "hokm2": "3", "chaharbarg": "0", "crash": "3"}
 DUEL_GAMES = BOARD_GAMES  # نام قدیمی؛ بازی‌های آرکید از duel_games() می‌آیند
 ARCADE_MINUTES = 3  # مهلت دوئل آرکید
 ARCADE_ATTEMPTS = 2  # تلاش هر نفر در دوئل آرکید
@@ -110,6 +114,8 @@ def search(user: TelegramUser, game_type: str, stake: int | None, now=None) -> D
     stake = _check_stake(stake)
     if game_type not in duel_games():
         raise DuelError("bad_game")
+    if game_type in TABLE_SIZES:
+        return _search_table(user, game_type, stake, now)
     user.refresh_from_db(fields=["coins", "is_banned", "started_bot"])
     if user.is_banned:
         raise DuelError("banned")
@@ -117,7 +123,7 @@ def search(user: TelegramUser, game_type: str, stake: int | None, now=None) -> D
         raise DuelError("need_start")
     if stake and user.coins < stake:
         raise DuelError("not_enough_coins", balance=user.coins, needed=stake)
-    if active_duel(user.pk) is not None:
+    if active_duel(user.pk) is not None or in_table(user.pk):
         raise DuelError("already_in_duel")
     with transaction.atomic():
         # جستجوی قبلی همین کاربر (اگر بود) با جستجوی تازه جایگزین می‌شود
@@ -156,6 +162,122 @@ def search(user: TelegramUser, game_type: str, stake: int | None, now=None) -> D
         _start(duel.pk)
         duel.refresh_from_db()
     return duel
+
+
+def _table_options(game_type: str, extra: dict) -> dict:
+    from django.conf import settings
+
+    options = services.match_options(game_type, extra)
+    if game_type in QUICK_OPTIONS:
+        options["variant"] = QUICK_OPTIONS[game_type]
+    if game_type == "crash":
+        options["house_percent"] = settings.CRASH_HOUSE_PERCENT
+    return options
+
+
+def _search_table(user: TelegramUser, game_type: str, stake: int | None, now) -> DuelTicket:
+    """میز تصادفی چندنفره: منتظرهای همان بازی با همان سکه (یا «فرقی نمی‌کند») جمع می‌شوند؛ وقتی تعداد لازم شد
+    میز همان لحظه با صندلی‌ها و یارهای تصادفی شروع می‌شود و جستجوی همه «پیدا شد» می‌شود."""
+    need = TABLE_SIZES[game_type]
+    with transaction.atomic():
+        DuelTicket.objects.select_for_update().filter(user=user, status=DuelTicket.Status.SEARCHING).update(
+            status=DuelTicket.Status.CANCELLED
+        )
+        waiting = [
+            t for t in DuelTicket.objects.select_for_update()
+            .filter(status=DuelTicket.Status.SEARCHING, game_type=game_type, expires_at__gt=now)
+            .exclude(user=user)
+            .select_related("user")
+            .order_by("created_at", "pk")
+            if not t.user.is_banned
+        ]  # fmt: skip
+        table_stake = stake
+        if table_stake is None:
+            concrete = [t.stake for t in waiting if t.stake is not None and t.stake <= user.coins]
+            # بیشترین منتظر با مقداری که سکه‌اش را دارد؛ اگر نبود (یا همه «فرقی نمی‌کند» گفته‌اند) بازی بدون سکه است
+            table_stake = max(set(concrete), key=lambda v: (concrete.count(v), -concrete.index(v))) if concrete else 0
+        if table_stake and user.coins < table_stake:
+            raise DuelError("not_enough_coins", balance=user.coins, needed=table_stake)
+        members = [t for t in waiting if t.stake in (table_stake, None) and t.user.coins >= table_stake]
+        if len(members) + 1 < need:
+            try:
+                with transaction.atomic():
+                    return DuelTicket.objects.create(
+                        user=user, game_type=game_type, stake=stake, expires_at=now + timedelta(seconds=SEARCH_SECONDS)
+                    )
+            except IntegrityError as exc:
+                raise DuelError("already_searching") from exc
+        chosen = members[: need - 1]
+        players = [t.user for t in chosen] + [user]
+        try:
+            match = _start_table(game_type, players, table_stake)
+        except MatchError as exc:
+            raise DuelError("coins" if exc.code == "not_enough_coins" else "table_failed") from exc
+        DuelTicket.objects.filter(pk__in=[t.pk for t in chosen]).update(status=DuelTicket.Status.MATCHED, match=match)
+        return DuelTicket.objects.create(
+            user=user, game_type=game_type, stake=stake, status=DuelTicket.Status.MATCHED, match=match, expires_at=now
+        )
+
+
+def _start_table(game_type: str, players: list[TelegramUser], stake: int) -> Match:
+    import time
+
+    from arcade import board
+
+    match = Match.objects.create(
+        group=None,
+        creator=players[0],
+        game_type=game_type,
+        entry_fee=stake,
+        prize_split=[100],
+        join_deadline=timezone.now() + timedelta(seconds=60),
+        min_players=len(players),
+        max_players=len(players),
+        options=_table_options(game_type, {"table": True}),
+    )
+    for player in players:
+        services.join_match(match.pk, player)
+    match = services.start_match(match.pk)
+    order = [p.pk for p in players]
+    random.SystemRandom().shuffle(order)  # صندلی‌ها و یارها تصادفی
+    board.start(match.pk, board.new_state(game_type, order, time.time(), seed=str(match.seed), options=match.options))
+    return match
+
+
+def table_ticket(user_id: int) -> DuelTicket | None:
+    """میز تصادفی چندنفره‌ای که این کاربر الان در آن است (یا همین تازگی تمام شده)."""
+    since = timezone.now() - timedelta(minutes=30)
+    return (
+        DuelTicket.objects.filter(user_id=user_id, status=DuelTicket.Status.MATCHED, match__isnull=False, created_at__gte=since)
+        .select_related("match")
+        .order_by("-pk")
+        .first()
+    )
+
+
+def in_table(user_id: int) -> bool:
+    ticket = table_ticket(user_id)
+    return ticket is not None and ticket.match.status == MatchStatus.RUNNING
+
+
+def finish_table(match: Match):
+    """برای ربات: اگر بازی میز تصادفی تمام شده جایزه را می‌دهد و نتیجه را برمی‌گرداند (وگرنه ``None``)."""
+    import time
+
+    from arcade import board
+
+    if match.status != MatchStatus.RUNNING:
+        return None
+    state = board.tick(match.pk)
+    if state is None or not state["over"]:
+        return None
+    now = time.time()
+    standings = [Standing(uid, score, now if score > 0 else None) for uid, score in board.standings(state)]
+    return services.finish_match(match.pk, standings)
+
+
+def running_tables():
+    return Match.objects.filter(group__isnull=True, status=MatchStatus.RUNNING, options__table=True)
 
 
 def _best_partner(waiting: list[DuelTicket], stake: int | None) -> DuelTicket | None:
@@ -249,7 +371,7 @@ def _start(duel_id: int) -> None:
     duel = Duel.objects.select_related("player_a", "player_b").get(pk=duel_id)
     stake = duel.offer_a or 0
     arcade = is_arcade(duel.game_type)
-    options = services.match_options(duel.game_type, {"duel": duel.pk})
+    options = _table_options(duel.game_type, {"duel": duel.pk})
     if arcade:
         options.update(window_minutes=ARCADE_MINUTES, attempts=ARCADE_ATTEMPTS)
     try:
@@ -279,7 +401,9 @@ def _start(duel_id: int) -> None:
                 random.Random(match.seed).shuffle(order)
                 import time
 
-                board.start(match.pk, board.new_state(duel.game_type, order, time.time(), seed=str(match.seed)))
+                board.start(
+                    match.pk, board.new_state(duel.game_type, order, time.time(), seed=str(match.seed), options=match.options)
+                )
             locked.status = Duel.Status.PLAYING
             locked.stake = stake
             locked.match = match

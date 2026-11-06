@@ -220,6 +220,10 @@ class DuelTicket(models.Model):
     stake = models.PositiveIntegerField(verbose_name="سکه‌ی پیشنهادی", null=True, blank=True)
     status = models.CharField(verbose_name="وضعیت", max_length=10, choices=Status.choices, default=Status.SEARCHING)
     duel = models.ForeignKey("Duel", null=True, blank=True, on_delete=models.SET_NULL, related_name="tickets", verbose_name="دوئل")
+    # میز تصادفی چندنفره (حکم چهارنفره و سه‌نفره): مسابقه‌ای که این جستجو در آن نشست
+    match = models.ForeignKey(
+        "Match", null=True, blank=True, on_delete=models.SET_NULL, related_name="tickets", verbose_name="میز"
+    )
     message_id = models.BigIntegerField(verbose_name="شناسه‌ی پیام ربات", null=True, blank=True)
     created_at = models.DateTimeField(verbose_name="تاریخ ایجاد", auto_now_add=True)
     expires_at = models.DateTimeField(verbose_name="انقضا")

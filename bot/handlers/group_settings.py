@@ -2,6 +2,7 @@
 
 from html import escape
 
+from django.conf import settings
 from django.db import transaction
 from telegram import InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
@@ -34,7 +35,7 @@ def home_screen(group: TelegramGroup):
     text = texts.SETTINGS_HEADER.format(
         min=fa_num(group.min_entry),
         max=fa_num(group.max_entry),
-        join=fa_num(group.default_join_seconds),
+        join=fa_num(settings.LOBBY_JOIN_SECONDS),
         users=yes_no,
         enabled=fa_num(enabled),
         total=fa_num(len(games)),
@@ -46,11 +47,6 @@ def home_screen(group: TelegramGroup):
             [
                 ui.button(texts.SETTINGS_MIN_BTN.format(v=fa_num(group.min_entry)), "set:min", style=ui.PRIMARY),
                 ui.button(texts.SETTINGS_MAX_BTN.format(v=fa_num(group.max_entry)), "set:max", style=ui.PRIMARY),
-            ],
-            [
-                ui.button(
-                    texts.SETTINGS_JOIN_BTN.format(v=fa_num(group.default_join_seconds)), "set:join", style=ui.PRIMARY
-                )
             ],
             [
                 ui.button(

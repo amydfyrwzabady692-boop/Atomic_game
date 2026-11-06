@@ -282,9 +282,7 @@ async def test_game_menu_flow_creates_lobby_and_only_creator_can_use_it(app):
     back = await click(app, 61, "n:b", menu_id)
     assert "ورودی" in back.edits[-1]["text"]
     await click(app, 61, "n:f:250", menu_id)
-    step = await click(app, 61, "n:s:60-30-10", menu_id)
-    assert "عضوگیری" in step.edits[-1]["text"]
-    await click(app, 61, "n:t:30", menu_id)
+    await click(app, 61, "n:s:60-30-10", menu_id)  # زمان ثبت‌نام دیگر پرسیده نمی‌شود: همیشه ۱:۳۰
 
     match = await sync_to_async(Match.objects.select_related("group").get)()
     assert (match.game_type, match.entry_fee, match.prize_split, match.status) == (
@@ -708,23 +706,21 @@ async def test_each_step_shows_its_number_and_the_choices_so_far(app):
     await start_user(app, 255)
     _, menu_id = await open_game_menu(app, 255)
     fee = await click(app, 255, "n:g:quick_math", menu_id)
-    assert "مرحله‌ی ۲ از ۴" in fee.edits[-1]["text"] and "✅" not in fee.edits[-1]["text"]
+    assert "مرحله‌ی ۲ از ۳" in fee.edits[-1]["text"] and "✅" not in fee.edits[-1]["text"]
     split = await click(app, 255, "n:f:100", menu_id)
-    assert "مرحله‌ی ۳ از ۴" in split.edits[-1]["text"] and "ورودی: ۱۰۰" in split.edits[-1]["text"]
-    join = await click(app, 255, "n:s:60-30-10", menu_id)
-    assert "مرحله‌ی ۴ از ۴" in join.edits[-1]["text"] and "تقسیم: ۶۰ - ۳۰ - ۱۰" in join.edits[-1]["text"]
-    # بازی رایگان مرحله‌ی تقسیم جایزه ندارد؛ شمارش هم کم می‌شود
-    await click(app, 255, "n:b", menu_id)
+    assert "مرحله‌ی ۳ از ۳" in split.edits[-1]["text"] and "ورودی: ۱۰۰" in split.edits[-1]["text"]
     back = await click(app, 255, "n:b", menu_id)
-    assert "مرحله‌ی ۲ از ۴" in back.edits[-1]["text"]  # برگشت تا انتخاب ورودی
-    free = await click(app, 255, "n:f:0", menu_id)
-    assert "مرحله‌ی ۳ از ۳" in free.edits[-1]["text"] and "ورودی: رایگان" in free.edits[-1]["text"]
+    assert "مرحله‌ی ۲ از ۳" in back.edits[-1]["text"]  # برگشت تا انتخاب ورودی
+    # بازی رایگان مرحله‌ی تقسیم جایزه ندارد و زمان ثبت‌نام هم پرسیده نمی‌شود: لابی همان لحظه ساخته می‌شود
+    await click(app, 255, "n:f:0", menu_id)
+    lobby = await sync_to_async(Match.objects.filter(creator__tg_id=255).latest)("pk")
+    assert lobby.entry_fee == 0 and 85 <= (lobby.join_deadline - lobby.created_at).total_seconds() <= 95
     # گزینه‌ی بازی (کنترل زمان شطرنج) هم در خلاصه می‌آید
     _, chess_menu = await open_game_menu(app, 255)
     variant = await click(app, 255, "n:g:chess", chess_menu)
-    assert "مرحله‌ی ۲ از ۴" in variant.edits[-1]["text"]
+    assert "مرحله‌ی ۲ از ۳" in variant.edits[-1]["text"]
     fee = await click(app, 255, "n:v:blitz3", chess_menu)
-    assert "مرحله‌ی ۳ از ۴" in fee.edits[-1]["text"] and "کنترل زمان: ⚡️ برق‌آسا" in fee.edits[-1]["text"]
+    assert "مرحله‌ی ۳ از ۳" in fee.edits[-1]["text"] and "کنترل زمان: ⚡️ برق‌آسا" in fee.edits[-1]["text"]
 
 
 async def test_arcade_games_are_not_offered_until_the_mini_app_is_set_up(app, settings):
@@ -982,9 +978,10 @@ async def test_duel_flow_in_private_chat(app, settings):
         await duel_handlers.duel_callback(update, context)
         return update
 
-    # اول چهار بازی نوبتی، بعد ردیف عنوان آرکید و بازی‌های رکوردی
-    assert labels[:4] == ["du:g:chess", "du:g:poker", "du:g:tictactoe", "du:g:connect4"]
-    assert labels[4] == "du:i" and "du:g:arcade_flappy" in labels and len(labels) == 10
+    # اول همه‌ی بازی‌های نوبتی و کارتی (حکم‌ها، چهاربرگ و انفجار هم)، بعد ردیف عنوان آرکید و بازی‌های رکوردی
+    board_keys = ["chess", "poker", "hokm", "hokm3", "hokm2", "chaharbarg", "crash", "tictactoe", "connect4"]
+    assert labels[:9] == ["du:g:" + k for k in board_keys]
+    assert labels[9] == "du:i" and "du:g:arcade_flappy" in labels and len(labels) == 15
     header = await press(501, "du:i", 11)
     assert header.answers[-1][1] is True and "تلاش" in header.answers[-1][0] and not header.edits
     arcade = await press(501, "du:g:arcade_flappy", 11)

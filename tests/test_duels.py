@@ -220,7 +220,7 @@ def _played(match, user, *scores):
 
 def test_every_game_is_offered_and_arcade_duels_share_one_seed(make_user):
     keys = duels.duel_games()
-    assert keys[:4] == ["chess", "poker", "tictactoe", "connect4"] and "arcade_flappy" in keys and len(keys) == 9 and "arcade_snake" not in keys and "arcade_helix" not in keys
+    assert keys[:9] == ["chess", "poker", "hokm", "hokm3", "hokm2", "chaharbarg", "crash", "tictactoe", "connect4"] and "arcade_flappy" in keys and len(keys) == 14 and "arcade_snake" not in keys and "arcade_helix" not in keys
     a, b = make_user(500), make_user(500)
     duels.search(a, "arcade_flappy", 100)
     duel = duels.search(b, "arcade_flappy", 100)

@@ -156,7 +156,9 @@ PRIZE_SPLITS = {
     "60-30-10": [60, 30, 10],
     "50-30-20": [50, 30, 20],
 }
-JOIN_SECONDS_CHOICES = [30, 60, 120]
+# زمان ثبت‌نام همه‌ی لابی‌ها ثابت است: ۱ دقیقه و ۳۰ ثانیه (اگر ظرفیت زودتر پر شود بازی همان لحظه شروع می‌شود)
+LOBBY_JOIN_SECONDS = 90
+JOIN_SECONDS_CHOICES = [LOBBY_JOIN_SECONDS]
 PLAY_WINDOW_CHOICES = [3, 5, 10]  # دقیقه، برای بازی‌های آرکید
 
 XP_PARTICIPATION = 10

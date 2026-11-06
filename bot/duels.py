@@ -160,6 +160,7 @@ class DuelRunner:
     async def tick(self) -> None:
         for ticket in await db(duels.expire)():
             await self._show(ticket.user.tg_id, ticket.message_id, texts.DUEL_SEARCH_EXPIRED, None)
+        await self.tables()
         for duel_id in await db(_playing_ids)():
             try:
                 await db(duels.finish_if_over)(duel_id)
@@ -190,6 +191,37 @@ class DuelRunner:
                 await self._show(user.tg_id, message_id, text, keyboard)
         await db(_mark_notified)(duel.pk, duel.version)
 
+    async def tables(self) -> None:
+        """میزهای تصادفی چندنفره (حکم چهارنفره و سه‌نفره): اعلام شروع به همه با دکمه‌ی میز، و پایان و جایزه."""
+        for match_id, announced in await db(_table_rows)():
+            players, token, game_type, stake = await db(_table_players)(match_id)
+            if not announced:
+                names = "، ".join(escape(render.short_name(n)) for _, n in players)
+                line = texts.DUEL_STAKE_LINE.format(stake=fa_num(stake), prize=fa_num(stake * len(players))) if stake else texts.DUEL_FREE_LINE
+                text = texts.TABLE_STARTED.format(game=game_label(game_type), names=names, stake_line=line)
+                keyboard = None
+                if render.arcade_ready():
+                    web_app = WebAppInfo(url=render.game_page_url(token))
+                    keyboard = InlineKeyboardMarkup([[ui.button(texts.DUEL_OPEN_BTN, web_app=web_app, style=ui.SUCCESS)]])
+                for tg_id, _ in players:
+                    await tg_call(self.bot.send_message, tg_id, text, parse_mode="HTML", reply_markup=keyboard)
+                await db(_mark_table)(match_id, "announced")
+            try:
+                result = await db(duels.finish_table)(await db(_match)(match_id))
+            except Exception:
+                logger.exception("table finish failed", extra={"match": match_id})
+                continue
+            if result is None:
+                continue
+            again = InlineKeyboardMarkup([[ui.button(texts.DUEL_AGAIN_BTN, "du:h", style=ui.PRIMARY)]])
+            for r in result.players:
+                prize = texts.DUEL_PRIZE.format(amount=fa_num(r.prize)) if r.prize else ""
+                head = texts.TABLE_WON if r.rank == 1 and r.score > 0 else texts.TABLE_LOST
+                await tg_call(
+                    self.bot.send_message, r.user.tg_id, head.format(game=game_label(game_type)) + prize,
+                    parse_mode="HTML", reply_markup=again,
+                )
+
     async def _show(self, chat_id: int, message_id: int | None, text: str, keyboard) -> None:
         if message_id is None:
             await tg_call(self.bot.send_message, chat_id, text, parse_mode="HTML", reply_markup=keyboard)
@@ -202,6 +234,35 @@ class DuelRunner:
             parse_mode="HTML",
             reply_markup=keyboard,
         )
+
+
+def _table_rows() -> list[tuple[int, bool]]:
+    return [(m.pk, bool(m.options.get("announced"))) for m in duels.running_tables().only("pk", "options")]
+
+
+def _table_players(match_id: int):
+    from games.models import Match
+
+    match = Match.objects.get(pk=match_id)
+    players = [(p.user.tg_id, p.user.display_name) for p in match.players.select_related("user").order_by("pk")]
+    return players, match.token, match.game_type, match.entry_fee
+
+
+def _match(match_id: int):
+    from games.models import Match
+
+    return Match.objects.get(pk=match_id)
+
+
+def _mark_table(match_id: int, flag: str) -> None:
+    from django.db import transaction
+
+    from games.models import Match
+
+    with transaction.atomic():
+        match = Match.objects.select_for_update().get(pk=match_id)
+        match.options = {**(match.options or {}), flag: True}
+        match.save(update_fields=["options"])
 
 
 def _playing_ids() -> list[int]:

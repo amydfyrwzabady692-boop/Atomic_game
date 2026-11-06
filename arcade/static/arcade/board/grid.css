@@ -80,3 +80,46 @@
 @keyframes glow { from { filter: brightness(1); transform: scale(1); } to { filter: brightness(1.35); transform: scale(1.08); } }
 #actions .btn { flex: 0 1 220px; margin: 0 auto; }
 @media (prefers-reduced-motion: reduce) { .cell i, .cell.win i { animation: none; } }
+
+/* ================================================================ نسخه‌ی باکیفیت
+   دوز چهارتایی: قاب پلاستیکی سه‌بعدی با لبه‌ی براق، پیچ‌های گوشه، سوراخ‌های پخ‌خورده و مهره‌های براق با شیار دایره‌ای
+   (مثل مهره‌ی واقعی). دوز: صفحه‌ی شیشه‌ای تیره با خطوط نئونی و X و O درخشان. صفحه وسط قاب گوشی می‌نشیند. */
+body:has(#grid-wrap) #game { justify-content: center; min-height: 100vh; min-height: 100dvh; }
+body:has(#grid-wrap)::after {
+  content: ""; position: fixed; left: 50%; top: 18%; z-index: -1; width: 120vw; height: 70vh; transform: translateX(-50%);
+  pointer-events: none; background: radial-gradient(closest-side, rgba(110, 140, 255, .18), transparent);
+}
+#grid-wrap { position: relative; padding: 14px 12px 16px; border-radius: 26px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .22), transparent 18%, transparent 82%, rgba(0, 0, 0, .25)),
+    linear-gradient(160deg, #4b5cf0, #2c39b8 55%, #1b2385);
+  box-shadow: 0 22px 44px rgba(0, 0, 0, .55), 0 6px 0 #141a66, inset 0 2px 0 rgba(255, 255, 255, .35), inset 0 -3px 0 rgba(0, 0, 0, .25);
+}
+#grid-wrap::before, #grid-wrap::after { /* پیچ‌های گوشه */
+  content: ""; position: absolute; top: 5px; width: 7px; height: 7px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff, #9aa6ff 60%, #3341b8); box-shadow: 0 1px 1px rgba(0, 0, 0, .4);
+}
+#grid-wrap::before { left: 7px; }
+#grid-wrap::after { right: 7px; }
+.cell { background: radial-gradient(circle at 50% 30%, #11163d, #05071a 72%); box-shadow: inset 0 6px 10px rgba(0, 0, 0, .75), inset 0 -2px 0 rgba(255, 255, 255, .12), 0 1px 0 rgba(255, 255, 255, .18); }
+.cell i.R, .cell i.Y { box-shadow: inset 0 -6px 10px rgba(0, 0, 0, .3), 0 3px 6px rgba(0, 0, 0, .45); }
+.cell i.R::after, .cell i.Y::after { /* شیار دایره‌ای و برق روی مهره */
+  content: ""; position: absolute; inset: 18%; border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, .14); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .35);
+}
+.cell i.R::before, .cell i.Y::before { content: ""; position: absolute; left: 22%; top: 14%; width: 30%; height: 18%; border-radius: 50%; background: rgba(255, 255, 255, .45); transform: rotate(-25deg); }
+.cell.last { outline: none; }
+.cell.last i { box-shadow: 0 0 0 3px #ffd166, 0 0 16px rgba(255, 209, 102, .75), inset 0 -6px 10px rgba(0, 0, 0, .3); }
+
+#grid-wrap.xo {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .1), transparent 25%),
+    radial-gradient(90% 90% at 50% 40%, #2b2f6e, #141739 75%);
+  box-shadow: 0 22px 44px rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(140, 160, 255, .35), 0 0 30px rgba(110, 140, 255, .18);
+}
+#grid-wrap.xo::before, #grid-wrap.xo::after { display: none; }
+.xo .cell { background: linear-gradient(180deg, rgba(255, 255, 255, .09), rgba(255, 255, 255, .03)); box-shadow: inset 0 0 0 1px rgba(160, 180, 255, .22), inset 0 8px 16px rgba(0, 0, 0, .25); }
+.xo .cell i.X { color: #ff6b88; text-shadow: 0 0 10px rgba(255, 92, 122, .9), 0 0 26px rgba(255, 92, 122, .55); }
+.xo .cell i.O { color: #7beaff; text-shadow: 0 0 10px rgba(110, 231, 255, .9), 0 0 26px rgba(110, 231, 255, .55); }
+.xo .cell.last { box-shadow: inset 0 0 0 2px rgba(255, 214, 80, .85), 0 0 16px rgba(255, 214, 80, .35); }
+.xo .cell.last i { box-shadow: none; }

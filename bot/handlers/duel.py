@@ -71,7 +71,11 @@ async def duel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user
             result = await db(duels.search)(user, parts[2], stake)
             await answer(query)
             message_id = query.message.message_id
-            if isinstance(result, DuelTicket):
+            if isinstance(result, DuelTicket) and result.match_id:
+                # میز چندنفره همین الان پر و شروع شد؛ پیام شروع را DuelRunner برای همه می‌فرستد
+                await db(duels.set_ticket_message)(result.pk, message_id)
+                await _edit(query, texts.TABLE_FILLING, None)
+            elif isinstance(result, DuelTicket):
                 await db(duels.set_ticket_message)(result.pk, message_id)
                 await _edit(query, *searching_view(result))
             else:

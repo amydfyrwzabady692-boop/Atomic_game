@@ -89,7 +89,7 @@ def test_duel_through_the_mini_app(client, make_user):
     a, b = make_user(1000), make_user(1000)
     status, data = post(client, "duel/state", a)
     keys = [g["key"] for g in data["games"]]
-    assert data["state"]["mode"] == "idle" and keys[:4] == ["chess", "poker", "tictactoe", "connect4"] and len(keys) == 9
+    assert data["state"]["mode"] == "idle" and keys[:9] == ["chess", "poker", "hokm", "hokm3", "hokm2", "chaharbarg", "crash", "tictactoe", "connect4"] and len(keys) == 14
     kinds = {g["key"]: g["kind"] for g in data["games"]}
     assert kinds["chess"] == "board" and kinds["arcade_flappy"] == "arcade" and data["quick"] and data["max_stake"] > 0
     # شطرنج حریف تصادفی کنترل زمانی ۵+۳ دارد و برچسبش در متن راست‌به‌چپ برعکس نمی‌شود

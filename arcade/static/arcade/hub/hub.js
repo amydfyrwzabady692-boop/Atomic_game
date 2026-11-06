@@ -312,6 +312,15 @@
     });
   }
   $("duel-banner").addEventListener("click", function () { haptic("light"); show("duel"); });
+  // میان‌بُر بازی‌های محبوب: همان بازی در تب «حریف» انتخاب‌شده باز می‌شود
+  Array.prototype.forEach.call(document.querySelectorAll("#featured button"), function (button) {
+    button.addEventListener("click", function () {
+      haptic("light");
+      duel.game = button.dataset.game;
+      show("duel");
+      if (duel.state) drawDuel();
+    });
+  });
 
   // ------------------------------------------------------------------ حریف تصادفی
   function duelSecondsLeft() {
@@ -412,11 +421,14 @@
       drawChat($("duel-chat-negotiating"), s);
     } else if (s.mode === "playing") {
       // پوکر میز نقدی است: هر کس به اندازه‌ی ژتونش از کل سکه‌ها می‌برد، نه برنده‌ی همه
-      var pot = s.game.key === "poker" ? "هر کس به اندازه‌ی ژتونش از " + money(s.stake * 2) + " 🪙" : "جایزه " + money(s.stake * 2) + " 🪙";
+      var seats = s.players || 2;
+      var pot = s.game.key === "poker" ? "هر کس به اندازه‌ی ژتونش از " + money(s.stake * seats) + " 🪙" : "جایزه " + money(s.stake * seats) + " 🪙";
       $("duel-playing-info").textContent = s.game.emoji + " " + s.game.title + " مقابل " + s.opponent.name + " — " +
         (s.stake ? "ورودی " + money(s.stake) + " — " + pot : "بدون سکه") +
         (s.game.kind === "arcade" ? " — " + s.game.note + "؛ امتیاز بیشتر برنده" : "");
-      drawChat($("duel-chat-playing"), s);
+      // میز چندنفره گفت‌وگوی خودش را داخل صفحه‌ی میز دارد
+      $("duel-chat-playing").classList.toggle("hidden", !!s.table);
+      if (!s.table) drawChat($("duel-chat-playing"), s);
     }
   }
 
@@ -449,7 +461,8 @@
     $("duel-pick").textContent = picked
       ? "انتخاب تو: " + picked.emoji + " " + picked.title + (picked.kind === "arcade"
         ? " — هر دو همان بازی را در " + picked.note + " بازی می‌کنید؛ بهترین امتیاز برنده است."
-        : (picked.note ? " · ساعت " + picked.note : ""))
+        : picked.table ? " — میز " + fa(picked.table) + " نفره: جستجو تا پر شدن میز ادامه دارد و بازی بدون توافق، با همان سکه‌ای که انتخاب کردی شروع می‌شود."
+        : picked.key === "chess" && picked.note ? " · ساعت " + picked.note : picked.note ? " · " + picked.note : "")
       : "";
   }
 
