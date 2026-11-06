@@ -11,7 +11,7 @@ from games.models import Duel, DuelTicket
 
 from .. import render
 from ..db import db
-from ..duels import duel_view, error_text, games_keyboard, load_duel, searching_view, stakes_keyboard
+from ..duels import duel_view, error_text, games_keyboard, load_duel, searching_view
 from ..tg import tg_call
 from .common import answer, callback, command, reply
 
@@ -58,17 +58,10 @@ async def duel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user
         await answer(query, texts.DUEL_UNAVAILABLE, alert=True)
         return
     try:
-        if action == "g" and len(parts) == 3:
-            await answer(query)
-            fresh = await db(lambda: TelegramUser.objects.get(pk=user.pk))()
-            info = {g.key: g for g in duels.available_games()}.get(parts[2])
-            if info is None:
-                raise duels.DuelError("bad_game")
-            text = texts.DUEL_CHOOSE_STAKE.format(game=f"{info.emoji} {info.title_fa}", coins=fa_num(fresh.coins))
-            await _edit(query, text, stakes_keyboard(info.key))
-        elif action == "s" and len(parts) == 4:
-            stake = None if parts[3] == "any" else int(parts[3]) if parts[3].isdigit() else -1
-            result = await db(duels.search)(user, parts[2], stake)
+        if action in ("g", "s") and len(parts) in (3, 4):
+            # با انتخاب بازی جستجو همان لحظه شروع می‌شود؛ مقدار سکه را دو طرف بعد از پیدا شدن حریف می‌نویسند
+            # («du:s:…» پیام‌های قدیمی هم همین کار را می‌کند)
+            result = await db(duels.search)(user, parts[2], None)
             await answer(query)
             message_id = query.message.message_id
             if isinstance(result, DuelTicket) and result.match_id:
@@ -81,13 +74,6 @@ async def duel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user
             else:
                 await db(duels.set_duel_message)(result.pk, "b", message_id)
                 await _show_duel(query, result.pk, user)
-        elif action == "k" and len(parts) == 3:
-            # مقدار سکه را خود کاربر می‌نویسد
-            if parts[2] not in duels.duel_games():
-                raise duels.DuelError("bad_game")
-            context.user_data["duel_flow"] = {"kind": "search", "game": parts[2]}
-            await answer(query)
-            await _edit(query, texts.DUEL_CUSTOM_ASK.format(max=fa_num(duels.MAX_STAKE)), None)
         elif action == "ko" and len(parts) == 3 and parts[2].isdigit():
             context.user_data["duel_flow"] = {"kind": "offer", "duel": int(parts[2])}
             await answer(query)

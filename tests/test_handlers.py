@@ -984,23 +984,25 @@ async def test_duel_flow_in_private_chat(app, settings):
     assert labels[9] == "du:i" and "du:g:arcade_flappy" in labels and len(labels) == 15
     header = await press(501, "du:i", 11)
     assert header.answers[-1][1] is True and "تلاش" in header.answers[-1][0] and not header.edits
+    # با انتخاب بازی جستجو همان لحظه شروع می‌شود و سکه پرسیده نمی‌شود
     arcade = await press(501, "du:g:arcade_flappy", 11)
-    assert "سر چند سکه" in arcade.edits[-1]["text"] and "پرنده" in arcade.edits[-1]["text"]
+    assert "در جستجوی حریف" in arcade.edits[-1]["text"] and "پرنده" in arcade.edits[-1]["text"]
+    assert "سر چند سکه" not in arcade.edits[-1]["text"]
+    searching = await press(501, "du:g:tictactoe", 11)  # جستجوی تازه جای قبلی را می‌گیرد
+    assert "در جستجوی حریف" in searching.edits[-1]["text"] and "دوز" in searching.edits[-1]["text"]
 
-    pick = await press(501, "du:g:tictactoe", 11)
-    assert "سر چند سکه" in pick.edits[-1]["text"]
-    searching = await press(501, "du:s:tictactoe:100", 11)
-    assert "در جستجوی حریف" in searching.edits[-1]["text"]
-
-    found = await press(502, "du:s:tictactoe:any", 22)
-    # حریف «فرقی نمی‌کند» گفته: باید روی ۱۰۰ توافق کنند
+    found = await press(502, "du:g:tictactoe", 22)
+    # حریف پیدا شد؛ هنوز هیچ‌کدام مبلغی نگفته‌اند و خودشان می‌نویسند یا پیشنهاد می‌دهند
     duel = await sync_to_async(Duel.objects.get)()
-    assert duel.status == Duel.Status.NEGOTIATING and (duel.offer_a, duel.offer_b) == (100, None)
+    assert duel.status == Duel.Status.NEGOTIATING and (duel.offer_a, duel.offer_b) == (None, None)
     text = found.edits[-1]["text"]
     assert "حریف پیدا شد" in text and "سطح" in text
-    accept = [b for b in buttons_of(found.edits[-1]["reply_markup"]) if b.callback_data == f"du:a:{duel.pk}"]
-    assert accept, "دکمه‌ی قبول پیشنهاد حریف"
+    labels = [b.callback_data for b in buttons_of(found.edits[-1]["reply_markup"])]
+    assert f"du:ko:{duel.pk}" in labels and f"du:o:{duel.pk}:100" in labels
 
+    await press(501, f"du:o:{duel.pk}:100", 11)
+    duel = await sync_to_async(Duel.objects.get)()
+    assert duel.offer_a == 100
     await press(502, f"du:a:{duel.pk}", 22)
     duel = await sync_to_async(Duel.objects.select_related("match").get)()
     assert duel.status == Duel.Status.PLAYING and duel.stake == 100
@@ -1030,9 +1032,9 @@ async def test_duel_search_errors_are_shown(app, settings):
     settings.MINIAPP_BASE_URL = "https://arcade.test"
     await set_economy(signup_bonus=0)
     await start_user(app, 511)
-    update, context = make_callback(app, 511, "du:s:chess:500", 5, chat_id=511, chat_type="private")
+    update, context = make_callback(app, 511, "du:g:nope", 5, chat_id=511, chat_type="private")
     await duel_handlers.duel_callback(update, context)
-    assert update.answers[-1] == (texts.DUEL_ERRORS["not_enough_coins"], True)
+    assert update.answers[-1] == (texts.DUEL_ERRORS["bad_game"], True)
 
 
 async def test_duel_needs_the_mini_app(app, settings):
@@ -1095,20 +1097,22 @@ async def test_custom_fee_then_split_step_for_group_games(app):
     assert match.entry_fee == 120 and match.prize_split == [100]
 
 
-async def test_duel_stake_can_be_typed(app, settings):
+async def test_duel_amount_is_typed_after_the_opponent_is_found(app, settings):
     from bot.handlers import duel as duel_handlers
     from bot.handlers import wallet as wallet_handlers
-    from games.models import DuelTicket
+    from games.models import Duel
 
     settings.MINIAPP_BASE_URL = "https://arcade.test"
     await start_user(app, 281)
-    update, context = make_callback(app, 281, "du:g:chess", 21, chat_id=281, chat_type="private")
-    await duel_handlers.duel_callback(update, context)
-    assert "du:k:chess" in [b.callback_data for b in buttons_of(update.edits[-1]["reply_markup"])]
-    update, context = make_callback(app, 281, "du:k:chess", 21, chat_id=281, chat_type="private")
+    await start_user(app, 282)
+    for tg_id in (281, 282):
+        update, context = make_callback(app, tg_id, "du:g:chess", 21, chat_id=tg_id, chat_type="private")
+        await duel_handlers.duel_callback(update, context)
+    duel = await sync_to_async(Duel.objects.get)()
+    update, context = make_callback(app, 281, f"du:ko:{duel.pk}", 21, chat_id=281, chat_type="private")
     context.user_data = {}
     await duel_handlers.duel_callback(update, context)
-    assert context.user_data["duel_flow"] == {"kind": "search", "game": "chess"}
+    assert context.user_data["duel_flow"] == {"kind": "offer", "duel": duel.pk}
     msg, ctx = make_update(app, 281, text="abc")
     ctx.user_data = context.user_data
     await wallet_handlers.private_message(msg, ctx)
@@ -1116,5 +1120,5 @@ async def test_duel_stake_can_be_typed(app, settings):
     msg, ctx = make_update(app, 281, text="۳۳۳")
     ctx.user_data = context.user_data
     await wallet_handlers.private_message(msg, ctx)
-    ticket = await sync_to_async(DuelTicket.objects.get)(user__tg_id=281)
-    assert ticket.stake == 333 and ticket.status == DuelTicket.Status.SEARCHING and "duel_flow" not in ctx.user_data
+    duel = await sync_to_async(Duel.objects.get)()
+    assert duel.offer_a == 333 and duel.status == Duel.Status.NEGOTIATING and "duel_flow" not in ctx.user_data

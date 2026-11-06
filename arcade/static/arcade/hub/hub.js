@@ -391,13 +391,6 @@
     if (s.mode === "idle" || s.mode === "finished" || s.mode === "cancelled") {
       if (!duel.game && duel.games.length) duel.game = duel.games[0].key;
       drawDuelGames();
-      var stakes = $("duel-stakes");
-      stakes.textContent = "";
-      var custom = duel.stake !== null && duel.stakes.indexOf(duel.stake) === -1;
-      duel.stakes.concat([null]).forEach(function (value) {
-        stakes.appendChild(chip(stakeLabel(value), duel.stake === value, function () { duel.stake = value; drawDuel(); }));
-      });
-      if (custom) stakes.appendChild(chip("✍️ " + stakeLabel(duel.stake), true, function () {}));
     } else if (s.mode === "searching") {
       $("duel-search-info").textContent = s.game.emoji + " " + s.game.title + " — " + stakeLabel(s.stake) +
         " — " + fa(Math.ceil(duelSecondsLeft() / 60)) + " دقیقه";
@@ -461,7 +454,7 @@
     $("duel-pick").textContent = picked
       ? "انتخاب تو: " + picked.emoji + " " + picked.title + (picked.kind === "arcade"
         ? " — هر دو همان بازی را در " + picked.note + " بازی می‌کنید؛ بهترین امتیاز برنده است."
-        : picked.table ? " — میز " + fa(picked.table) + " نفره: جستجو تا پر شدن میز ادامه دارد و بازی بدون توافق، با همان سکه‌ای که انتخاب کردی شروع می‌شود."
+        : picked.table ? " — میز " + fa(picked.table) + " نفره: جستجو تا پر شدن میز ادامه دارد و بازی بدون سکه، با یارهای تصادفی شروع می‌شود."
         : picked.key === "chess" && picked.note ? " · ساعت " + picked.note : picked.note ? " · " + picked.note : "")
       : "";
   }
@@ -478,14 +471,6 @@
     }
     return value;
   }
-  $("duel-custom-set").addEventListener("click", function () {
-    var value = readAmount($("duel-custom"));
-    if (value === null) return;
-    duel.stake = value;
-    $("duel-custom").value = "";
-    haptic("light");
-    drawDuel();
-  });
   $("duel-offer-send").addEventListener("click", function () {
     var value = readAmount($("duel-offer-custom"));
     if (value === null || !duel.state) return;
@@ -551,7 +536,8 @@
   }
   $("duel-search").addEventListener("click", function () {
     if (!duel.game) return;
-    api("duel/search", { game: duel.game, stake: duel.stake }).then(applyDuel);
+    // مقدار سکه بعد از پیدا شدن حریف معلوم می‌شود (توافق یا نوشتن عدد)
+    api("duel/search", { game: duel.game, stake: null }).then(applyDuel);
   });
   $("duel-cancel-search").addEventListener("click", function () { api("duel/cancel_search").then(applyDuel); });
   $("duel-accept").addEventListener("click", function () {
