@@ -15,6 +15,7 @@ import time
 from dataclasses import dataclass, field
 from html import escape
 
+from django.conf import settings
 from django.utils import timezone
 from telegram import InlineKeyboardMarkup, InputMediaPhoto, WebAppInfo
 
@@ -51,10 +52,12 @@ LIVE_POLL_SECONDS = 2
 def live_key(state: dict):
     """چه وقت پیام وضعیت گروه باید ویرایش شود. در حکم فقط با رویدادهای مهم (انتخاب حکم، پایان هر دست، پایان دور)
     نه با تک‌تک کارت‌ها، تا یک بازی ۵۲کارتی سهمیه‌ی ویرایش پیام‌های گروه را نخورد؛ بقیه با هر نسخه‌ی تازه."""
-    if state.get("game") in ("hokm", "hokm3"):
+    if state.get("game") in ("hokm", "hokm2", "hokm3"):
         return (state["round"], state["phase"], state["trump"], state["trick_no"], tuple(state["points"]), bool(state["over"]))
     if state.get("game") == "chaharbarg":
         return (state["round"], state["phase"], len(state["deck"]), tuple(state["points"]), bool(state["over"]))
+    if state.get("game") == "crash":
+        return (state["round"], state["phase"] == "pause", bool(state["over"]))
     return state["version"]
 LIVE_EDIT_MIN_GAP = 3  # فاصله‌ی ویرایش عکس صفحه در گروه (حد نرخ تلگرام)
 ARCADE_POLL_SECONDS = 5
@@ -267,6 +270,8 @@ class MatchManager:
         info = get_info(info.key) or info
         if not info.enabled:
             raise MatchError("game_disabled")
+        if info.key == "crash":
+            options = {**options, "house_percent": settings.CRASH_HOUSE_PERCENT}  # درصد همین لحظه برای همین مسابقه
         match = await db(services.create_match)(
             group,
             creator,
@@ -376,8 +381,9 @@ class MatchManager:
                 match = await db(services.start_match)(active.match_id, play_seconds)
             except MatchError as exc:
                 reason = "not_enough_players" if exc.code == "not_enough_players" else "error"
-                if reason == "not_enough_players" and info.key in ("hokm", "hokm3"):
-                    reason = "hokm_four" if info.key == "hokm" else "hokm_three"  # تعداد دقیق بازیکن لازم است
+                if reason == "not_enough_players" and info.key in ("hokm", "hokm2", "hokm3"):
+                    # تعداد دقیق بازیکن لازم است
+                    reason = {"hokm": "hokm_four", "hokm3": "hokm_three", "hokm2": "hokm_two"}[info.key]
                 await self._cancel_locked(active, reason)
                 return
             entries = await db(lambda: list(match.players.select_related("user")))()
@@ -702,12 +708,15 @@ class MatchManager:
         if state.get("game") == "poker":
             by_id = {p.user_id: p for p in active.players_by_tg.values()}
             return None, render.poker_text(state, {uid: p.name for uid, p in by_id.items()}, live=True)
-        if state.get("game") in ("hokm", "hokm3"):
+        if state.get("game") in ("hokm", "hokm2", "hokm3"):
             by_id = {p.user_id: p for p in active.players_by_tg.values()}
             return None, render.hokm_text(state, {uid: p.name for uid, p in by_id.items()})
         if state.get("game") == "chaharbarg":
             by_id = {p.user_id: p for p in active.players_by_tg.values()}
             return None, render.chaharbarg_text(state, {uid: p.name for uid, p in by_id.items()})
+        if state.get("game") == "crash":
+            by_id = {p.user_id: p for p in active.players_by_tg.values()}
+            return None, render.crash_text(state, {uid: p.name for uid, p in by_id.items()})
         if state.get("game", "chess") != "chess":
             return self._grid_view(active, state)
         by_id = {p.user_id: p for p in active.players_by_tg.values()}

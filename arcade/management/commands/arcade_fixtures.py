@@ -21,7 +21,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         FIXTURE_DIR.mkdir(parents=True, exist_ok=True)
-        sims = all_simulators()
+        sims = all_simulators(include_retired=True)
         for key in options["games"] or sorted(sims):
             path = FIXTURE_DIR / f"{key}.json"
             if options["missing"] and path.exists():

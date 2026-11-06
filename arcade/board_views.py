@@ -35,10 +35,12 @@ def render_page(request, token: str, practice: bool = False):
         template = "arcade/board.html"
     elif match.game_type == "poker":
         template = "arcade/poker.html"
-    elif match.game_type in ("hokm", "hokm3"):
+    elif match.game_type in ("hokm", "hokm2", "hokm3"):
         template = "arcade/hokm.html"
     elif match.game_type == "chaharbarg":
         template = "arcade/chaharbarg.html"
+    elif match.game_type == "crash":
+        template = "arcade/crash.html"
     else:
         template = "arcade/grid.html"
     return render(
@@ -122,6 +124,8 @@ def _table_money(match, state: dict) -> dict:
     """سکه‌های میزهای چندنفره (پوکر و حکم): کل سکه‌های میز و بعد از پایان، سکه‌ی واقعیِ پرداخت‌شده به هر صندلی.
     در پوکر (میز نقدی) هر ژتون سهم ثابتی از کل ورودی‌هاست (``pot_coins`` ÷ همه‌ی ژتون‌ها)."""
     info = {"pot_coins": match.pot, "payout": (match.options or {}).get("payout", "rank")}
+    if (match.options or {}).get("house_percent"):
+        info["house_percent"] = int(match.options["house_percent"])
     if match.status == MatchStatus.FINISHED:
         prizes = dict(match.players.values_list("user_id", "prize"))
         info["prizes"] = {side: prizes.get(uid, 0) for side, uid in board.rules_for(state).players(state).items()}
@@ -210,10 +214,11 @@ def state(request, user, payload):
         cached = board.cached_version(str(payload.get("match_token") or "")[:32])
         if cached and cached[0] == version and not cached[3] and (cached[2] or not cached[1] or now <= cached[1]):
             room = cached[4] if len(cached) > 4 else None
+            shown = None if len(cached) > 5 and cached[5] else cached[1]
             if chat_after is None:
-                return _unchanged(cached[1], now)
+                return _unchanged(shown, now)
             if room:
-                return _unchanged(cached[1], now, _chat_since(room, user, chat_after))
+                return _unchanged(shown, now, _chat_since(room, user, chat_after))
     match = _match(payload)
     current = match.state["board"]
     if match.status == MatchStatus.RUNNING and not current["over"] and now > (current["deadline"] or now):
@@ -223,7 +228,7 @@ def state(request, user, payload):
     board.publish_version(match, current, only_new=True)
     if version == current["version"] and match.status != MatchStatus.CANCELLED:
         extra = None if chat_after is None else _chat_since(chat.match_room(match), user, chat_after)
-        return _unchanged(current["deadline"], now, extra)
+        return _unchanged(None if board.secret_deadline(current) else current["deadline"], now, extra)
     return _response(match, current, user, chat_after)
 
 
@@ -264,16 +269,26 @@ def action(request, user, payload):
     if match.status != MatchStatus.RUNNING:
         raise ArcadeError("match_not_running", 409)
     kind = payload.get("action")
-    if kind in ("hokm_trump", "hokm_play"):
-        if match.game_type not in ("hokm", "hokm3"):
+    if kind in ("hokm_trump", "hokm_play", "hokm_draw"):
+        if match.game_type not in ("hokm", "hokm2", "hokm3"):
             raise ArcadeError("bad_action", 400)
         now = time.time()
         if kind == "hokm_trump":
             chosen = payload.get("suit")
             change = lambda s: hokm.choose_trump(s, user.pk, chosen, now)  # noqa: E731
+        elif kind == "hokm_draw":
+            keep = payload.get("keep")
+            change = lambda s: hokm.draw(s, user.pk, keep, now)  # noqa: E731
         else:
             card = payload.get("card")
             change = lambda s: hokm.play(s, user.pk, card, now)  # noqa: E731
+    elif kind == "crash_cash":
+        if match.game_type != "crash":
+            raise ArcadeError("bad_action", 400)
+        from games.crash import live as crash
+
+        now = time.time()
+        change = lambda s: crash.cash_out(s, user.pk, now)  # noqa: E731
     elif kind == "cb_play":
         if match.game_type != "chaharbarg":
             raise ArcadeError("bad_action", 400)

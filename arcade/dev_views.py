@@ -8,11 +8,11 @@ from .sim import all_simulators
 
 
 def parity(request):
-    return render(request, "arcade/dev_parity.html", {"keys": sorted(all_simulators())})
+    return render(request, "arcade/dev_parity.html", {"keys": sorted(all_simulators(include_retired=True))})
 
 
 def fixture(request, game_key: str):
     path = FIXTURE_DIR / f"{game_key}.json"
-    if game_key not in all_simulators() or not path.is_file():
+    if game_key not in all_simulators(include_retired=True) or not path.is_file():
         raise Http404
     return FileResponse(path.open("rb"), content_type="application/json")

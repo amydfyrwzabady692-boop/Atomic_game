@@ -53,6 +53,16 @@
         <button type="button" data-suit="c"><span>♣</span><em>گشنیز</em><i></i></button>
       </div>
     </div>
+    <!-- حکم دونفره: کشیدن کارت؛ فقط نفرِ نوبت کارت رویی را می‌بیند -->
+    <div id="draw-pick" class="hidden" role="dialog" aria-label="کشیدن کارت">
+      <b>🃏 کارت رویی دسته</b>
+      <div id="draw-card"></div>
+      <div class="draw-btns">
+        <button type="button" class="btn go" id="draw-keep">✋ برش دار</button>
+        <button type="button" class="btn violet" id="draw-pass">🔥 بسوزان، زیری را بگیر</button>
+      </div>
+      <small id="draw-note"></small>
+    </div>
     <div id="bubbles" aria-live="polite"></div>
   </section>
 

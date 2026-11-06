@@ -84,9 +84,13 @@ async def open_arcade(manager, group, users, attempts=3, fee=100):
     return active
 
 
-def test_all_fourteen_arcade_games_in_catalog_with_categories():
+def test_active_arcade_games_in_catalog_with_categories():
+    from arcade.sim import RETIRED
+
     games = {k: g for k, g in catalog().items() if g.is_arcade}
-    assert len(games) == 14
+    assert len(games) == 6 and not {g.arcade_key for g in games.values()} & RETIRED
+    retired = catalog(include_disabled=True, include_retired=True)
+    assert len([g for g in retired.values() if g.is_arcade]) == 14  # کدشان هست و مسابقه‌های قدیمی پیدا می‌شوند
     assert {g.category for g in games.values()} == {"speed", "skill", "stage"}
     for info in games.values():
         assert info.title_fa and info.description_fa and info.suggested_minutes in (3, 5, 10)

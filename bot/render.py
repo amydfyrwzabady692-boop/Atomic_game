@@ -201,8 +201,11 @@ def lobby_split(match) -> str:
         return texts.SPLIT_BY_CHIPS
     if getattr(match, "game_type", "") == "hokm":
         return texts.SPLIT_TEAM
-    if getattr(match, "game_type", "") == "hokm3":
+    if getattr(match, "game_type", "") in ("hokm2", "hokm3"):
         return texts.SPLIT_LABELS["100"]
+    house = int((getattr(match, "options", None) or {}).get("house_percent") or 0)
+    if house and match.entry_fee:
+        return split_label(match.prize_split) + texts.SPLIT_HOUSE.format(percent=fa_num(house))
     return split_label(match.prize_split)
 
 
@@ -246,6 +249,9 @@ def result_text(result, info: GameInfo, prize_note: str = "") -> str:
     lines.append(
         texts.RESULT_FOOTER.format(pot=fa_num(result.match.pot)) if result.match.pot else texts.RESULT_FREE
     )
+    house = int((result.match.options or {}).get("house_cut") or 0)
+    if house:
+        lines.append(texts.RESULT_HOUSE.format(coins=fa_num(house)))
     extras = []
     for r in result.players:
         if r.leveled_up:
@@ -300,7 +306,7 @@ def live_keyboard(username: str, token: str, game_key: str) -> InlineKeyboardMar
         [
             [
                 ui.button(
-                    {"chess": texts.CHESS_PLAY_BTN, "hokm": texts.HOKM_PLAY_BTN, "hokm3": texts.HOKM_PLAY_BTN, "chaharbarg": texts.CB_PLAY_BTN}.get(game_key, texts.LIVE_PLAY_BTN),
+                    {"chess": texts.CHESS_PLAY_BTN, "hokm": texts.HOKM_PLAY_BTN, "hokm2": texts.HOKM_PLAY_BTN, "hokm3": texts.HOKM_PLAY_BTN, "chaharbarg": texts.CB_PLAY_BTN, "crash": texts.CRASH_PLAY_BTN}.get(game_key, texts.LIVE_PLAY_BTN),
                     url=miniapp_link(username, token),
                     style=ui.SUCCESS,
                 )
@@ -390,7 +396,7 @@ def hokm_text(state: dict, names: dict[int, str]) -> str:
     """متن وضعیت حکم برای پیام گروه: امتیاز دو تیم، حاکم و حکم، نتیجه‌ی دور قبل و نوبت. کارت هیچ‌کس این‌جا نیست."""
     seats = state["seats"]
     name = {i: escape(short_name(names.get(uid, ""))) for i, uid in enumerate(seats)}
-    if len(seats) == 3:
+    if len(seats) != 4:
         return _hokm_solo_text(state, name)
     lines = [texts.HOKM_HEADER.format(round=fa_num(max(state["round"], 1)), target=fa_num(state["target"]))]
     for team in (0, 1):
@@ -431,10 +437,10 @@ def hokm_text(state: dict, names: dict[int, str]) -> str:
 
 
 def _hokm_solo_text(state: dict, name: dict) -> str:
-    """حکم سه‌نفره: هر کس برای خودش."""
+    """حکم سه‌نفره و دونفره: هر کس برای خودش."""
     marks = ("🔵", "🟠", "🟢")
     lines = [texts.HOKM_HEADER.format(round=fa_num(max(state["round"], 1)), target=fa_num(state["target"]))]
-    for i in range(3):
+    for i in range(len(state["seats"])):
         lines.append(texts.HOKM_SOLO_LINE.format(mark=marks[i], name=name[i], points=fa_num(state["points"][i]), tricks=fa_num(state["tricks"][i])))
     trump = ""
     if state["trump"]:
@@ -454,9 +460,37 @@ def _hokm_solo_text(state: dict, name: dict) -> str:
         text += texts.HOKM_NEXT_ROUND
     elif state["phase"] == "trump":
         text += texts.HOKM_CHOOSING
+    elif state["phase"] == "draw":
+        text += texts.HOKM_DRAWING.format(name=name[state["turn"]])
     elif state["turn"] is not None:
         text += texts.HOKM_TURN.format(name=name[state["turn"]])
     return text + texts.HOKM_LIVE_HINT
+
+
+def crash_text(state: dict, names: dict[int, str]) -> str:
+    """متن وضعیت انفجار برای پیام گروه: امتیاز هر نفر و نقطه‌ی انفجار دورهای گذشته. نقطه‌ی انفجار دور جاری هرگز این‌جا نیست."""
+    seats = state["seats"]
+    name = {i: escape(short_name(names.get(uid, ""))) for i, uid in enumerate(seats)}
+    lines = [texts.CRASH_HEADER.format(round=fa_num(max(state["round"], 1)), rounds=fa_num(state["rounds"]))]
+    order = sorted(range(len(seats)), key=lambda i: -state["scores"][i])
+    for i in order:
+        left = texts.CRASH_LEFT if state["left"][i] else ""
+        lines.append(texts.CRASH_LINE.format(name=name[i], score=crash_mult(state["scores"][i]), left=left))
+    if state["results"]:
+        points = "  ".join(crash_mult(int(round(r["point"] * 100))) for r in state["results"][-6:])
+        lines.append(texts.CRASH_HISTORY.format(points=points))
+    over = state.get("over")
+    if over:
+        winner = seats.index(over["winner"]) if over.get("winner") in seats else None
+        lines.append(texts.CRASH_OVER.format(name=name[winner]) if winner is not None else texts.CRASH_OVER_TIE)
+        return "\n".join(lines)
+    lines.append(texts.CRASH_FLYING if state["phase"] == "fly" else texts.CRASH_WAITING)
+    return "\n".join(lines) + texts.CRASH_LIVE_HINT
+
+
+def crash_mult(hundredths: int) -> str:
+    """۲۴۵ ← «۲٫۴۵×»"""
+    return fa_num(f"{hundredths // 100}.{hundredths % 100:02d}").replace(".", "٫") + "×"
 
 
 def chaharbarg_text(state: dict, names: dict[int, str]) -> str:

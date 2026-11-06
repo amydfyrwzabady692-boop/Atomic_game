@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 
 VERSION_TTL = 3  # ثانیه؛ لغو مسابقه (که نسخه را عوض نمی‌کند) حداکثر با همین تأخیر دیده می‌شود
 
-LIVE_GAMES = ("chess", "tictactoe", "connect4", "poker", "hokm", "hokm3", "chaharbarg")
-CARD_TABLES = ("poker", "hokm", "hokm3", "chaharbarg")  # میزهای کارت چندنفره
+LIVE_GAMES = ("chess", "tictactoe", "connect4", "poker", "hokm", "hokm2", "hokm3", "chaharbarg", "crash")
+CARD_TABLES = ("poker", "hokm", "hokm2", "hokm3", "chaharbarg", "crash")  # میزهای کارت چندنفره
 
 
 def rules_for(state: dict):
@@ -36,10 +36,14 @@ def rules_for(state: dict):
         return live
     if game == "poker":
         return poker
-    if game in ("hokm", "hokm3"):
+    if game in ("hokm", "hokm2", "hokm3"):
         return hokm
     if game == "chaharbarg":
         return chaharbarg
+    if game == "crash":
+        from games.crash import live as crash
+
+        return crash
     return gridlive
 
 
@@ -55,7 +59,13 @@ def new_state(game: str, user_ids: list[int], now: float, seed: str = "", option
         variant = str((options or {}).get("variant") or chaharbarg.DEFAULT_TARGET)
         target = int(variant) if variant.isdigit() else chaharbarg.DEFAULT_TARGET
         return chaharbarg.new_state(list(user_ids), now, seed=seed, target=target)
-    if game in ("hokm", "hokm3"):
+    if game == "crash":
+        from games.crash import live as crash
+
+        variant = str((options or {}).get("variant") or crash.DEFAULT_ROUNDS)
+        rounds = int(variant) if variant.isdigit() else crash.DEFAULT_ROUNDS
+        return crash.new_state(list(user_ids), now, seed=seed, rounds=rounds)
+    if game in ("hokm", "hokm2", "hokm3"):
         # طول بازی همان گزینه‌ای است که سازنده انتخاب کرده (۳، ۵ یا ۷ امتیاز)
         variant = str((options or {}).get("variant") or hokm.DEFAULT_TARGET)
         target = int(variant) if variant.isdigit() else hokm.DEFAULT_TARGET
@@ -86,7 +96,10 @@ def publish_version(match: Match, state: dict, only_new: bool = False) -> None:
 
     # اتاق گفت‌وگو هم کنار نسخه می‌ماند تا پرسش «پیام تازه؟» بدون خواندن مسابقه از پایگاه داده جواب بگیرد
     value = json.dumps(
-        [state["version"], state.get("deadline"), bool(state.get("over")), match.status == MatchStatus.CANCELLED, match_room(match)]
+        [
+            state["version"], state.get("deadline"), bool(state.get("over")), match.status == MatchStatus.CANCELLED,
+            match_room(match), secret_deadline(state),
+        ]
     )
     try:
         get_sync_redis().set(_version_key(match.token), value, ex=VERSION_TTL, nx=only_new)
@@ -94,8 +107,13 @@ def publish_version(match: Match, state: dict, only_new: bool = False) -> None:
         logger.warning("board version cache unavailable", exc_info=True)
 
 
+def secret_deadline(state: dict) -> bool:
+    """مهلتی که نباید به بیننده برسد: در انفجار، مهلتِ پرواز همان لحظه‌ی انفجار است."""
+    return state.get("game") == "crash" and state.get("phase") == "fly"
+
+
 def cached_version(token: str) -> list | None:
-    """[نسخه، مهلت، تمام‌شده، لغوشده، اتاق گفت‌وگو] یا ``None``."""
+    """[نسخه، مهلت، تمام‌شده، لغوشده، اتاق گفت‌وگو، مهلت مخفی] یا ``None``."""
     from core.redis import get_sync_redis
 
     try:

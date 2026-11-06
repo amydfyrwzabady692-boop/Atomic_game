@@ -1,0 +1,119 @@
+{% load static %}<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#160818">
+<title>انفجار</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E💥%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="{% static 'arcade/board/chess.css' %}?v={{ version }}">
+<link rel="stylesheet" href="{% static 'arcade/board/hokm.css' %}?v={{ version }}">
+<link rel="stylesheet" href="{% static 'arcade/board/cardroom.css' %}?v={{ version }}">
+<link rel="stylesheet" href="{% static 'arcade/board/crash.css' %}?v={{ version }}">
+<link rel="preload" href="/arcade/font/regular.ttf" as="font" type="font/ttf" crossorigin>
+</head>
+<body class="hokm crash">
+<div class="stars" aria-hidden="true"></div>
+<main id="game" class="hidden">
+  <header id="table-head">
+    <div class="title">
+      <b id="game-title">💥 انفجار</b>
+      <span class="chip" id="target-chip"></span>
+    </div>
+    <div class="tools">
+      <button class="icon-btn" id="chat-btn" type="button" aria-label="گفت‌وگو" title="گفت‌وگو">💬<i class="badge hidden" id="chat-badge"></i></button>
+      <button class="icon-btn" id="history-btn" type="button" aria-label="دورها و قانون‌ها" title="دورها و قانون‌ها">📜</button>
+      <button class="icon-btn" id="sound-btn" type="button" aria-label="صدا" title="صدا">🔊</button>
+      <button class="icon-btn" id="resign-btn" type="button" aria-label="ترک بازی" title="ترک بازی">🚪</button>
+    </div>
+  </header>
+
+  <!-- نقطه‌ی انفجار دورهای قبل -->
+  <section id="past" aria-label="انفجارهای قبلی"></section>
+
+  <section id="stage" aria-label="ضریب">
+    <canvas id="graph" aria-hidden="true"></canvas>
+    <div id="rocket" aria-hidden="true">🚀</div>
+    <div id="center">
+      <b id="mult">۱٫۰۰×</b>
+      <small id="phase-note"></small>
+    </div>
+    <div id="cash-flash" class="hidden"></div>
+  </section>
+
+  <button id="cash-btn" class="btn" type="button" disabled>💰 برداشت</button>
+  <p id="status" aria-live="polite"></p>
+
+  <!-- بازیکن‌ها: برداشت همین دور و جمع امتیاز -->
+  <section id="players" aria-label="بازیکن‌ها"></section>
+</main>
+
+<section id="loading" class="overlay">
+  <div class="spinner"></div>
+  <p id="loading-text">در حال آماده‌سازی انفجار…</p>
+</section>
+
+<section id="result" class="overlay hidden">
+  <div class="card">
+    <div class="result-icon" id="result-icon">🏆</div>
+    <h1 id="result-title"></h1>
+    <p class="muted" id="result-reason"></p>
+    <ol id="result-list"></ol>
+    <p class="mine-prize hidden" id="result-mine"></p>
+    <button id="result-close" class="btn go" type="button">برگشت</button>
+    <button id="result-view" class="btn violet" type="button">دیدن صفحه</button>
+  </div>
+</section>
+
+<section id="history" class="overlay sheet hidden" role="dialog" aria-label="دورها و قانون‌ها">
+  <div class="card">
+    <h2>📜 دورها و قانون‌ها</h2>
+    <div id="history-body"></div>
+    <button class="btn violet sheet-close" type="button">بستن</button>
+  </div>
+</section>
+
+<section id="chat" class="overlay sheet hidden" role="dialog" aria-label="گفت‌وگوی میز">
+  <div class="card">
+    <h2>💬 گفت‌وگو</h2>
+    <div id="chat-list" aria-live="polite"></div>
+    <p class="muted chat-empty" id="chat-empty">هنوز پیامی نیست؛ سلام کن 👋</p>
+    <div id="chat-quick"></div>
+    <form id="chat-form" autocomplete="off">
+      <input id="chat-input" type="text" maxlength="120" placeholder="پیام کوتاه… (لینک و آیدی ممنوع)" aria-label="پیام">
+      <button id="chat-send" class="btn go" type="submit">ارسال</button>
+    </form>
+    <p class="muted chat-note hidden" id="chat-note">فقط بازیکن‌های میز می‌نویسند؛ تو تماشاچی هستی.</p>
+    <p class="chat-locked hidden" id="chat-locked">🔒 گفت‌وگوی این میز به خاطر شک به تقلب تا پایان بازی بسته شد.</p>
+    <button class="btn ghost chat-lock hidden" id="chat-lock" type="button">🚫 کسی تقلب می‌کند؟ گفت‌وگو را ببند</button>
+    <p class="muted chat-lock-note" id="chat-lock-note"></p>
+    <button class="btn violet sheet-close" type="button">بستن</button>
+  </div>
+</section>
+
+<section id="leave" class="overlay sheet hidden" role="dialog" aria-label="ترک بازی">
+  <div class="card">
+    <h2>🚪 ترک بازی</h2>
+    <p id="leave-note">اگر بروی <b>امتیاز تو صفر می‌شود</b> و جایزه به بقیه می‌رسد.</p>
+    <button id="leave-yes" class="btn danger" type="button">ترک می‌کنم</button>
+    <button class="btn violet sheet-close" type="button">می‌مانم</button>
+  </div>
+</section>
+
+<div id="confetti" aria-hidden="true"></div>
+
+<div id="toast" class="hidden" role="alert"></div>
+
+<script src="{% static 'arcade/common/telegram-web-app.js' %}?v={{ version }}"></script>
+<script src="{% static 'arcade/common/sfx.js' %}?v={{ version }}"></script>
+<script>
+window.BOARD_BOOT = {
+  token: "{{ token|escapejs }}",
+  apiBase: "{% url 'arcade:app' %}api/",
+  devAuth: {{ dev_auth|yesno:"true,false" }},
+  version: "{{ version }}"
+};
+</script>
+<script src="{% static 'arcade/board/crash.js' %}?v={{ version }}"></script>
+</body>
+</html>

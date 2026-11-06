@@ -62,7 +62,7 @@ def _arcade_style(sim) -> str:
     )
 
 
-def defaults() -> dict[str, GameInfo]:
+def defaults(include_retired: bool = False) -> dict[str, GameInfo]:
     from arcade.sim import all_simulators
     from games.engine.registry import all_games
 
@@ -86,7 +86,7 @@ def defaults() -> dict[str, GameInfo]:
             ceiling=max(cls.players_ceiling, cls.players_floor),
             miniapp_only=cls.miniapp_only,
         )
-    for key, sim in all_simulators().items():
+    for key, sim in all_simulators(include_retired=include_retired).items():
         full_key = ARCADE_PREFIX + key
         games[full_key] = GameInfo(
             key=full_key,
@@ -111,11 +111,12 @@ def defaults() -> dict[str, GameInfo]:
     return games
 
 
-def catalog(include_disabled: bool = False) -> dict[str, GameInfo]:
-    """بازی‌ها با تنظیمات پنل ادمین. بازی‌های غیرفعال فقط با ``include_disabled`` برمی‌گردند."""
+def catalog(include_disabled: bool = False, include_retired: bool = False) -> dict[str, GameInfo]:
+    """بازی‌ها با تنظیمات پنل ادمین. بازی‌های غیرفعال فقط با ``include_disabled`` برمی‌گردند؛ بازی‌های آرکیدِ کنار
+    گذاشته‌شده (``arcade.sim.RETIRED``) فقط با ``include_retired`` (برای مسابقه‌ها و گزارش‌های قدیمی)."""
     games = {}
     overrides = config.overrides()
-    for key, info in defaults().items():
+    for key, info in defaults(include_retired).items():
         info = config.apply(info, overrides.get(key))
         if info.enabled or include_disabled:
             games[key] = info
@@ -124,10 +125,14 @@ def catalog(include_disabled: bool = False) -> dict[str, GameInfo]:
 
 def arcade_enabled(arcade_key: str) -> bool:
     """آیا این بازی آرکید (با کلید شبیه‌ساز، بدون پیشوند) از پنل ادمین فعال است؟"""
+    from arcade.sim import RETIRED
+
+    if arcade_key in RETIRED:
+        return False
     override = config.overrides().get(ARCADE_PREFIX + arcade_key)
     return override is None or override.enabled
 
 
 def get_info(key: str) -> GameInfo | None:
     """اطلاعات یک بازی، حتی اگر غیرفعال شده باشد (برای مسابقه‌های در جریان و گزارش‌ها)."""
-    return catalog(include_disabled=True).get(key)
+    return catalog(include_disabled=True, include_retired=True).get(key)

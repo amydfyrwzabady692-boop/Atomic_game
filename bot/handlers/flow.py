@@ -113,7 +113,7 @@ def _disarm_menu_timeout(chat_id: int, message_id: int) -> None:
 # بازی‌های منو بر اساس نوع و به ترتیب محبوبیت؛ هر دسته یک ردیف عنوان دارد. بازی تازه‌ای که این‌جا نیست
 # خودکار در «بازی‌های دیگر» (یا ته بازی‌های آرکید) می‌آید، پس هیچ بازی‌ای از منو جا نمی‌ماند.
 MENU_SECTIONS = (
-    ("board", ("chess", "poker", "hokm", "hokm3", "chaharbarg", "tictactoe", "connect4")),
+    ("board", ("chess", "poker", "hokm", "hokm3", "hokm2", "chaharbarg", "crash", "tictactoe", "connect4")),
     ("word", ("quiz", "anagram", "hangman", "emoji_guess", "word_chain")),
     ("speed", ("quick_math", "typing_race", "guess_number", "dice_games")),
 )
@@ -174,7 +174,7 @@ def steps_for(info: GameInfo, draft: dict | None = None) -> list[str]:
     steps.append("fee")
     # بازی رایگان جایزه‌ای ندارد که تقسیم شود؛ پوکر میز نقدی است و هر کس به اندازه‌ی ژتونش می‌برد و در حکم
     # دو یار تیم برنده جایزه را نصف‌نصف می‌برند
-    if info.max_players > 2 and (draft or {}).get("fee") != 0 and info.key not in ("poker", "hokm", "hokm3"):
+    if info.max_players > 2 and (draft or {}).get("fee") != 0 and info.key not in ("poker", "hokm", "hokm2", "hokm3"):
         steps.append("split")
     if info.is_arcade:
         steps.append("window")

@@ -34,6 +34,11 @@ TRICKS_TO_WIN = 7
 SOLO_PLAYERS = 3
 SOLO_TRICKS_TO_WIN = 6
 SOLO_REMOVED = "2c"
+# حکم دونفره: به هر نفر ۵ کارت، حاکم حکم را می‌گوید، بعد نوبتی «کارت بکش»: کارت رویی دسته را می‌بینی؛ یا برش می‌داری و
+# کارت زیرش ندیده می‌سوزد، یا آن را می‌سوزانی و کارت زیرش (ندیده) مال تو می‌شود؛ تا هر نفر ۱۳ کارت داشته باشد. اولین کسی که
+# ۷ دست ببرد دور را می‌برد.
+DUO_PLAYERS = 2
+DRAW_SECONDS = 15
 HAND_SIZE = 13
 FIRST_DEAL = 5
 MOVE_SECONDS = 25
@@ -52,6 +57,9 @@ def size(state: dict) -> int:
     return len(state["seats"])
 
 
+GAME_KEYS = {PLAYERS: "hokm", SOLO_PLAYERS: "hokm3", DUO_PLAYERS: "hokm2"}
+
+
 def team(state: dict, seat: int) -> int:
     """تیم یک صندلی: در حکم چهارنفره یارها روبه‌روی هم (۰ و ۲، ۱ و ۳)؛ در سه‌نفره هر کس تیم خودش."""
     return seat % 2 if size(state) == PLAYERS else seat
@@ -63,7 +71,7 @@ def teams(state: dict) -> list[list[int]]:
 
 
 def need(state: dict) -> int:
-    return TRICKS_TO_WIN if size(state) == PLAYERS else SOLO_TRICKS_TO_WIN
+    return SOLO_TRICKS_TO_WIN if size(state) == SOLO_PLAYERS else TRICKS_TO_WIN
 
 
 def team_of(seat: int) -> int:
@@ -132,15 +140,15 @@ def first_hakem(seed: str, n: int = PLAYERS) -> tuple[int, list]:
 
 def new_state(user_ids: list[int], now: float, seed: str = "", target: int = DEFAULT_TARGET) -> dict:
     n = len(user_ids)
-    if n not in (PLAYERS, SOLO_PLAYERS):
-        raise ValueError("حکم ۴ یا ۳ بازیکن لازم دارد")
+    if n not in GAME_KEYS:
+        raise ValueError("حکم ۴، ۳ یا ۲ بازیکن لازم دارد")
     if target not in TARGETS:
         target = DEFAULT_TARGET
     seed = seed or str(now)
     hakem, draw = first_hakem(seed, n)
     nteams = 2 if n == PLAYERS else n
     state = {
-        "game": "hokm" if n == PLAYERS else "hokm3",
+        "game": GAME_KEYS[n],
         "seats": list(user_ids),
         "seed": seed,
         "target": target,
@@ -167,6 +175,7 @@ def new_state(user_ids: list[int], now: float, seed: str = "", target: int = DEF
         "deadline": None,
         "move_seconds": MOVE_SECONDS,
         "trump_seconds": TRUMP_SECONDS,
+        "burned": 0,  # حکم دونفره: کارت‌هایی که در کشیدن سوخت
         "last_action": None,
         "over": None,
         "version": 1,
@@ -204,6 +213,7 @@ def _start_round(state: dict, now: float) -> None:
     state["last_trick"] = None
     state["won"] = [[] for _ in range(n)]
     state["result"] = None
+    state["burned"] = 0
     state["deadline"] = _deadline(state, hakem, now, state.get("trump_seconds", TRUMP_SECONDS))
 
 
@@ -263,11 +273,42 @@ def _choose_trump(state: dict, seat: int, chosen: str, now: float, timeout: bool
     state["trump"] = chosen
     _mark(state, seat, timeout)
     state["last_action"] = {"kind": "trump", "seat": seat, "suit": chosen, "timeout": timeout}
+    if size(state) == DUO_PLAYERS:
+        # دونفره: کشیدن نوبتی از حاکم
+        state["phase"] = "draw"
+        state["turn"] = state["hakem"]
+        state["deadline"] = _deadline(state, state["hakem"], now, DRAW_SECONDS)
+        return
     _deal_rest(state)
+    _begin_play(state, now)
+
+
+def _begin_play(state: dict, now: float) -> None:
     state["phase"] = "play"
     state["turn"] = state["hakem"]
     state["leader"] = state["hakem"]
     state["deadline"] = _deadline(state, state["hakem"], now, state["move_seconds"])
+
+
+def want_card(state: dict, card: str) -> bool:
+    """تصمیم خودکار در کشیدن (برای غایب): حکم یا کارت بزرگ (سرباز به بالا) را نگه می‌دارد."""
+    return suit(card) == state["trump"] or value(card) >= RANK_VALUE["J"]
+
+
+def _draw(state: dict, seat: int, keep: bool, now: float, timeout: bool = False) -> None:
+    deck = state["pending"]
+    top, under = deck.pop(), deck.pop()
+    state["hands"][seat].append(top if keep else under)
+    state["burned"] += 1
+    _mark(state, seat, timeout)
+    state["last_action"] = {"kind": "draw", "seat": seat, "keep": keep, "timeout": timeout}
+    if all(len(h) >= HAND_SIZE for h in state["hands"]):
+        state["pending"] = []  # بقیه‌ی دسته کنار می‌رود
+        _begin_play(state, now)
+        return
+    other = next_seat(seat, size(state))
+    state["turn"] = other if len(state["hands"][other]) < HAND_SIZE else seat
+    state["deadline"] = _deadline(state, state["turn"], now, DRAW_SECONDS)
 
 
 def _play(state: dict, seat: int, card: str, now: float, timeout: bool = False) -> None:
@@ -341,6 +382,9 @@ def check_timeout(state: dict, now: float) -> bool:
     elif state["phase"] == "trump":
         seat = state["turn"]
         _choose_trump(state, seat, best_trump(state["hands"][seat]), now, timeout=True)
+    elif state["phase"] == "draw":
+        seat = state["turn"]
+        _draw(state, seat, want_card(state, state["pending"][-1]), now, timeout=True)
     elif state["phase"] == "play":
         seat = state["turn"]
         _play(state, seat, auto_card(state, seat), now, timeout=True)
@@ -372,6 +416,15 @@ def choose_trump(state: dict, user_id: int, chosen, now: float) -> None:
     state["version"] += 1
 
 
+def draw(state: dict, user_id: int, keep, now: float) -> None:
+    """حکم دونفره: کارت رویی را بردار (``keep``) یا بسوزان و کارت زیرش را بگیر."""
+    seat = _actor(state, user_id, now, "draw")
+    if not isinstance(keep, bool):
+        raise LiveError("illegal_move")
+    _draw(state, seat, keep, now)
+    state["version"] += 1
+
+
 def play(state: dict, user_id: int, card, now: float) -> None:
     """بازی یک کارت از دست. باید از خال زمین باشد، مگر بازیکن آن خال را نداشته باشد."""
     seat = _actor(state, user_id, now, "play")
@@ -391,6 +444,8 @@ def resign(state: dict, user_id: int, now: float | None = None) -> None:
     state["left"][seat] = True
     if size(state) == PLAYERS:
         winner = 1 - team_of(seat)
+    elif size(state) == DUO_PLAYERS:
+        winner = 1 - seat
     else:  # سه‌نفره: از دو نفر مانده، هر کس امتیاز بیشتری دارد (در تساوی نفر بعدی)
         others = [(seat + k) % size(state) for k in (1, 2)]
         winner = max(others, key=lambda t: (state["points"][t], -others.index(t)))
@@ -418,7 +473,7 @@ def standings(state: dict) -> list[tuple[int, int]]:
             if t != winner:
                 scores[t] = min(scores[t], scores[winner] - 1)
     for i in range(size(state)):
-        if state["left"][i] and team(state, i) != winner and size(state) != PLAYERS:
+        if state["left"][i] and team(state, i) != winner and size(state) == SOLO_PLAYERS:
             scores[team(state, i)] = 0
     return [(uid, scores[team(state, i)]) for i, uid in enumerate(state["seats"])]
 
@@ -451,12 +506,16 @@ def view(state: dict, viewer_id: int | None, now: float | None = None) -> dict:
             hand = sort_hand(state["hands"][you], trump)
     left = max(0.0, state["deadline"] - now) if state["deadline"] else 0.0
     turn = state["turn"]
-    seconds = state["trump_seconds"] if state["phase"] == "trump" else state["move_seconds"]
+    seconds = {"trump": state["trump_seconds"], "draw": DRAW_SECONDS}.get(state["phase"], state["move_seconds"])
+    drawing = state["phase"] == "draw" and you is not None and turn == you
     return {
         "game": state["game"],
         "need": need(state),
         "solo": size(state) != PLAYERS,
         "seats": seats,
+        "draw_card": state["pending"][-1] if drawing else None,
+        "deck": len(state["pending"]) if state["phase"] == "draw" else 0,
+        "burned": state.get("burned", 0),
         "you": you,
         "hand": hand,
         "legal": sort_hand(legal_cards(state, you), trump) if you is not None else [],

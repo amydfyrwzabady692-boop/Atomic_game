@@ -217,7 +217,7 @@ def test_disabled_arcade_game_cannot_be_practised(make_user):
     session, _ = arcade_services.start_session(user, "pins", None)
     assert session.game_key == "pins"
     setting("arcade_pins", is_enabled=False)
-    assert not arcade_enabled("pins") and arcade_enabled("stack")
+    assert not arcade_enabled("pins") and arcade_enabled("snake") and not arcade_enabled("stack")  # stack کنار گذاشته شده
     with pytest.raises(ArcadeError) as blocked:
         arcade_services.start_session(user, "pins", None)
     assert blocked.value.code == "unknown_game"

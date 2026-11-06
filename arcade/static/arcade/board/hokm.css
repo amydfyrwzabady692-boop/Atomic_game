@@ -314,3 +314,18 @@ body::before {
 #scores.solo .team .pts small { display: none; }
 #scores.solo .team.me { border-width: 2px; }
 #scores.solo #trump-box { width: 54px; }
+
+/* ---------------------------------------------------------------- حکم دونفره: کشیدن کارت */
+#draw-pick {
+  position: absolute; left: 50%; top: 50%; z-index: 6; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  width: min(84%, 300px); padding: 12px 14px; border-radius: 20px;
+  background: rgba(6, 12, 24, .94); border: 1px solid rgba(214, 170, 90, .6);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, .55); animation: pop .3s cubic-bezier(.2, 1.4, .4, 1);
+}
+#draw-pick b { font-size: 15px; font-weight: 900; }
+#draw-pick small { color: var(--muted); font-size: 12px; text-align: center; }
+#draw-card .pcard { --w: min(calc(var(--tw) * .2), 84px); box-shadow: 0 0 0 3px #ffd166, 0 10px 22px rgba(0, 0, 0, .5); }
+#draw-card .pcard.in { animation: pop .35s cubic-bezier(.2, 1.4, .4, 1); }
+#draw-pick .draw-btns { display: flex; gap: 8px; width: 100%; }
+#draw-pick .draw-btns .btn { flex: 1 1 0; margin: 0; padding: 10px 6px; font-size: 13px; }

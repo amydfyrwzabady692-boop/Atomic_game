@@ -26,7 +26,7 @@ from arcade.sim import (
 from arcade.sim.autoplay import autoplay
 from arcade.sim.rng import Mulberry32
 
-SIMS = all_simulators()
+SIMS = all_simulators(include_retired=True)  # کد بازی‌های کنار گذاشته‌شده هم باید درست بماند
 SEEDS = (7, 1234, 987654, 2_000_000_011)
 
 

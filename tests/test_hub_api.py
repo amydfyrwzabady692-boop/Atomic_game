@@ -21,7 +21,7 @@ def test_hub_page_is_the_mini_app_home(client):
     page = client.get("/arcade/")
     html = page.content.decode()
     assert page.status_code == 200 and "hub.js" in html and 'data-tab="duel"' in html
-    assert len(page.context["games"]) == 14
+    assert len(page.context["games"]) == 6
     # صفحه‌ی بازی‌ها و لینک مسابقه همان صفحه‌ی بازی قبلی‌اند
     assert "shell.js" in client.get("/arcade/play/pins/").content.decode()
 
@@ -89,7 +89,7 @@ def test_duel_through_the_mini_app(client, make_user):
     a, b = make_user(1000), make_user(1000)
     status, data = post(client, "duel/state", a)
     keys = [g["key"] for g in data["games"]]
-    assert data["state"]["mode"] == "idle" and keys[:4] == ["chess", "poker", "tictactoe", "connect4"] and len(keys) == 18
+    assert data["state"]["mode"] == "idle" and keys[:4] == ["chess", "poker", "tictactoe", "connect4"] and len(keys) == 10
     kinds = {g["key"]: g["kind"] for g in data["games"]}
     assert kinds["chess"] == "board" and kinds["arcade_snake"] == "arcade" and data["quick"] and data["max_stake"] > 0
     # شطرنج حریف تصادفی کنترل زمانی ۵+۳ دارد و برچسبش در متن راست‌به‌چپ برعکس نمی‌شود

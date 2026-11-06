@@ -674,21 +674,22 @@ async def test_game_menu_shows_every_game_on_one_screen(app):
     buttons = buttons_of(menu.replies[0]["reply_markup"])
     games = [b for b in buttons if (b.callback_data or "").startswith("n:g:")]
     arcade = [b for b in games if b.callback_data.startswith("n:g:arcade_")]
-    assert len(games) == 30 and len(arcade) == 14
+    assert len(games) == 24 and len(arcade) == 6
     assert {style_of(b) for b in arcade} == {"success"}
     assert {style_of(b) for b in games if b not in arcade} == {"primary"}
     labels = " ".join(b.text for b in games)
-    for title in ("هیزم‌شکن", "موش‌زن", "مار کلاسیک", "شطرنج", "دوز چهارتایی", "کوییز", "حکم", "حکم سه‌نفره", "چهاربرگ"):
+    for title in ("هیزم‌شکن", "موش‌زن", "مار کلاسیک", "شطرنج", "دوز چهارتایی", "کوییز", "حکم", "حکم سه‌نفره", "حکم دونفره", "چهاربرگ", "انفجار"):
         assert title in labels
-    assert "۱۶ بازی گروهی" in menu.replies[0]["text"] and "۱۴ بازی آرکید" in menu.replies[0]["text"]
+    assert "۱۸ بازی گروهی" in menu.replies[0]["text"] and "۶ بازی آرکید" in menu.replies[0]["text"]
     # مرتب بر اساس نوع: هر دسته یک ردیف عنوان و بعد بازی‌هایش به ترتیب محبوبیت
     order = [b.callback_data for b in buttons if b.callback_data != "n:x"]
-    assert order[:8] == [
-        "n:h:board", "n:g:chess", "n:g:poker", "n:g:hokm", "n:g:hokm3", "n:g:chaharbarg", "n:g:tictactoe", "n:g:connect4"
-    ]
-    assert order[8:14] == ["n:h:word", "n:g:quiz", "n:g:anagram", "n:g:hangman", "n:g:emoji_guess", "n:g:word_chain"]
-    assert order[14:19] == ["n:h:speed", "n:g:quick_math", "n:g:typing_race", "n:g:guess_number", "n:g:dice_games"]
-    assert order[19:21] == ["n:h:arcade", "n:g:arcade_snake"] and len(order) == 34
+    assert order[:10] == [
+        "n:h:board", "n:g:chess", "n:g:poker", "n:g:hokm", "n:g:hokm3", "n:g:hokm2", "n:g:chaharbarg", "n:g:crash",
+        "n:g:tictactoe", "n:g:connect4",
+    ]  # fmt: skip
+    assert order[10:16] == ["n:h:word", "n:g:quiz", "n:g:anagram", "n:g:hangman", "n:g:emoji_guess", "n:g:word_chain"]
+    assert order[16:21] == ["n:h:speed", "n:g:quick_math", "n:g:typing_race", "n:g:guess_number", "n:g:dice_games"]
+    assert order[21:23] == ["n:h:arcade", "n:g:arcade_snake"] and len(order) == 28
     # ردیف عنوان هر دسته فقط توضیح کوتاهی می‌دهد و منو را عوض نمی‌کند (و «n:h» منوهای قبلی هم کار می‌کند)
     for section in ("board", "word", "speed", "arcade"):
         header = await click(app, 251, f"n:h:{section}", menu_id)
@@ -758,7 +759,7 @@ async def test_practice_menu_lists_all_arcade_games_when_set_up(app):
     # اول دکمه‌ی صفحه‌ی اصلی مینی‌اپ، بعد هر ۱۴ بازی
     assert buttons[0].web_app.url == "https://arcade.test/arcade/"
     games = buttons[1:]
-    assert len(games) == 14 and all(b.web_app.url.startswith("https://arcade.test/arcade/play/") for b in games)
+    assert len(games) == 6 and all(b.web_app.url.startswith("https://arcade.test/arcade/play/") for b in games)
 
 
 async def test_game_menu_warns_when_the_bot_cannot_read_group_messages(app):
@@ -983,7 +984,7 @@ async def test_duel_flow_in_private_chat(app, settings):
 
     # اول چهار بازی نوبتی، بعد ردیف عنوان آرکید و بازی‌های رکوردی
     assert labels[:4] == ["du:g:chess", "du:g:poker", "du:g:tictactoe", "du:g:connect4"]
-    assert labels[4] == "du:i" and "du:g:arcade_snake" in labels and len(labels) == 19
+    assert labels[4] == "du:i" and "du:g:arcade_snake" in labels and len(labels) == 11
     header = await press(501, "du:i", 11)
     assert header.answers[-1][1] is True and "تلاش" in header.answers[-1][0] and not header.edits
     arcade = await press(501, "du:g:arcade_snake", 11)

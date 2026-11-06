@@ -157,6 +157,14 @@ def start_match(match_id: int, play_seconds: int | None = None) -> Match:
     return match
 
 
+def house_cut(match: Match) -> int:
+    """سکه‌هایی از pot که سهم سرویس است (رو به پایین)؛ بازی رایگان و بازی‌های بدون ``house_percent`` صفر."""
+    percent = int((match.options or {}).get("house_percent") or 0)
+    if match.entry_fee == 0 or percent <= 0:
+        return 0
+    return match.pot * min(percent, 50) // 100
+
+
 def finish_match(match_id: int, standings: list[Standing]) -> MatchResult | None:
     """رتبه‌بندی، تقسیم pot، XP و دستاوردها. فقط یک بار اثر می‌کند."""
     with transaction.atomic():
@@ -172,11 +180,17 @@ def finish_match(match_id: int, standings: list[Standing]) -> MatchResult | None
         # جایزه فقط به کسانی می‌رسد که امتیاز گرفته‌اند؛ امتیاز صفر یعنی باخت و سهمی ندارد.
         # اگر هیچ‌کس امتیاز نگرفت (یا بازی دونفره مساوی شد)، pot مساوی بین همه تقسیم می‌شود.
         paid_groups = [g for g in groups if g[0].score > 0] or groups
+        # سهم سرویس (فقط بازی‌هایی مثل انفجار که درصدش را موقع ساخت لابی در options دارند)
+        house = house_cut(match)
+        prize_pot = match.pot - house
+        if house:
+            match.options = {**(match.options or {}), "house_cut": house}
+            match.save(update_fields=["options"])
         if (match.options or {}).get("payout") == "chips":
             # میز نقدی پوکر: سهم هر کس به اندازه‌ی ژتون‌هایش (نه بر اساس رتبه)
-            shares = proportional_payouts(match.pot, {s.user_id: s.score for s in full})
+            shares = proportional_payouts(prize_pot, {s.user_id: s.score for s in full})
         else:
-            shares = compute_payouts(match.pot, match.prize_split, [[s.user_id for s in g] for g in paid_groups])
+            shares = compute_payouts(prize_pot, match.prize_split, [[s.user_id for s in g] for g in paid_groups])
         payouts = {uid: shares.get(uid, 0) for uid in entries}
         # بازی رایگان (ورودی صفر) فقط برای سرگرمی است: سکه، XP، برد، آمار و دستاورد ندارد
         free = match.entry_fee == 0

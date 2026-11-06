@@ -33,9 +33,10 @@ def match_problems() -> list[str]:
     refunds = _sums_by(txs.filter(type=TxType.REFUND), "ref_match")
     problems = []
     touched = set(fees) | set(prizes) | set(refunds)
-    for match in Match.objects.filter(pk__in=touched).only("pk", "status", "pot"):
+    for match in Match.objects.filter(pk__in=touched).only("pk", "status", "pot", "options"):
         taken, paid, back = -(fees.get(match.pk) or 0), prizes.get(match.pk) or 0, refunds.get(match.pk) or 0
-        if match.status == MatchStatus.FINISHED and (paid != match.pot or taken != match.pot or back):
+        house = int((match.options or {}).get("house_cut") or 0)  # سهم سرویس (انفجار) پرداخت نمی‌شود
+        if match.status == MatchStatus.FINISHED and (paid + house != match.pot or taken != match.pot or back):
             problems.append(f"match {match.pk} finished: pot={match.pot} fees={taken} prizes={paid} refunds={back}")
         elif match.status == MatchStatus.CANCELLED and (taken != back or paid):
             problems.append(f"match {match.pk} cancelled: fees={taken} refunds={back} prizes={paid}")

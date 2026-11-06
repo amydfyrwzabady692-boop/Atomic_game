@@ -42,6 +42,7 @@
   var SOLO_QUICK = ["👏 دست خوبی بود", "😎 کُت در راه است", "🙏 حکم خوبی بود", "😅 ببخشید", "🤝 بازی خوبی بود"];
   // در حکم سه‌نفره دو حریف راست و چپ می‌نشینند (جای بالا خالی است)
   var SOLO_SLOTS = [0, 1, 3];
+  var DUO_SLOTS = [0, 2]; // حکم دونفره: حریف روبه‌رو
 
   var real = null; // آخرین وضعیت سرور
   var state = null;
@@ -109,7 +110,7 @@
   function solo() { return !!state.solo; }
   function rel(seat) { return (seat - base() + count()) % count(); }
   // جای صندلی روی میز (یکی از چهار جای SPOTS): در سه‌نفره بالا خالی می‌ماند
-  function slot(seat) { var r = rel(seat); return solo() ? SOLO_SLOTS[r] : r; }
+  function slot(seat) { var r = rel(seat); return count() === 2 ? DUO_SLOTS[r] : solo() ? SOLO_SLOTS[r] : r; }
   function name(seat) { return state.players["s" + seat] || ""; }
   function badge(seat) {
     var profile = (state.profiles || {})["s" + seat];
@@ -127,13 +128,14 @@
   // «۷ به ۳» برای دو تیم؛ در سه‌نفره دست‌های هر سه نفر از برنده به بعد
   function tally(list, win) {
     if (!solo()) return fa(list[win]) + " به " + fa(list[1 - win]);
-    var order = [win].concat([0, 1, 2].filter(function (t) { return t !== win; }));
+    var order = [win].concat(list.map(function (_, i) { return i; }).filter(function (t) { return t !== win; }));
     return order.map(function (t) { return fa(list[t]); }).join(" – ");
   }
   function others(list, t) { return Math.max.apply(null, list.filter(function (_, i) { return i !== t; })); }
   function myTurn() {
-    return seated() && !state.over && state.turn === state.you && (state.phase === "play" || state.phase === "trump");
+    return seated() && !state.over && state.turn === state.you && (state.phase === "play" || state.phase === "trump" || state.phase === "draw");
   }
+  function duo() { return count() === 2; }
   function legalSet() {
     var set = {};
     (state.legal || []).forEach(function (c) { set[c] = true; });
@@ -187,7 +189,7 @@
 
   // ------------------------------------------------------------------ امتیاز و حکم
   function drawScores() {
-    $("team-2").classList.toggle("hidden", !solo());
+    $("team-2").classList.toggle("hidden", count() !== 3);
     $("scores").classList.toggle("solo", solo());
     state.points.forEach(function (_, t) {
       var box = $("team-" + t);
@@ -227,7 +229,7 @@
     box.textContent = "";
     state.seats.forEach(function (s) {
       var r = slot(s.seat);
-      var turn = !state.over && state.turn === s.seat && (state.phase === "play" || state.phase === "trump");
+      var turn = !state.over && state.turn === s.seat && (state.phase === "play" || state.phase === "trump" || state.phase === "draw");
       if (seated() && s.seat === state.you) {
         var me = el("div", "t" + (solo() ? s.seat : s.team));
         me.id = "me-plate";
@@ -376,7 +378,9 @@
       var limited = led && hand.some(function (c) { return !legal[c]; });
       hint = picked ? "دوباره بزن تا «" + label(picked) + "» بازی شود" : limited ? "باید از خال زمین (" + SUIT_NAMES[led] + ") بدهی" : "یک کارت را لمس کن تا بالا بیاید، دوباره بزن تا بازی شود";
     } else if (seated() && state.phase === "trump" && state.turn !== state.you) {
-      hint = "این ۵ کارت اول توست؛ بقیه بعد از انتخاب حکم می‌آید.";
+      hint = duo() ? "این ۵ کارت اول توست؛ بعد از انتخاب حکم نوبتی کارت می‌کشید." : "این ۵ کارت اول توست؛ بقیه بعد از انتخاب حکم می‌آید.";
+    } else if (seated() && state.phase === "draw") {
+      hint = fa(hand.length) + " از ۱۳ کارت؛ " + (myTurn() ? "کارت رویی را بردار یا بسوزان" : "نوبت " + name(state.turn) + " است که بکشد");
     }
     $("hand-hint").textContent = hint;
   }
@@ -384,7 +388,7 @@
   function tapCard(code) {
     if (!state || state.over) return;
     if (!myTurn() || state.phase !== "play") {
-      toast(state.phase === "trump" ? "اول حاکم باید حکم را انتخاب کند." : "نوبت تو نیست.", true);
+      toast(state.phase === "trump" ? "اول حاکم باید حکم را انتخاب کند." : state.phase === "draw" ? "اول باید کارت‌ها کشیده شود." : "نوبت تو نیست.", true);
       return;
     }
     if (busy) return;
@@ -401,6 +405,26 @@
       return;
     }
     send("hokm_play", { card: code });
+  }
+
+  // حکم دونفره: کارت رویی برای نفرِ نوبت؛ «برش دار» (زیری می‌سوزد) یا «بسوزان» (زیری ندیده مال تو)
+  var shownDraw = "";
+  function drawDrawPick() {
+    var box = $("draw-pick");
+    var show = myTurn() && state.phase === "draw" && !!state.draw_card;
+    box.classList.toggle("hidden", !show);
+    if (!show) { shownDraw = ""; return; }
+    var key = state.draw_card + ":" + (state.hand || []).length;
+    if (key !== shownDraw) {
+      shownDraw = key;
+      var slotBox = $("draw-card");
+      slotBox.textContent = "";
+      slotBox.appendChild(cardEl(state.draw_card, "in"));
+    }
+    var trump = state.draw_card[1] === state.trump;
+    $("draw-note").textContent = (trump ? "⭐ این کارت حکم است. " : "") + "مانده در دسته: " + fa(state.deck) + " کارت";
+    $("draw-keep").disabled = busy;
+    $("draw-pass").disabled = busy;
   }
 
   // ------------------------------------------------------------------ وسط میز: انتخاب حکم، نتیجه‌ی دور
@@ -431,6 +455,11 @@
   function drawNote() {
     if (collecting || state.over) { hideNote(); return; }
     if (noteTimer) return; // پیام تعیین حاکم هنوز روی میز است
+    if (state.phase === "draw" && !myTurn()) {
+      note("🃏 " + name(state.turn) + " دارد کارت می‌کشد…", "هر کدام نوبتی کارت رویی را برمی‌دارید یا می‌سوزانید تا ۱۳ کارت.");
+      return;
+    }
+    if (state.phase === "draw") { hideNote(); return; }
     if (state.phase === "trump" && !(myTurn())) {
       note("👑 " + name(state.hakem) + " دارد حکم را انتخاب می‌کند…", "حاکم از روی ۵ کارت اولش خال حکم را می‌گوید.");
       return;
@@ -473,7 +502,7 @@
   function msLeft() { return Math.max(0, leftBase - (now() - receivedAt)); }
   function armRing() {
     var circle = document.querySelector(".seat.turn .ring circle, #me-plate.turn .ring circle");
-    if (!circle || state.over || !(state.phase === "play" || state.phase === "trump")) { ring.node = null; return; }
+    if (!circle || state.over || !(state.phase === "play" || state.phase === "trump" || state.phase === "draw")) { ring.node = null; return; }
     var total = Math.max(1, state.move_seconds * 1000);
     var left = Math.min(total, msLeft());
     var end = now() + left;
@@ -504,6 +533,9 @@
     else if (state.phase === "pause") text = "⏳ دور بعد " + fa(seconds) + " ثانیه‌ی دیگر پخش می‌شود";
     else if (state.phase === "trump") {
       text = myTurn() ? "👑 تو حاکمی؛ حکم را انتخاب کن (" + fa(seconds) + " ثانیه)" : "👑 " + name(state.hakem) + " دارد حکم را انتخاب می‌کند (" + fa(seconds) + ")";
+      cls = myTurn() ? "mine" : "";
+    } else if (state.phase === "draw") {
+      text = myTurn() ? "🃏 نوبت توست که بکشی (" + fa(seconds) + " ثانیه)" : "🃏 " + name(state.turn) + " می‌کشد (" + fa(seconds) + ")";
       cls = myTurn() ? "mine" : "";
     } else if (state.turn !== null && state.turn !== undefined) {
       var mine = myTurn();
@@ -681,7 +713,7 @@
     list.textContent = "";
     var win = state.over.winner_team;
     var order = solo()
-      ? [win].concat([0, 1, 2].filter(function (s) { return s !== win; }).sort(function (a, b) { return state.points[b] - state.points[a]; }))
+      ? [win].concat(state.seats.map(function (s) { return s.seat; }).filter(function (s) { return s !== win; }).sort(function (a, b) { return state.points[b] - state.points[a]; }))
       : [win, win + 2, 1 - win, 3 - win];
     order.forEach(function (seat) {
       var item = el("li", "t" + team(seat) + (seated() && seat === state.you ? " me" : ""));
@@ -734,6 +766,7 @@
     var played = state.last_action && previous.last_action !== state.last_action &&
       JSON.stringify(previous.last_action) !== JSON.stringify(state.last_action);
     if (played && state.last_action.kind === "play") sound("move");
+    if (played && state.last_action.kind === "draw") sound(state.last_action.keep ? "deal" : "chip");
     if (played && state.last_action.kind === "trump") { sound("chips"); toast("حکم: " + SUITS[state.trump] + " " + SUIT_NAMES[state.trump], true); }
     var wasMine = previous.turn === previous.you && previous.you !== null && previous.phase === state.phase;
     if (myTurn() && !wasMine) { sound("turn"); haptic("medium"); }
@@ -745,8 +778,8 @@
     dressed = true;
     document.body.classList.toggle("solo", solo());
     if (!solo()) return;
-    document.title = "حکم سه‌نفره";
-    $("game-title").textContent = "👑 حکم سه‌نفره";
+    document.title = duo() ? "حکم دونفره" : "حکم سه‌نفره";
+    $("game-title").textContent = duo() ? "♥️ حکم دونفره" : "👑 حکم سه‌نفره";
     $("chat-empty").textContent = "هنوز پیامی نیست؛ سلام کن 👋";
     $("leave-note").textContent = "اگر بروی، بازی برای تو تمام می‌شود و می‌بازی؛ جایزه به نفری می‌رسد که امتیاز بیشتری دارد.";
     if (talk.quick.length) drawQuick();
@@ -760,6 +793,7 @@
     drawHand(previous);
     showIntro(); // قبل از پنجره‌ی انتخاب حکم، تا «تعیین حاکم» زیر آن پنهان نماند
     drawTrumpPick();
+    drawDrawPick();
     drawNote();
     tick();
     armRing();
@@ -840,6 +874,8 @@
       send("hokm_trump", { suit: button.dataset.suit });
     });
   });
+  $("draw-keep").addEventListener("click", function () { if (myTurn() && state.phase === "draw") send("hokm_draw", { keep: true }); });
+  $("draw-pass").addEventListener("click", function () { if (myTurn() && state.phase === "draw") send("hokm_draw", { keep: false }); });
   function openSheet(id) {
     if (id === "history") drawHistory();
     if (id === "chat") {

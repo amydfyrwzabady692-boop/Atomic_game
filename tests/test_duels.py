@@ -220,7 +220,7 @@ def _played(match, user, *scores):
 
 def test_every_game_is_offered_and_arcade_duels_share_one_seed(make_user):
     keys = duels.duel_games()
-    assert keys[:4] == ["chess", "poker", "tictactoe", "connect4"] and "arcade_snake" in keys and len(keys) == 18
+    assert keys[:4] == ["chess", "poker", "tictactoe", "connect4"] and "arcade_snake" in keys and len(keys) == 10 and "arcade_helix" not in keys
     a, b = make_user(500), make_user(500)
     duels.search(a, "arcade_snake", 100)
     duel = duels.search(b, "arcade_snake", 100)
@@ -243,8 +243,8 @@ def test_every_game_is_offered_and_arcade_duels_share_one_seed(make_user):
 
 def test_arcade_duel_ends_at_the_deadline_and_a_no_show_loses(make_user):
     a, b = make_user(500), make_user(500)
-    duels.search(a, "arcade_g2048", 50)
-    duel = duels.search(b, "arcade_g2048", 50)
+    duels.search(a, "arcade_timber", 50)
+    duel = duels.search(b, "arcade_timber", 50)
     match = duel.match
     _played(match, b, 64)
     assert duels.finish_if_over(duel.pk) is None
@@ -254,8 +254,8 @@ def test_arcade_duel_ends_at_the_deadline_and_a_no_show_loses(make_user):
     assert (prize.user_id, prize.amount) == (b.pk, 100)
     # هیچ‌کدام بازی نکرد: مساوی، ورودی هر کس به خودش برمی‌گردد
     c, d = make_user(500), make_user(500)
-    duels.search(c, "arcade_g2048", 50)
-    empty = duels.search(d, "arcade_g2048", 50)
+    duels.search(c, "arcade_timber", 50)
+    empty = duels.search(d, "arcade_timber", 50)
     Match.objects.filter(pk=empty.match.pk).update(play_deadline=timezone.now() - timedelta(seconds=1))
     duels.finish_if_over(empty.pk)
     refunds = dict(CoinTransaction.objects.filter(ref_match=empty.match, type=TxType.PRIZE).values_list("user_id", "amount"))

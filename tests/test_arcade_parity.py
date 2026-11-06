@@ -18,7 +18,7 @@ from arcade.sim.autoplay import build_cases
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "arcade" / "fixtures" / "parity"
 STATIC = ROOT / "arcade" / "static" / "arcade"
-KEYS = sorted(all_simulators())
+KEYS = sorted(all_simulators(include_retired=True))
 
 
 def load_cases(key: str) -> list[dict]:
@@ -62,7 +62,7 @@ def test_every_game_has_a_drawn_menu_icon(key):
 
 @pytest.mark.parametrize("key", KEYS)
 def test_python_simulator_matches_fixtures(key):
-    sim = all_simulators()[key]
+    sim = all_simulators(include_retired=True)[key]
     for i, case in enumerate(load_cases(key)):
         assert sim.validate_inputs(case["inputs"], case["duration_ms"]) is None, f"case {i}"
         result = sim.simulate(case["seed"], case["inputs"], case["duration_ms"], case["options"])
@@ -72,7 +72,7 @@ def test_python_simulator_matches_fixtures(key):
 @pytest.mark.parametrize("key", KEYS)
 def test_fixture_generation_is_deterministic(key):
     """همان ورودی‌ها باید همیشه همان fixture را بسازند (هیچ منبع تصادفیِ پنهانی در شبیه‌ساز نیست)."""
-    assert build_cases(all_simulators()[key]) == load_cases(key)
+    assert build_cases(all_simulators(include_retired=True)[key]) == load_cases(key)
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js نصب نیست؛ تست JS در CI اجرا می‌شود")
