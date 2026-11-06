@@ -217,11 +217,17 @@ def step_screen(step: str, draft: dict, info: GameInfo, group: TelegramGroup):
         buttons = _rows([_btn(label, f"n:v:{value}", ui.PRIMARY) for value, label in info.variants.items()], 2)
     elif step == "fee":
         text = texts.CHOOSE_FEE.format(**common)
+        # دو نوع: «رایگان» در یک ردیف، و «با سکه» با مقدارهای آماده و «مبلغ دلخواه»
         fees = [f for f in settings.ENTRY_FEE_CHOICES if group.fee_allowed(f)] or [group.min_entry]
-        # رایگان سبز، ورودی‌های سکه‌ای آبی
-        buttons = _rows([_btn(render.fee_label(f), f"n:f:{f}", ui.PRIMARY if f else ui.SUCCESS) for f in fees], 3)
+        buttons = []
+        if 0 in fees:
+            buttons.append([_btn(texts.FEE_FREE_BTN, "n:f:0", ui.SUCCESS)])
+        paid = [f for f in fees if f]
+        if paid or group.max_entry > 0:
+            buttons.append([_btn(texts.FEE_PAID_HEADER, "n:fh")])
+        buttons += _rows([_btn(render.fee_label(f), f"n:f:{f}", ui.PRIMARY) for f in paid], 4)
         if group.max_entry > 0:
-            buttons.append([_btn(texts.FEE_CUSTOM_BTN, "n:f:custom", ui.SUCCESS)])
+            buttons.append([_btn(texts.FEE_CUSTOM_BTN, "n:f:custom", ui.PRIMARY)])
     elif step == "split":
         text = texts.CHOOSE_SPLIT.format(**common)
         buttons = _rows([_btn(texts.SPLIT_LABELS[key], f"n:s:{key}", ui.PRIMARY) for key in settings.PRIZE_SPLITS], 2)
@@ -348,6 +354,9 @@ async def new_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             emoji=info.emoji, title=info.title_fa, min=fa_num(group.min_entry), max=fa_num(group.max_entry)
         )
         await _show(query, text, InlineKeyboardMarkup([[_btn(texts.BACK_BTN, "n:fb")]]))
+        return
+    elif action == "fh":
+        await answer(query, texts.FEE_PAID_NOTE, alert=True)
         return
     elif action == "fb":
         await get_redis().delete(_fee_key(chat.id, user.tg_id))

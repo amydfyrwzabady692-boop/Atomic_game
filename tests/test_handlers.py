@@ -1122,3 +1122,20 @@ async def test_duel_amount_is_typed_after_the_opponent_is_found(app, settings):
     await wallet_handlers.private_message(msg, ctx)
     duel = await sync_to_async(Duel.objects.get)()
     assert duel.offer_a == 333 and duel.status == Duel.Status.NEGOTIATING and "duel_flow" not in ctx.user_data
+
+
+async def test_fee_step_offers_free_or_coins_with_presets_and_custom(app):
+    await start_user(app, 291)
+    _, menu_id = await open_game_menu(app, 291)
+    fee = await click(app, 291, "n:g:chess", menu_id)
+    fee = await click(app, 291, "n:v:blitz3", menu_id)
+    screen = fee.edits[-1]
+    assert "رایگان" in screen["text"] and "با سکه" in screen["text"]
+    data = [b.callback_data for b in buttons_of(screen["reply_markup"])]
+    assert data[:2] == ["n:f:0", "n:fh"]
+    assert data[2:6] == ["n:f:50", "n:f:100", "n:f:150", "n:f:200"] and "n:f:custom" in data
+    note = await click(app, 291, "n:fh", menu_id)
+    assert note.answers[-1][1] is True and not note.edits
+    await click(app, 291, "n:f:150", menu_id)
+    match = await sync_to_async(Match.objects.get)(creator__tg_id=291)
+    assert match.entry_fee == 150 and (await get_user(291)).coins == START_COINS - 150

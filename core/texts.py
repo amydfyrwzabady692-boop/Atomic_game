@@ -285,7 +285,15 @@ GAME_MENU_SECTION_NOTES = {
 BACK_BTN = "‹ برگشت"
 CLOSE_BTN = "✖️ بستن"
 CHOOSE_VARIANT = "{emoji} <b>{title}</b>{progress}\n<blockquote>{description}</blockquote>\n🔸 <b>{variant_title}</b> را انتخاب کن:"
-CHOOSE_FEE = "{emoji} <b>{title}</b>{progress}\n<blockquote>{description}</blockquote>\n" + COIN + " <b>ورودی هر نفر</b> چقدر باشد؟\n<i>جمع ورودی‌ها جایزه‌ی برنده‌هاست.</i>"
+CHOOSE_FEE = (
+    "{emoji} <b>{title}</b>{progress}\n<blockquote>{description}</blockquote>\n"
+    "🎮 <b>نوع بازی</b> را انتخاب کن:\n"
+    "🆓 <b>رایگان</b>: فقط برای سرگرمی، بدون جایزه.\n"
+    + COIN + " <b>با سکه</b>: ورودی هر نفر را انتخاب کن یا خودت بنویس؛ بقیه با همان مقدار وارد می‌شوند و جمع ورودی‌ها جایزه‌ی برنده‌هاست."
+)
+FEE_FREE_BTN = "🆓 رایگان (بدون سکه)"
+FEE_PAID_HEADER = "👇 با سکه — ورودی هر نفر 👇"
+FEE_PAID_NOTE = "ورودی هر نفر را انتخاب کن یا «مبلغ دلخواه» را بزن و عددش را بفرست. هر کس بخواهد شرکت کند همین مقدار از سکه‌اش کم می‌شود."
 CHOOSE_SPLIT = "{emoji} <b>{title}</b>{progress}\n\n🏆 <b>جایزه</b> چطور بین برنده‌ها تقسیم شود؟"
 CHOOSE_WINDOW = "{emoji} <b>{title}</b>{progress}\n\n⏱ <b>مدت مسابقه</b> چقدر باشد؟\n<i>پیشنهاد: {suggested} دقیقه</i>"
 CHOOSE_JOIN_TIME = "{emoji} <b>{title}</b>{progress}\n\n⏳ <b>زمان عضوگیری</b> چقدر باشد؟\n<i>بعد از این زمان (یا با پر شدن ظرفیت) بازی شروع می‌شود.</i>"
