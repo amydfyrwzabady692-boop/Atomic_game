@@ -67,6 +67,134 @@ body::after {
 .chat-lock-note:empty { display: none; }
 #chat-btn.locked { opacity: .6; }
 
+/* ================================================================= میزهای کارت: نسخه‌ی باکیفیت
+   لبه‌ی چوبی براق با رگه‌ی چوب و نوار برنجی، نمد با بافت پارچه (نویز SVG که یک بار رنگ می‌شود)، نور سقفی روی میز، نشان
+   خال‌ها وسط نمد، پشت کارت با قاب طلایی و مدال، پلاک‌ها و دکمه‌های براق. فقط لایه‌های ثابت؛ جان‌دار فقط transform/opacity. */
+:root {
+  --wood-hi: #8a4b22;
+  --wood: #5b2c12;
+  --wood-lo: #2a1206;
+  --brass: #e8c27a;
+  --brass-lo: #9a6b25;
+  --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='60'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.012 .55' numOctaves='3' seed='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .1  0 0 0 0 .05  0 0 0 0 0  0 0 0 1.1 -.3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+
+/* نور سقفی روی صفحه */
+body.hokm:not(.crash) #game::before, body.poker #game::before {
+  content: ""; position: fixed; left: 50%; top: -12vh; z-index: -1; width: 130vw; height: 90vh; transform: translateX(-50%);
+  pointer-events: none;
+  background: radial-gradient(closest-side, rgba(255, 236, 190, .13), rgba(255, 236, 190, .05) 55%, transparent);
+}
+
+/* لبه‌ی چوبی میز حکم و چهاربرگ (پوکر لبه‌ی خودش را دارد و فقط رنگ و بافتش این‌جا عوض می‌شود) */
+body.hokm:not(.crash) #rail {
+  position: absolute; inset: 0.5% 0; border-radius: 46px; pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .22), transparent 14%, transparent 80%, rgba(0, 0, 0, .35)),
+    var(--grain) 0 0 / 400px 60px,
+    linear-gradient(160deg, var(--wood-hi), var(--wood) 45%, var(--wood-lo));
+  box-shadow:
+    0 calc(var(--tw) * .05) calc(var(--tw) * .09) rgba(0, 0, 0, .75),
+    0 2px 0 rgba(255, 255, 255, .06),
+    inset 0 2px 1px rgba(255, 220, 170, .35),
+    inset 0 -3px 6px rgba(0, 0, 0, .6);
+}
+body.hokm:not(.crash) #rail::after { /* نوار برنجی بین چوب و نمد */
+  content: ""; position: absolute; inset: 11px; border-radius: 36px;
+  background: linear-gradient(135deg, #fff1c9, var(--brass) 25%, var(--brass-lo) 50%, var(--brass) 75%, #fff1c9);
+  box-shadow: 0 0 0 1px rgba(40, 20, 4, .9), 0 0 8px rgba(255, 210, 130, .25);
+}
+body.hokm:not(.crash) #rail .lamp { /* برق نور روی لبه‌ی چوب */
+  position: absolute; left: 18%; right: 18%; top: 2px; height: 9px; border-radius: 99px;
+  background: linear-gradient(90deg, transparent, rgba(255, 240, 210, .45), transparent);
+  filter: blur(1px);
+}
+body.hokm:not(.crash) #felt {
+  inset: calc(0.5% + 14px) 14px; border-radius: 33px;
+  background:
+    radial-gradient(55% 45% at 50% 44%, rgba(255, 255, 255, .16), transparent 70%),
+    var(--noise) 0 0 / 180px 180px,
+    radial-gradient(85% 75% at 50% 46%, var(--felt-hi), var(--felt) 55%, var(--felt-lo));
+  background-blend-mode: normal, soft-light, normal;
+  box-shadow: inset 0 0 calc(var(--tw) * .12) rgba(0, 0, 0, .7), inset 0 0 0 1px rgba(0, 0, 0, .55), inset 0 3px 8px rgba(0, 0, 0, .6);
+}
+body.poker #rail {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .2), transparent 16%, transparent 78%, rgba(0, 0, 0, .35)),
+    var(--grain) 0 0 / 400px 60px,
+    linear-gradient(160deg, var(--rail-hi), var(--rail) 45%, var(--rail-lo));
+}
+body.poker #rail::after { box-shadow: 0 0 0 2px var(--brass), 0 0 0 3px rgba(40, 20, 4, .9), 0 0 10px rgba(255, 210, 130, .3); }
+body.poker #felt {
+  background:
+    radial-gradient(60% 45% at 50% 42%, rgba(255, 255, 255, .15), transparent 70%),
+    var(--noise) 0 0 / 180px 180px,
+    radial-gradient(75% 70% at 50% 46%, var(--felt-hi), var(--felt) 52%, var(--felt-lo));
+  background-blend-mode: normal, soft-light, normal;
+}
+
+/* نشان چهار خال وسط نمد (چاپ‌شده روی پارچه) */
+.felt-emblem {
+  position: absolute; left: 50%; top: 50%; width: calc(var(--tw) * .34); aspect-ratio: 1; transform: translate(-50%, -50%) rotate(45deg);
+  display: grid; grid-template-columns: 1fr 1fr; place-items: center; border-radius: 22%;
+  border: 2px solid rgba(255, 230, 170, .13); box-shadow: inset 0 0 0 6px rgba(0, 0, 0, .06), 0 0 0 6px rgba(255, 230, 170, .04);
+  pointer-events: none;
+}
+.felt-emblem span { transform: rotate(-45deg); font-family: "Segoe UI Symbol", Arial, sans-serif; font-size: calc(var(--tw) * .075); color: rgba(0, 0, 0, .16); text-shadow: 0 1px 0 rgba(255, 255, 255, .07); }
+body.poker .felt-emblem { top: 64%; width: calc(var(--tw) * .2); opacity: .8; }
+.felt-logo { z-index: 0; }
+body.hokm:not(.crash) .felt-logo { opacity: .75; }
+
+/* پشت کارت: قاب طلایی دوخطه و مدال وسط */
+.pcard.back { overflow: hidden; }
+.pcard.back::before {
+  content: "W"; position: absolute; left: 50%; top: 50%; display: grid; place-items: center;
+  width: 46%; aspect-ratio: 1; transform: translate(-50%, -50%) rotate(45deg); border-radius: 18%;
+  background: radial-gradient(circle at 35% 30%, #fff3c9, #e2b866 45%, #8f5f1d);
+  box-shadow: 0 0 0 calc(var(--w) * .025) rgba(255, 255, 255, .5), 0 1px 3px rgba(0, 0, 0, .5);
+  color: transparent; font-size: 0;
+}
+.pcard.back::after {
+  content: ""; position: absolute; inset: calc(var(--w) * .09); border-radius: calc(var(--w) * .06);
+  border: max(1px, calc(var(--w) * .022)) solid rgba(240, 205, 130, .85);
+  box-shadow: inset 0 0 0 max(1px, calc(var(--w) * .03)) rgba(0, 0, 0, .25), inset 0 0 0 max(2px, calc(var(--w) * .05)) rgba(240, 205, 130, .35);
+  background: none;
+}
+
+/* کارت‌های رو: سایه‌ی دولایه و لبه‌ی نرم‌تر */
+.pcard.face { box-shadow: 0 1px 1px rgba(0, 0, 0, .25), 0 6px 14px rgba(0, 0, 0, .4), inset 0 0 0 1px rgba(0, 0, 0, .12); }
+#hand .pcard.face { box-shadow: 0 2px 2px rgba(0, 0, 0, .3), 0 10px 22px rgba(0, 0, 0, .5), inset 0 0 0 1px rgba(0, 0, 0, .12); }
+
+/* آواتارها: حلقه‌ی رنگی براق و برق روی چهره */
+.ava { background: conic-gradient(from 210deg, var(--c, #8aa) , #fff 12%, var(--c, #8aa) 30%, rgba(0, 0, 0, .6) 60%, var(--c, #8aa)); }
+.ava span { box-shadow: inset 0 -4px 8px rgba(0, 0, 0, .35), inset 0 2px 3px rgba(255, 255, 255, .35); }
+
+/* پلاک نام‌ها: شیشه‌ی تیره با خط طلایی بالا */
+.plate, #me-plate {
+  background: linear-gradient(180deg, rgba(40, 46, 70, .96), rgba(10, 12, 24, .96));
+  box-shadow: 0 6px 14px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 230, 170, .35);
+}
+
+/* پلاک‌های امتیاز و دکمه‌های سربرگ */
+body.hokm .team {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 24%, rgba(20, 24, 44, .95)), rgba(8, 10, 22, .95));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 6px 14px rgba(0, 0, 0, .4);
+}
+body.hokm .team .pts { text-shadow: 0 0 14px color-mix(in srgb, var(--c) 55%, transparent); }
+#table-head .icon-btn {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .04));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 4px 10px rgba(0, 0, 0, .35);
+}
+#table-head .title b { color: #fff6dc; text-shadow: 0 0 14px rgba(255, 214, 140, .35), 0 2px 0 rgba(0, 0, 0, .35); }
+#trump-box:not(.empty) { background: linear-gradient(170deg, #fffdf6, #efe4c8); box-shadow: 0 6px 16px rgba(0, 0, 0, .45), inset 0 0 0 2px var(--brass), inset 0 0 0 4px rgba(255, 255, 255, .7); }
+
+/* دست خودت: سایه‌ی لبه‌ی میز زیر بادبزن */
+#hand::before {
+  content: ""; position: absolute; left: 6%; right: 6%; bottom: 0; height: 26px; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, .55), transparent); pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   body::after, .suit-deco i, #felt::after { animation: none !important; }
 }

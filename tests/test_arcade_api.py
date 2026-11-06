@@ -64,7 +64,7 @@ def test_site_root_redirects_to_the_arcade_menu(client):
 
 def test_app_page_gives_every_game_its_rules(client):
     games = client.get("/arcade/").context["games"]
-    assert len(games) == 6 and not {g["key"] for g in games} & {"helix", "stack", "colorswitch", "breakout"}
+    assert len(games) == 5 and not {g["key"] for g in games} & {"helix", "stack", "colorswitch", "breakout"}
     for game in games:
         assert len(game["rules"]) == 3 and all(isinstance(line, str) and line for line in game["rules"])
         assert game["howto"]

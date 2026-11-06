@@ -348,7 +348,7 @@ def test_retired_arcade_games_are_hidden_but_their_code_stays():
     from arcade.sim import RETIRED, all_simulators, get_simulator
     from games.catalog import catalog, get_info
 
-    assert RETIRED == {"colorswitch", "g2048", "helix", "stack", "jumper", "runner", "timing", "breakout"}
+    assert RETIRED == {"colorswitch", "g2048", "helix", "stack", "jumper", "runner", "timing", "breakout", "snake"}
     assert not set(all_simulators()) & RETIRED and set(all_simulators(include_retired=True)) >= RETIRED
     assert all(get_simulator(k) is not None for k in RETIRED)  # برای برگرداندن کافی است از RETIRED حذف شوند
     assert "arcade_helix" not in catalog(include_disabled=True) and get_info("arcade_helix") is not None

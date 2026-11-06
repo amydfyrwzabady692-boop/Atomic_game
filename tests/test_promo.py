@@ -219,7 +219,7 @@ async def test_admin_controls_invites_and_publishes_channel_posts(app, settings)
     text = shown(wallet)
     assert "۱٬۰۰۰ تومان" in text and "۱۰٪" in text and "حداقل ۱۰۰ سکه" in text
     intro = await panel(app, OWNER, "adm:post:show:intro")
-    assert "@test_bot" in shown(intro) and "۱۸ بازی گروهی" in shown(intro) and "۶ بازی آرکید" in shown(intro)
+    assert "@test_bot" in shown(intro) and "۱۸ بازی گروهی" in shown(intro) and "۵ بازی آرکید" in shown(intro)
 
     channel = await sync_to_async(ForcedChannel.objects.create)(chat_id=-1007, title="کانال ما", username="winzon_ch")
     picked = await panel(app, OWNER, "adm:post:pick:intro")

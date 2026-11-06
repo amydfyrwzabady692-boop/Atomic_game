@@ -13,7 +13,7 @@ _loaded = False
 
 # بازی‌هایی که فعلاً از ربات و مینی‌اپ برداشته شده‌اند تا منو خلوت‌تر باشد. کدشان (شبیه‌ساز، core.js و صفحه) سر جایش
 # است و مسابقه‌های در جریان و آمارهای قبلی‌شان کار می‌کند؛ برای برگرداندن هر کدام کافی است از همین فهرست حذفش کنی.
-RETIRED = frozenset({"colorswitch", "g2048", "helix", "stack", "jumper", "runner", "timing", "breakout"})
+RETIRED = frozenset({"colorswitch", "g2048", "helix", "stack", "jumper", "runner", "timing", "breakout", "snake"})
 
 
 def load_simulators() -> None:

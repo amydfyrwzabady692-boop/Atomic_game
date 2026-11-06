@@ -141,6 +141,7 @@
     canvas.width = Math.round(box.clientWidth * dpr);
     canvas.height = Math.round(box.clientHeight * dpr);
     ctx2d = canvas.getContext("2d");
+    stars = [];
   }
   function color(m) {
     if (m < 1.5) return "#6ee7ff";
@@ -148,10 +149,58 @@
     if (m < 5) return "#ffc857";
     return "#ff5c7a";
   }
+  // ذره‌ها: شعله‌ی پشت موشک و ترکش‌های انفجار (روی همان canvas)
+  var sparks = [];
+  var stars = [];
+  var lastFrameAt = 0;
+  function makeStars(w, h) {
+    stars = [];
+    for (var i = 0; i < 46; i++) stars.push({ x: Math.random() * w, y: Math.random() * h, r: (Math.random() * 1.3 + 0.3) * dpr, s: Math.random() * 0.6 + 0.2, t: Math.random() * 6 });
+  }
+  function spawnTrail(p, c) {
+    for (var i = 0; i < 3; i++) {
+      sparks.push({ x: p[0], y: p[1], vx: (-1.4 - Math.random() * 1.6) * dpr, vy: (0.6 + Math.random() * 1.4) * dpr, life: 1, decay: 0.03 + Math.random() * 0.03, r: (2 + Math.random() * 3) * dpr, c: c });
+    }
+  }
+  function spawnBoom(p) {
+    for (var i = 0; i < 70; i++) {
+      var a = Math.random() * Math.PI * 2, v = (1.5 + Math.random() * 5) * dpr;
+      sparks.push({ x: p[0], y: p[1], vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, decay: 0.012 + Math.random() * 0.02, r: (1.5 + Math.random() * 3.5) * dpr, c: i % 3 ? "#ff5c7a" : "#ffc857", g: 0.06 * dpr });
+    }
+  }
+  function drawSparks() {
+    ctx2d.globalCompositeOperation = "lighter";
+    for (var i = sparks.length - 1; i >= 0; i--) {
+      var p = sparks[i];
+      p.x += p.vx; p.y += p.vy; p.vy += p.g || 0; p.life -= p.decay;
+      if (p.life <= 0) { sparks.splice(i, 1); continue; }
+      ctx2d.globalAlpha = Math.max(0, p.life);
+      ctx2d.fillStyle = p.c;
+      ctx2d.beginPath(); ctx2d.arc(p.x, p.y, p.r * (0.4 + p.life * 0.6), 0, Math.PI * 2); ctx2d.fill();
+    }
+    ctx2d.globalAlpha = 1;
+    ctx2d.globalCompositeOperation = "source-over";
+  }
+  function drawStars(w, h, speed) {
+    if (!stars.length) makeStars(w, h);
+    var t = now() / 1000;
+    stars.forEach(function (st) {
+      st.x -= st.s * speed * dpr;
+      st.y += st.s * speed * 0.35 * dpr;
+      if (st.x < 0) st.x += w;
+      if (st.y > h) st.y -= h;
+      ctx2d.globalAlpha = 0.35 + 0.35 * Math.sin(t * 2 + st.t);
+      ctx2d.fillStyle = "#fff";
+      ctx2d.beginPath(); ctx2d.arc(st.x, st.y, st.r, 0, Math.PI * 2); ctx2d.fill();
+    });
+    ctx2d.globalAlpha = 1;
+  }
+  var boomAt = null;
   function drawGraph(m, flying, crashed) {
     if (!ctx2d) sizeCanvas();
     var w = canvas.width, h = canvas.height;
     ctx2d.clearRect(0, 0, w, h);
+    drawStars(w, h, flying ? Math.min(6, 0.6 + Math.log(m) * 2) : 0.15);
     var pad = 18 * dpr;
     var top = Math.max(2, m * 1.15);
     var span = Math.log(top) / clock.rate; // ثانیه‌های تا سقف نمودار
@@ -166,7 +215,7 @@
       ctx2d.beginPath(); ctx2d.moveTo(pad, y); ctx2d.lineTo(w - pad, y); ctx2d.stroke();
       ctx2d.fillText(g + "×", pad + 2 * dpr, y - 3 * dpr);
     });
-    if (m <= 1 && !crashed) { placeRocket(null); return; }
+    if (m <= 1 && !crashed) { placeRocket(null); drawSparks(); return; }
     var steps = 60;
     var tEnd = Math.log(m) / clock.rate;
     var pts = [];
@@ -195,7 +244,17 @@
     ctx2d.shadowBlur = 14 * dpr;
     ctx2d.stroke();
     ctx2d.shadowBlur = 0;
-    placeRocket(flying || crashed ? pts[pts.length - 1] : null, crashed);
+    var tip = pts[pts.length - 1];
+    if (flying) spawnTrail(tip, Math.random() < 0.5 ? "#ffc857" : "#ff8a3d");
+    if (crashed && boomAt !== clock.crashAt) { boomAt = clock.crashAt; spawnBoom(tip); }
+    // هاله‌ی نور سر منحنی
+    var glow = ctx2d.createRadialGradient(tip[0], tip[1], 0, tip[0], tip[1], 40 * dpr);
+    glow.addColorStop(0, crashed ? "rgba(255,92,122,.55)" : "rgba(255,220,140,.5)");
+    glow.addColorStop(1, "rgba(0,0,0,0)");
+    ctx2d.fillStyle = glow;
+    ctx2d.fillRect(tip[0] - 40 * dpr, tip[1] - 40 * dpr, 80 * dpr, 80 * dpr);
+    drawSparks();
+    placeRocket(flying || crashed ? tip : null, crashed);
   }
   function placeRocket(p, crashed) {
     var node = $("rocket");
