@@ -81,6 +81,17 @@ async def duel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user
             else:
                 await db(duels.set_duel_message)(result.pk, "b", message_id)
                 await _show_duel(query, result.pk, user)
+        elif action == "k" and len(parts) == 3:
+            # مقدار سکه را خود کاربر می‌نویسد
+            if parts[2] not in duels.duel_games():
+                raise duels.DuelError("bad_game")
+            context.user_data["duel_flow"] = {"kind": "search", "game": parts[2]}
+            await answer(query)
+            await _edit(query, texts.DUEL_CUSTOM_ASK.format(max=fa_num(duels.MAX_STAKE)), None)
+        elif action == "ko" and len(parts) == 3 and parts[2].isdigit():
+            context.user_data["duel_flow"] = {"kind": "offer", "duel": int(parts[2])}
+            await answer(query)
+            await tg_call(query.message.reply_text, texts.DUEL_CUSTOM_ASK.format(max=fa_num(duels.MAX_STAKE)), parse_mode="HTML")
         elif action == "x":
             await db(duels.cancel_search)(user)
             await answer(query, texts.DUEL_SEARCH_CANCELLED)
@@ -99,6 +110,54 @@ async def duel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, user
             await _after_change(query, context, result, user)
     except duels.DuelError as exc:
         await answer(query, error_text(exc), alert=True)
+
+
+async def custom_stake_message(update: Update, context: ContextTypes.DEFAULT_TYPE, user: TelegramUser) -> bool:
+    """کاربر «✍️ مبلغ دلخواه» زده و حالا عدد را در پیوی فرستاده است (جستجوی تازه یا پیشنهاد در توافق)."""
+    from core.textutils import parse_int
+
+    flow = context.user_data.get("duel_flow")
+    message = update.effective_message
+    if not flow or message is None:
+        return False
+    text = (message.text or "").strip()
+    if text in texts.CANCEL_WORDS:
+        context.user_data.pop("duel_flow", None)
+        await reply(update, texts.DUEL_CHOOSE_GAME, games_keyboard())
+        return True
+    amount = parse_int(text)
+    if amount is None or not 0 <= amount <= duels.MAX_STAKE:
+        await reply(update, texts.DUEL_CUSTOM_BAD.format(max=fa_num(duels.MAX_STAKE)))
+        return True
+    context.user_data.pop("duel_flow", None)
+    try:
+        if flow.get("kind") == "offer":
+            result = await db(duels.offer)(user, int(flow["duel"]), amount)
+            runner = _runner(context)
+            if runner is not None:
+                await runner.notify(result.pk)
+            else:
+                loaded, prizes = await load_duel(result.pk)
+                await reply(update, *duel_view(loaded, loaded.side_of(user.pk), prizes))
+            return True
+        result = await db(duels.search)(user, flow["game"], amount)
+    except duels.DuelError as exc:
+        await reply(update, error_text(exc))
+        return True
+    if isinstance(result, DuelTicket) and result.match_id:
+        await reply(update, texts.TABLE_FILLING)
+        return True
+    if isinstance(result, DuelTicket):
+        text, keyboard = searching_view(result)
+        sent = await reply(update, text, keyboard)
+        if sent is not None:
+            await db(duels.set_ticket_message)(result.pk, sent.message_id)
+        return True
+    loaded, prizes = await load_duel(result.pk)
+    sent = await reply(update, *duel_view(loaded, loaded.side_of(user.pk), prizes))
+    if sent is not None:
+        await db(duels.set_duel_message)(result.pk, "b", sent.message_id)
+    return True
 
 
 async def _show_duel(query, duel_id: int, user: TelegramUser) -> None:

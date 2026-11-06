@@ -220,6 +220,8 @@ def step_screen(step: str, draft: dict, info: GameInfo, group: TelegramGroup):
         fees = [f for f in settings.ENTRY_FEE_CHOICES if group.fee_allowed(f)] or [group.min_entry]
         # رایگان سبز، ورودی‌های سکه‌ای آبی
         buttons = _rows([_btn(render.fee_label(f), f"n:f:{f}", ui.PRIMARY if f else ui.SUCCESS) for f in fees], 3)
+        if group.max_entry > 0:
+            buttons.append([_btn(texts.FEE_CUSTOM_BTN, "n:f:custom", ui.SUCCESS)])
     elif step == "split":
         text = texts.CHOOSE_SPLIT.format(**common)
         buttons = _rows([_btn(texts.SPLIT_LABELS[key], f"n:s:{key}", ui.PRIMARY) for key in settings.PRIZE_SPLITS], 2)
@@ -338,6 +340,17 @@ async def new_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         draft.pop(done[-1])
     elif action == "v" and value in info.variants:
         draft["variant"] = value
+    elif action == "f" and value == "custom":
+        # عدد ورودی را خود سازنده در گروه تایپ می‌کند (۲ دقیقه وقت)
+        await get_redis().set(_fee_key(chat.id, user.tg_id), str(message_id), ex=120)
+        await _save_draft(chat.id, message_id, draft)
+        text = texts.FEE_CUSTOM_ASK.format(
+            emoji=info.emoji, title=info.title_fa, min=fa_num(group.min_entry), max=fa_num(group.max_entry)
+        )
+        await _show(query, text, InlineKeyboardMarkup([[_btn(texts.BACK_BTN, "n:fb")]]))
+        return
+    elif action == "fb":
+        await get_redis().delete(_fee_key(chat.id, user.tg_id))
     elif action == "f" and value.isdigit() and group.fee_allowed(int(value)):
         draft["fee"] = int(value)
         if draft["fee"] == 0:
@@ -349,10 +362,32 @@ async def new_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     elif action == "t" and value.isdigit() and int(value) in settings.JOIN_SECONDS_CHOICES:
         draft["join"] = int(value)
 
+    await _advance(context, chat.id, message_id, draft, info, group, user, query)
+
+
+async def _edit_menu(context, chat_id: int, message_id: int, text: str, keyboard) -> None:
+    await tg_call(
+        context.bot.edit_message_text, text, chat_id=chat_id, message_id=message_id, parse_mode="HTML", reply_markup=keyboard
+    )
+
+
+async def _advance(context, chat_id: int, message_id: int, draft: dict, info: GameInfo, group, user, query=None) -> None:
+    """مرحله‌ی بعد منو را نشان می‌دهد یا اگر همه انتخاب شده لابی را می‌سازد. ``query`` نبود یعنی انتخاب با پیام متنی
+    (مبلغ دلخواه) آمده و خطاها با پیام گروه گفته می‌شود."""
+
+    async def say(text: str) -> None:
+        if query is not None:
+            await answer(query, text, alert=True)
+        else:
+            await tg_call(context.bot.send_message, chat_id, text, parse_mode="HTML")
+
     step = next_step(draft, info)
-    await _save_draft(chat.id, message_id, draft)
+    await _save_draft(chat_id, message_id, draft)
     if step is not None:
-        await _show(query, *step_screen(step, draft, info, group))
+        if query is not None:
+            await _show(query, *step_screen(step, draft, info, group))
+        else:
+            await _edit_menu(context, chat_id, message_id, *step_screen(step, draft, info, group))
         return
 
     # همه‌ی انتخاب‌ها انجام شد: ساخت مسابقه و تبدیل همین پیام به لابی
@@ -365,8 +400,8 @@ async def new_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     split = settings.PRIZE_SPLITS[draft.get("split", "100")]
     manager = manager_of(context)
     # از این لحظه پیام منو لابی می‌شود و دیگر نباید خودکار پاک شود
-    _disarm_menu_timeout(chat.id, message_id)
-    await get_redis().delete(_draft_key(chat.id, message_id))
+    _disarm_menu_timeout(chat_id, message_id)
+    await get_redis().delete(_draft_key(chat_id, message_id))
     try:
         active = await manager.create_lobby(
             group,
@@ -379,14 +414,65 @@ async def new_game_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             menu_message_id=message_id,
         )
     except MatchError as exc:
-        await answer(query, error_text(exc), alert=True)
-        await tg_call(query.message.delete)
+        await say(error_text(exc))
+        await tg_call(context.bot.delete_message, chat_id, message_id)
         return
     # سازنده خودکار عضو می‌شود (اگر بتواند)
     try:
         await manager.join(active, user)
     except MatchError as exc:
         if exc.code == "need_start":
-            await answer(query, url=render.start_link(render.bot_username(context), render.join_payload(active.match_id)))
+            link = render.start_link(render.bot_username(context), render.join_payload(active.match_id))
+            if query is not None:
+                await answer(query, url=link)
+            else:
+                await say(texts.FEE_CUSTOM_NEED_START.format(link=link))
             return
-        await answer(query, error_text(exc), alert=True)
+        await say(error_text(exc))
+
+
+# ------------------------------------------------------------------ مبلغ دلخواه
+def _fee_key(chat_id: int, tg_id: int) -> str:
+    return f"fee_input:{chat_id}:{tg_id}"
+
+
+async def custom_fee_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """سازنده‌ی منو «✍️ مبلغ دلخواه» زده و حالا عدد ورودی را در گروه فرستاده است. اگر پیام همین بود True."""
+    message, tg_user, chat = update.effective_message, update.effective_user, update.effective_chat
+    if message is None or tg_user is None or chat is None:
+        return False
+    redis = get_redis()
+    raw = await redis.get(_fee_key(chat.id, tg_user.id))
+    if raw is None:
+        return False
+    from core.textutils import parse_int
+
+    amount = parse_int(message.text or "")
+    if amount is None:
+        return False  # پیام عددی نیست؛ شاید جواب بازی دیگری باشد
+    message_id = int(raw)
+    group = await ensure_group(chat)
+    if not group.fee_allowed(amount):
+        await tg_call(
+            message.reply_text,
+            texts.FEE_CUSTOM_RANGE.format(min=fa_num(group.min_entry), max=fa_num(group.max_entry)),
+            parse_mode="HTML",
+        )
+        return True
+    draft = await _load_draft(chat.id, message_id)
+    if draft is None or draft.get("creator") != tg_user.id or "game" not in draft:
+        await redis.delete(_fee_key(chat.id, tg_user.id))
+        return True
+    info = enabled_games(group).get(draft["game"])
+    if info is None:
+        await redis.delete(_fee_key(chat.id, tg_user.id))
+        return True
+    await redis.delete(_fee_key(chat.id, tg_user.id))
+    await tg_call(message.delete)  # گروه شلوغ نشود
+    draft["fee"] = amount
+    if amount == 0:
+        draft.pop("split", None)
+    user = await db(TelegramUser.objects.get)(tg_id=tg_user.id)
+    _arm_menu_timeout(context, chat.id, message_id)
+    await _advance(context, chat.id, message_id, draft, info, group, user)
+    return True

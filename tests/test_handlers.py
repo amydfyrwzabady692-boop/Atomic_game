@@ -1043,3 +1043,78 @@ async def test_duel_needs_the_mini_app(app, settings):
     update, context = make_update(app, 521, text="/duel")
     await duel_handlers.duel(update, context)
     assert update.replies[0]["text"] == texts.DUEL_UNAVAILABLE
+
+
+# ====================================================================== مبلغ دلخواه (کاربر خودش عدد را می‌نویسد)
+async def _group_text(app, tg_id, text):
+    from bot.handlers import group as group_handlers
+
+    update, context = make_update(app, tg_id, chat_id=GROUP_ID, chat_type="supergroup", text=text)
+
+    async def delete():
+        return True
+
+    update.effective_message.delete = delete
+    await group_handlers.group_text(update, context)
+    return update
+
+
+async def test_creator_types_a_custom_entry_fee(app):
+    await start_user(app, 271)
+    _, menu_id = await open_game_menu(app, 271)
+    fee = await click(app, 271, "n:g:tictactoe", menu_id)
+    labels = [b.callback_data for b in buttons_of(fee.edits[-1]["reply_markup"])]
+    assert "n:f:custom" in labels
+    ask = await click(app, 271, "n:f:custom", menu_id)
+    assert "چند سکه" in ask.edits[-1]["text"]
+    # کس دیگری عدد بفرستد اثری ندارد؛ عدد بیرون از محدوده‌ی گروه رد می‌شود
+    await start_user(app, 272)
+    await _group_text(app, 272, "۷۷")
+    out = await _group_text(app, 271, "999999")
+    assert "بین" in out.replies[-1]["text"]
+    assert not await sync_to_async(Match.objects.filter(creator__tg_id=271).exists)()
+    await _group_text(app, 271, "۷۷")
+    match = await sync_to_async(Match.objects.get)(creator__tg_id=271)
+    assert match.entry_fee == 77 and match.game_type == "tictactoe"
+    assert (await get_user(271)).coins == START_COINS - 77
+    # بعد از ساخته شدن لابی، عدد بعدی دیگر ورودی حساب نمی‌شود
+    await _group_text(app, 271, "۵۰")
+    assert await sync_to_async(Match.objects.filter(creator__tg_id=271).count)() == 1
+
+
+async def test_custom_fee_then_split_step_for_group_games(app):
+    await start_user(app, 273)
+    _, menu_id = await open_game_menu(app, 273)
+    await click(app, 273, "n:g:quick_math", menu_id)
+    await click(app, 273, "n:f:custom", menu_id)
+    await _group_text(app, 273, "120")
+    edits = app.bot.edits
+    assert any("تقسیم" in (e.get("text") or "") for e in edits)  # مرحله‌ی بعد روی همان پیام منو
+    await click(app, 273, "n:s:100", menu_id)
+    match = await sync_to_async(Match.objects.get)(creator__tg_id=273)
+    assert match.entry_fee == 120 and match.prize_split == [100]
+
+
+async def test_duel_stake_can_be_typed(app, settings):
+    from bot.handlers import duel as duel_handlers
+    from bot.handlers import wallet as wallet_handlers
+    from games.models import DuelTicket
+
+    settings.MINIAPP_BASE_URL = "https://arcade.test"
+    await start_user(app, 281)
+    update, context = make_callback(app, 281, "du:g:chess", 21, chat_id=281, chat_type="private")
+    await duel_handlers.duel_callback(update, context)
+    assert "du:k:chess" in [b.callback_data for b in buttons_of(update.edits[-1]["reply_markup"])]
+    update, context = make_callback(app, 281, "du:k:chess", 21, chat_id=281, chat_type="private")
+    context.user_data = {}
+    await duel_handlers.duel_callback(update, context)
+    assert context.user_data["duel_flow"] == {"kind": "search", "game": "chess"}
+    msg, ctx = make_update(app, 281, text="abc")
+    ctx.user_data = context.user_data
+    await wallet_handlers.private_message(msg, ctx)
+    assert "عدد" in msg.replies[-1]["text"]
+    msg, ctx = make_update(app, 281, text="۳۳۳")
+    ctx.user_data = context.user_data
+    await wallet_handlers.private_message(msg, ctx)
+    ticket = await sync_to_async(DuelTicket.objects.get)(user__tg_id=281)
+    assert ticket.stake == 333 and ticket.status == DuelTicket.Status.SEARCHING and "duel_flow" not in ctx.user_data

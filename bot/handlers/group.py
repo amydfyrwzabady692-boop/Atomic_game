@@ -109,6 +109,11 @@ async def group_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message, tg_user = update.effective_message, update.effective_user
     if message is None or tg_user is None or tg_user.is_bot:
         return
+    from . import flow
+
+    # سازنده‌ی منوی /game که «✍️ مبلغ دلخواه» زده و حالا عدد ورودی را فرستاده است
+    if await flow.custom_fee_message(update, context):
+        return
     manager = manager_of(context)
     # پیام به همه‌ی بازی‌های متنیِ در جریان این گروه می‌رسد که فرستنده بازیکنشان است؛ هر بازی خودش
     # تشخیص می‌دهد که پیام جواب او هست یا نه (چند بازی هم‌زمان در یک گروه مشکلی ندارد)

@@ -285,6 +285,11 @@ async def private_message(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         if await admin.user_support_message(update, context, user):
             return
+    if context.user_data.get("duel_flow"):
+        from . import duel
+
+        if await duel.custom_stake_message(update, context, user):
+            return
 
     flow = context.user_data.get("wallet_flow")
     if not flow:

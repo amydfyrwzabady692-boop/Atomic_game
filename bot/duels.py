@@ -56,6 +56,7 @@ def stakes_keyboard(game_type: str) -> InlineKeyboardMarkup:
     buttons = [ui.button(stake_label(s), f"du:s:{game_type}:{s}", style=ui.SUCCESS if s == 0 else ui.PRIMARY) for s in duels.STAKE_CHOICES]
     rows = ui.rows(buttons, 3)
     rows.append([ui.button(texts.DUEL_STAKE_ANY, f"du:s:{game_type}:any", style=ui.SUCCESS)])
+    rows.append([ui.button(texts.DUEL_CUSTOM_BTN, f"du:k:{game_type}", style=ui.SUCCESS)])
     rows.append([ui.button(texts.BACK_BTN, "du:h")])
     return InlineKeyboardMarkup(rows)
 
@@ -93,6 +94,7 @@ def duel_view(duel: Duel, side: str, prizes: dict | None = None) -> tuple[str, I
             for s in duels.STAKE_CHOICES
         ]
         rows += ui.rows(offers, 3)
+        rows.append([ui.button(texts.DUEL_CUSTOM_BTN, f"du:ko:{duel.pk}", style=ui.SUCCESS)])
         rows.append([ui.button(texts.DUEL_LEAVE_BTN, f"du:c:{duel.pk}", style=ui.DANGER)])
         return text, InlineKeyboardMarkup(rows)
     if duel.status == Duel.Status.PLAYING:
